@@ -1,98 +1,108 @@
+"use client";
+
 import Link from "next/link";
-import { artists } from "@/data/artists";
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
+import { logout } from "@/lib/firebase/auth";
+import { getArtistProfileByUid, type ArtistDoc } from "@/lib/firebase/firestore";
 
-const representedArtists = [...artists]
-  .filter((artist) => artist.type === "represented")
-  .sort((a, b) => a.name.localeCompare(b.name));
+export default function ArtistDashboardPage() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [artist, setArtist] = useState<ArtistDoc | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
-function ArtistCard({
-  slug,
-  name,
-  nameKo,
-  tagline,
-  index,
-}: {
-  slug: string;
-  name: string;
-  nameKo?: string;
-  tagline?: string;
-  index: number;
-}) {
-  return (
-    <Link
-      href={`/artists/${slug}`}
-      className="group rounded-[1.75rem] border border-black/8 bg-white p-6 transition hover:-translate-y-0.5 hover:border-black/15 hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)]"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-            {String(index + 1).padStart(2, "0")}
-          </p>
-          <h2 className="mt-3 text-[1.6rem] font-medium tracking-[-0.03em] text-neutral-950 md:text-[1.8rem]">
-            {name}
-          </h2>
-          {nameKo ? (
-            <p className="mt-2 text-sm text-neutral-500">{nameKo}</p>
-          ) : null}
-        </div>
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      try {
+        setIsLoading(true);
+        setErrorMessage("");
 
-        <span className="mt-1 text-sm text-neutral-400 transition group-hover:translate-x-0.5 group-hover:text-neutral-700">
-          View
-        </span>
-      </div>
+        if (!user) {
+          setArtist(null);
+          setErrorMessage("로그인이 필요합니다.");
+          return;
+        }
 
-      {tagline ? (
-        <p className="mt-8 max-w-[32rem] text-sm leading-7 text-neutral-600">
-          {tagline}
-        </p>
-      ) : null}
-    </Link>
-  );
-}
+        const artistDoc = await getArtistProfileByUid(user.uid);
 
-export default function ArtistsPage() {
+        if (!artistDoc) {
+          setArtist(null);
+          setErrorMessage("등록된 작가 정보가 없습니다.");
+          return;
+        }
+
+        setArtist(artistDoc);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "작가 정보를 불러오는 중 오류가 발생했습니다.";
+
+        setErrorMessage(message);
+      } finally {
+        setIsLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = "/artist/login";
+  };
+
   return (
     <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
       <section className="border-b border-black/5">
         <div className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-8">
           <header className="flex items-center justify-between">
-            <Link href="/" className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
+            <Link
+              href="/"
+              className="text-[11px] uppercase tracking-[0.28em] text-neutral-500"
+            >
               KÜN’S GALLERY
             </Link>
 
-            <nav className="flex items-center gap-2 md:gap-3">
+            <div className="flex items-center gap-2 md:gap-3">
               <Link
-                href="/"
+                href="/artist/profile"
                 className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
               >
-                Home
+                Profile
               </Link>
-            </nav>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
+              >
+                Logout
+              </button>
+            </div>
           </header>
 
-          <div className="grid gap-12 py-12 md:grid-cols-[1.1fr_0.9fr] md:items-end md:py-16">
+          <div className="grid gap-10 py-12 md:grid-cols-[1.05fr_0.95fr] md:items-end md:py-16">
             <div className="max-w-4xl">
               <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
-                Represented Artists
+                Artist Dashboard
               </p>
 
               <h1 className="mt-5 text-5xl font-semibold tracking-[-0.04em] text-neutral-950 md:text-7xl md:leading-[0.95]">
-                The artists
+                Your artist
                 <br />
-                at KÜN’S
-                <br />
-                Gallery.
+                dashboard.
               </h1>
 
               <p className="mt-8 max-w-xl text-sm leading-7 text-neutral-600 md:text-[15px]">
-                KÜN’S GALLERY의 전속 작가를 한 곳에서 볼 수 있는 페이지입니다.
-                각 작가의 상세 페이지를 통해 소개와 작품, 그리고 AR 진입 구조까지
-                순차적으로 연결됩니다.
+                여기에서 본인 프로필과 작품 데이터를 직접 관리하는 구조로
+                확장됩니다. 현재는 작가 문서 조회와 프로필 편집 진입까지
+                연결된 상태입니다.
               </p>
             </div>
 
             <div className="flex justify-start md:justify-end">
-              <div className="w-full max-w-[420px] rounded-[2rem] border border-black/10 bg-white/80 p-5 backdrop-blur-sm md:p-6">
+              <div className="w-full max-w-[440px] rounded-[2rem] border border-black/10 bg-white/80 p-5 backdrop-blur-sm md:p-6">
                 <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
                   Overview
                 </p>
@@ -100,34 +110,36 @@ export default function ArtistsPage() {
                 <div className="mt-5 space-y-4">
                   <div className="rounded-[1.5rem] bg-[#f7f6f2] px-4 py-4">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">
-                      Count
+                      Status
                     </p>
-                    <p className="mt-2 text-2xl font-medium tracking-[-0.03em] text-neutral-950">
-                      {representedArtists.length}
+                    <p className="mt-2 text-sm leading-6 text-neutral-600">
+                      {isLoading
+                        ? "Loading..."
+                        : artist?.status || errorMessage || "Unavailable"}
                     </p>
                   </div>
 
                   <div className="rounded-[1.5rem] bg-[#f7f6f2] px-4 py-4">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">
-                      Order
+                      Artist
                     </p>
                     <p className="mt-2 text-sm leading-6 text-neutral-600">
-                      English name
-                      <br />
-                      alphabetical order
+                      {isLoading
+                        ? "Loading..."
+                        : artist?.name || "No artist data"}
                     </p>
                   </div>
 
                   <div className="rounded-[1.5rem] bg-[#f7f6f2] px-4 py-4">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">
-                      Structure
+                      Access
                     </p>
                     <p className="mt-2 text-sm leading-6 text-neutral-600">
-                      Artist detail
+                      Profile edit
                       <br />
-                      Work detail
+                      Work management
                       <br />
-                      AR access
+                      Archive update
                     </p>
                   </div>
                 </div>
@@ -135,17 +147,39 @@ export default function ArtistsPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 pb-10 md:grid-cols-2 xl:grid-cols-2">
-            {representedArtists.map((artist, index) => (
-              <ArtistCard
-                key={artist.slug}
-                slug={artist.slug}
-                name={artist.name}
-                nameKo={artist.nameKo}
-                tagline={artist.tagline}
-                index={index}
-              />
-            ))}
+          <div className="grid gap-4 border-t border-black/5 py-8 md:grid-cols-3">
+            <Link
+              href="/artist/profile"
+              className="rounded-[1.5rem] bg-white px-5 py-5 transition hover:shadow-sm"
+            >
+              <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                Profile
+              </p>
+              <p className="mt-3 text-sm leading-6 text-neutral-600">
+                작가 기본 정보와 소개 문구를 수정합니다.
+              </p>
+            </Link>
+
+            <Link
+              href="/artist/works"
+              className="rounded-[1.5rem] bg-white px-5 py-5 transition hover:shadow-sm"
+            >
+              <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                Works
+              </p>
+              <p className="mt-3 text-sm leading-6 text-neutral-600">
+                작품 리스트와 등록 구조로 확장될 영역입니다.
+              </p>
+            </Link>
+
+            <div className="rounded-[1.5rem] bg-white px-5 py-5">
+              <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                Archive
+              </p>
+              <p className="mt-3 text-sm leading-6 text-neutral-600">
+                아카이브와 공개 상태 관리로 이어질 예정입니다.
+              </p>
+            </div>
           </div>
         </div>
       </section>
