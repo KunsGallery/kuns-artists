@@ -1,58 +1,9 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
-import { logout } from "@/lib/firebase/auth";
-import { getArtistProfileByUid, type ArtistDoc } from "@/lib/firebase/firestore";
+import { getRepresentedArtists } from "@/data/artists";
 
-export default function ArtistDashboardPage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [artist, setArtist] = useState<ArtistDoc | null>(null);
-  const [errorMessage, setErrorMessage] = useState("");
+const representedArtists = getRepresentedArtists();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      try {
-        setIsLoading(true);
-        setErrorMessage("");
-
-        if (!user) {
-          setArtist(null);
-          setErrorMessage("로그인이 필요합니다.");
-          return;
-        }
-
-        const artistDoc = await getArtistProfileByUid(user.uid);
-
-        if (!artistDoc) {
-          setArtist(null);
-          setErrorMessage("등록된 작가 정보가 없습니다.");
-          return;
-        }
-
-        setArtist(artistDoc);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "작가 정보를 불러오는 중 오류가 발생했습니다.";
-
-        setErrorMessage(message);
-      } finally {
-        setIsLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = "/artist/login";
-  };
-
+export default function ArtistsPage() {
   return (
     <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
       <section className="border-b border-black/5">
@@ -65,120 +16,89 @@ export default function ArtistDashboardPage() {
               KÜN’S GALLERY
             </Link>
 
-            <div className="flex items-center gap-2 md:gap-3">
-              <Link
-                href="/artist/profile"
-                className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
-              >
-                Profile
-              </Link>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
-              >
-                Logout
-              </button>
-            </div>
+            <Link
+              href="/"
+              className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
+            >
+              Home
+            </Link>
           </header>
 
-          <div className="grid gap-10 py-12 md:grid-cols-[1.05fr_0.95fr] md:items-end md:py-16">
-            <div className="max-w-4xl">
+          <div className="grid gap-10 py-12 md:grid-cols-[0.95fr_1.05fr] md:items-end md:py-16">
+            <div className="max-w-3xl">
               <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
-                Artist Dashboard
+                Artists
               </p>
-
-              <h1 className="mt-5 text-5xl font-semibold tracking-[-0.04em] text-neutral-950 md:text-7xl md:leading-[0.95]">
-                Your artist
+              <h1 className="mt-5 text-5xl font-semibold tracking-[-0.045em] text-neutral-950 md:text-7xl md:leading-[0.95]">
+                The artists
                 <br />
-                dashboard.
+                represented by
+                <br />
+                KÜN’S Gallery.
               </h1>
-
-              <p className="mt-8 max-w-xl text-sm leading-7 text-neutral-600 md:text-[15px]">
-                여기에서 본인 프로필과 작품 데이터를 직접 관리하는 구조로
-                확장됩니다. 현재는 작가 문서 조회와 프로필 편집 진입까지
-                연결된 상태입니다.
-              </p>
             </div>
 
-            <div className="flex justify-start md:justify-end">
-              <div className="w-full max-w-[440px] rounded-[2rem] border border-black/10 bg-white/80 p-5 backdrop-blur-sm md:p-6">
-                <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
-                  Overview
-                </p>
-
-                <div className="mt-5 space-y-4">
-                  <div className="rounded-[1.5rem] bg-[#f7f6f2] px-4 py-4">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">
-                      Status
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600">
-                      {isLoading
-                        ? "Loading..."
-                        : artist?.status || errorMessage || "Unavailable"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-[1.5rem] bg-[#f7f6f2] px-4 py-4">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">
-                      Artist
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600">
-                      {isLoading
-                        ? "Loading..."
-                        : artist?.name || "No artist data"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-[1.5rem] bg-[#f7f6f2] px-4 py-4">
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">
-                      Access
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-neutral-600">
-                      Profile edit
-                      <br />
-                      Work management
-                      <br />
-                      Archive update
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <div className="max-w-xl md:justify-self-end">
+              <p className="text-sm leading-7 text-neutral-600 md:text-[15px]">
+                현재 쿤스의 전속 작가 페이지는 작품, 작가 소개, 텍스트, 미디어와
+                같은 아카이브를 중심으로 구성되어 있습니다. 새 시스템에서도 그
+                감도는 유지하되, 작품별 AR 진입과 관리 구조가 자연스럽게 이어지도록
+                설계합니다.
+              </p>
             </div>
           </div>
 
-          <div className="grid gap-4 border-t border-black/5 py-8 md:grid-cols-3">
-            <Link
-              href="/artist/profile"
-              className="rounded-[1.5rem] bg-white px-5 py-5 transition hover:shadow-sm"
-            >
-              <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                Profile
-              </p>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                작가 기본 정보와 소개 문구를 수정합니다.
-              </p>
-            </Link>
+          <div className="border-t border-black/5 py-8 md:py-10">
+            <div className="space-y-4">
+              {representedArtists.map((artist, index) => (
+                <Link
+                  key={artist.slug}
+                  href={`/artists/${artist.slug}`}
+                  className="group grid gap-5 rounded-[1.9rem] border border-black/8 bg-white p-5 transition hover:-translate-y-0.5 hover:border-black/15 hover:shadow-[0_24px_60px_rgba(0,0,0,0.05)] md:grid-cols-[180px_minmax(0,1fr)_120px] md:items-center md:p-6"
+                >
+                  <div className="overflow-hidden rounded-[1.35rem] bg-[#ece8df]">
+                    {artist.profileImage ? (
+                      <img
+                        src={artist.profileImage}
+                        alt={artist.name}
+                        className="h-[180px] w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-[180px] items-center justify-center text-sm text-neutral-400">
+                        No Image
+                      </div>
+                    )}
+                  </div>
 
-            <Link
-              href="/artist/works"
-              className="rounded-[1.5rem] bg-white px-5 py-5 transition hover:shadow-sm"
-            >
-              <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                Works
-              </p>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                작품 리스트와 등록 구조로 확장될 영역입니다.
-              </p>
-            </Link>
+                  <div className="min-w-0">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                      {String(index + 1).padStart(2, "0")}
+                    </p>
+                    <h2 className="mt-3 text-[1.9rem] font-medium tracking-[-0.04em] text-neutral-950 md:text-[2.35rem]">
+                      {artist.name}
+                    </h2>
+                    {artist.nameKo ? (
+                      <p className="mt-2 text-sm text-neutral-500">
+                        {artist.nameKo}
+                      </p>
+                    ) : null}
+                    {artist.tagline ? (
+                      <p className="mt-5 max-w-2xl text-sm leading-7 text-neutral-600">
+                        {artist.tagline}
+                      </p>
+                    ) : null}
+                  </div>
 
-            <div className="rounded-[1.5rem] bg-white px-5 py-5">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                Archive
-              </p>
-              <p className="mt-3 text-sm leading-6 text-neutral-600">
-                아카이브와 공개 상태 관리로 이어질 예정입니다.
-              </p>
+                  <div className="flex items-end justify-between md:block md:text-right">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                      View Artist
+                    </p>
+                    <span className="mt-4 inline-flex h-11 items-center rounded-full border border-black/10 px-5 text-sm text-neutral-800 transition group-hover:border-black/20 group-hover:bg-[#f7f6f2]">
+                      Enter
+                    </span>
+                  </div>
+                </Link>
+              ))}
             </div>
           </div>
         </div>
