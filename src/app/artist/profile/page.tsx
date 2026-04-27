@@ -16,24 +16,39 @@ type FormState = {
   nameKo: string;
   tagline: string;
   bio: string;
+  bioEn: string;
+  location: string;
   profileImageUrl: string;
+  instagramUrl: string;
+  youtubeUrl: string;
+  cvUrl: string;
+  artsyUrl: string;
+  websiteUrl: string;
+};
+
+const initialForm: FormState = {
+  name: "",
+  nameKo: "",
+  tagline: "",
+  bio: "",
+  bioEn: "",
+  location: "",
+  profileImageUrl: "",
+  instagramUrl: "",
+  youtubeUrl: "",
+  cvUrl: "",
+  artsyUrl: "",
+  websiteUrl: "",
 };
 
 export default function ArtistProfilePage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [uid, setUid] = useState("");
   const [artist, setArtist] = useState<ArtistDoc | null>(null);
+  const [form, setForm] = useState<FormState>(initialForm);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-
-  const [form, setForm] = useState<FormState>({
-    name: "",
-    nameKo: "",
-    tagline: "",
-    bio: "",
-    profileImageUrl: "",
-  });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -43,8 +58,8 @@ export default function ArtistProfilePage() {
         setMessage("");
 
         if (!user) {
-          setErrorMessage("로그인이 필요합니다.");
           setArtist(null);
+          setErrorMessage("로그인이 필요합니다.");
           return;
         }
 
@@ -53,8 +68,8 @@ export default function ArtistProfilePage() {
         const artistDoc = await getArtistProfileByUid(user.uid);
 
         if (!artistDoc) {
-          setErrorMessage("등록된 작가 정보가 없습니다.");
           setArtist(null);
+          setErrorMessage("등록된 작가 정보가 없습니다.");
           return;
         }
 
@@ -64,7 +79,14 @@ export default function ArtistProfilePage() {
           nameKo: artistDoc.nameKo || "",
           tagline: artistDoc.tagline || "",
           bio: artistDoc.bio || "",
+          bioEn: artistDoc.bioEn || "",
+          location: artistDoc.location || "",
           profileImageUrl: artistDoc.profileImageUrl || "",
+          instagramUrl: artistDoc.instagramUrl || "",
+          youtubeUrl: artistDoc.youtubeUrl || "",
+          cvUrl: artistDoc.cvUrl || "",
+          artsyUrl: artistDoc.artsyUrl || "",
+          websiteUrl: artistDoc.websiteUrl || "",
         });
       } catch (error) {
         const msg =
@@ -81,10 +103,7 @@ export default function ArtistProfilePage() {
     return () => unsubscribe();
   }, []);
 
-  const handleChange = (
-    key: keyof FormState,
-    value: string
-  ) => {
+  const handleChange = (key: keyof FormState, value: string) => {
     setForm((prev) => ({
       ...prev,
       [key]: value,
@@ -98,23 +117,28 @@ export default function ArtistProfilePage() {
       }
 
       setIsSaving(true);
-      setErrorMessage("");
       setMessage("");
+      setErrorMessage("");
 
       await updateArtistProfile(uid, {
         name: form.name,
         nameKo: form.nameKo,
         tagline: form.tagline,
         bio: form.bio,
+        bioEn: form.bioEn,
+        location: form.location,
         profileImageUrl: form.profileImageUrl,
+        instagramUrl: form.instagramUrl,
+        youtubeUrl: form.youtubeUrl,
+        cvUrl: form.cvUrl,
+        artsyUrl: form.artsyUrl,
+        websiteUrl: form.websiteUrl,
       });
 
       setMessage("프로필 정보가 저장되었습니다.");
     } catch (error) {
       const msg =
-        error instanceof Error
-          ? error.message
-          : "저장 중 오류가 발생했습니다.";
+        error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.";
 
       setErrorMessage(msg);
     } finally {
@@ -146,6 +170,7 @@ export default function ArtistProfilePage() {
               >
                 Dashboard
               </Link>
+
               <button
                 type="button"
                 onClick={handleLogout}
@@ -169,12 +194,13 @@ export default function ArtistProfilePage() {
               </h1>
 
               <p className="mt-8 max-w-xl text-sm leading-7 text-neutral-600 md:text-[15px]">
-                작가 기본 정보와 소개 문구를 수정하는 페이지입니다. 이후 작품
-                등록, 아카이빙, 파일 업로드 구조와 이어집니다.
+                작가 기본 정보, 소개글, 링크 정보를 입력하는 페이지입니다.
+                현재는 URL 입력 방식으로 운영하고, 이후 Cloudflare R2 업로드
+                기능을 붙일 수 있습니다.
               </p>
             </div>
 
-            <div className="flex justify-start md:justify-end">
+            <aside className="flex justify-start md:justify-end">
               <div className="w-full max-w-[440px] rounded-[2rem] border border-black/10 bg-white/80 p-5 backdrop-blur-sm md:p-6">
                 <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
                   Current Artist
@@ -192,10 +218,10 @@ export default function ArtistProfilePage() {
 
                   <div className="rounded-[1.5rem] bg-[#f7f6f2] px-4 py-4">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">
-                      Type
+                      Role
                     </p>
                     <p className="mt-2 text-sm leading-6 text-neutral-600">
-                      {isLoading ? "Loading..." : artist?.type || "No data"}
+                      {isLoading ? "Loading..." : artist?.role || "No data"}
                     </p>
                   </div>
 
@@ -209,71 +235,90 @@ export default function ArtistProfilePage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </aside>
           </div>
 
           <div className="border-t border-black/5 py-8 md:py-10">
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-5 rounded-[1.75rem] bg-white p-6">
-                <div>
-                  <label className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                    English Name
-                  </label>
-                  <input
-                    value={form.name}
-                    onChange={(e) => handleChange("name", e.target.value)}
-                    className="mt-3 h-13 w-full rounded-2xl border border-black/10 bg-[#f7f6f2] px-4 text-sm outline-none transition focus:border-black/20"
-                  />
-                </div>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="space-y-5 rounded-[1.75rem] bg-white p-6">
+                <InputField
+                  label="English Name"
+                  value={form.name}
+                  onChange={(value) => handleChange("name", value)}
+                />
 
-                <div>
-                  <label className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                    Korean Name
-                  </label>
-                  <input
-                    value={form.nameKo}
-                    onChange={(e) => handleChange("nameKo", e.target.value)}
-                    className="mt-3 h-13 w-full rounded-2xl border border-black/10 bg-[#f7f6f2] px-4 text-sm outline-none transition focus:border-black/20"
-                  />
-                </div>
+                <InputField
+                  label="Korean Name"
+                  value={form.nameKo}
+                  onChange={(value) => handleChange("nameKo", value)}
+                />
 
-                <div>
-                  <label className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                    Tagline
-                  </label>
-                  <input
-                    value={form.tagline}
-                    onChange={(e) => handleChange("tagline", e.target.value)}
-                    className="mt-3 h-13 w-full rounded-2xl border border-black/10 bg-[#f7f6f2] px-4 text-sm outline-none transition focus:border-black/20"
-                  />
-                </div>
+                <InputField
+                  label="Location"
+                  value={form.location}
+                  placeholder="Lives & works in Seoul, Korea"
+                  onChange={(value) => handleChange("location", value)}
+                />
 
-                <div>
-                  <label className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                    Profile Image URL
-                  </label>
-                  <input
-                    value={form.profileImageUrl}
-                    onChange={(e) =>
-                      handleChange("profileImageUrl", e.target.value)
-                    }
-                    className="mt-3 h-13 w-full rounded-2xl border border-black/10 bg-[#f7f6f2] px-4 text-sm outline-none transition focus:border-black/20"
-                  />
-                </div>
-              </div>
+                <InputField
+                  label="Tagline"
+                  value={form.tagline}
+                  onChange={(value) => handleChange("tagline", value)}
+                />
 
-              <div className="space-y-5 rounded-[1.75rem] bg-white p-6">
-                <div>
-                  <label className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                    Biography
-                  </label>
-                  <textarea
-                    value={form.bio}
-                    onChange={(e) => handleChange("bio", e.target.value)}
-                    rows={12}
-                    className="mt-3 w-full rounded-2xl border border-black/10 bg-[#f7f6f2] px-4 py-4 text-sm leading-7 outline-none transition focus:border-black/20"
-                  />
-                </div>
+                <InputField
+                  label="Profile Image URL"
+                  value={form.profileImageUrl}
+                  onChange={(value) => handleChange("profileImageUrl", value)}
+                />
+              </section>
+
+              <section className="space-y-5 rounded-[1.75rem] bg-white p-6">
+                <InputField
+                  label="Instagram URL"
+                  value={form.instagramUrl}
+                  onChange={(value) => handleChange("instagramUrl", value)}
+                />
+
+                <InputField
+                  label="YouTube URL"
+                  value={form.youtubeUrl}
+                  onChange={(value) => handleChange("youtubeUrl", value)}
+                />
+
+                <InputField
+                  label="CV URL"
+                  value={form.cvUrl}
+                  onChange={(value) => handleChange("cvUrl", value)}
+                />
+
+                <InputField
+                  label="Artsy URL"
+                  value={form.artsyUrl}
+                  onChange={(value) => handleChange("artsyUrl", value)}
+                />
+
+                <InputField
+                  label="Website URL"
+                  value={form.websiteUrl}
+                  onChange={(value) => handleChange("websiteUrl", value)}
+                />
+              </section>
+
+              <section className="space-y-5 rounded-[1.75rem] bg-white p-6 lg:col-span-2">
+                <TextareaField
+                  label="Korean Biography"
+                  value={form.bio}
+                  rows={8}
+                  onChange={(value) => handleChange("bio", value)}
+                />
+
+                <TextareaField
+                  label="English Biography"
+                  value={form.bioEn}
+                  rows={8}
+                  onChange={(value) => handleChange("bioEn", value)}
+                />
 
                 {message ? (
                   <div className="rounded-[1.25rem] bg-[#f7f6f2] px-4 py-4 text-sm leading-7 text-green-700">
@@ -295,11 +340,63 @@ export default function ArtistProfilePage() {
                 >
                   {isSaving ? "저장 중..." : "프로필 저장"}
                 </button>
-              </div>
+              </section>
             </div>
           </div>
         </div>
       </section>
     </main>
+  );
+}
+
+function InputField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+        {label}
+      </label>
+      <input
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-3 h-13 w-full rounded-2xl border border-black/10 bg-[#f7f6f2] px-4 text-sm outline-none transition placeholder:text-neutral-400 focus:border-black/20"
+      />
+    </div>
+  );
+}
+
+function TextareaField({
+  label,
+  value,
+  rows,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  rows: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+        {label}
+      </label>
+      <textarea
+        value={value}
+        rows={rows}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-3 w-full rounded-2xl border border-black/10 bg-[#f7f6f2] px-4 py-4 text-sm leading-7 outline-none transition focus:border-black/20"
+      />
+    </div>
   );
 }

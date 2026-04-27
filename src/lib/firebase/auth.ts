@@ -4,8 +4,12 @@ import {
   signOut,
   User,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "./client";
+import { auth } from "./client";
+import {
+  createArtistProfileFromSeed,
+  getArtistProfileByUid,
+} from "./firestore";
+import { getAllowedArtistByEmail } from "@/lib/artistAccess";
 
 const googleProvider = new GoogleAuthProvider();
 
@@ -22,35 +26,22 @@ export async function logout() {
   await signOut(auth);
 }
 
-export async function getArtistDocByUid(uid: string) {
-  const artistRef = doc(db, "artists", uid);
-  const snapshot = await getDoc(artistRef);
-
-  if (!snapshot.exists()) return null;
-
-  return {
-    id: snapshot.id,
-    ...snapshot.data(),
-  };
-}
-
 export async function assertAllowedArtist(user: User) {
   if (!user.email) {
     throw new Error("이 계정에는 이메일 정보가 없습니다.");
   }
 
-  const artistDoc = await getArtistDocByUid(user.uid);
+  const allowedArtist = getAllowedArtistByEmail(user.email);
 
-  if (!artistDoc) {
+  if (!allowedArtist) {
     throw new Error("등록되지 않은 작가 계정입니다.");
   }
 
-  const artistEmail =
-    typeof artistDoc.email === "string" ? artistDoc.email.toLowerCase() : "";
+  const existingArtistDoc = await getArtistProfileByUid(user.uid);
 
-  if (artistEmail !== user.email.toLowerCase()) {
-    throw new Error("이메일 정보가 일치하지 않습니다.");
+  if (existingArtistDoc) {
+    return existingArtistDoc;
   }
 
-  return artistDoc;
+  return await createArtistProfileFromSeed(user.uid, allowedArtist);
 }

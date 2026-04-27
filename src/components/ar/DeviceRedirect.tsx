@@ -9,9 +9,53 @@ type DeviceRedirectProps = {
   work: Work;
 };
 
+type DeviceInfo = {
+  isReady: boolean;
+  isMobile: boolean;
+  isIos: boolean;
+  isAndroid: boolean;
+  currentUrl: string;
+  origin: string;
+};
+
+const initialDeviceInfo: DeviceInfo = {
+  isReady: false,
+  isMobile: false,
+  isIos: false,
+  isAndroid: false,
+  currentUrl: "",
+  origin: "",
+};
+
+function getDeviceInfo(): DeviceInfo {
+  const ua = window.navigator.userAgent.toLowerCase();
+
+  const isIos = /iphone|ipad|ipod/i.test(ua);
+  const isAndroid = /android/i.test(ua);
+  const isMobile =
+    isIos ||
+    isAndroid ||
+    /mobile|blackberry|iemobile|opera mini/i.test(ua);
+
+  return {
+    isReady: true,
+    isMobile,
+    isIos,
+    isAndroid,
+    currentUrl: window.location.href,
+    origin: window.location.origin,
+  };
+}
+
 function getIosQuickLookLink(modelUsdz?: string) {
   if (!modelUsdz) return null;
   return modelUsdz;
+}
+
+function getAbsoluteModelUrl(modelPath: string | undefined, origin: string) {
+  if (!modelPath || !origin) return "";
+
+  return modelPath.startsWith("http") ? modelPath : `${origin}${modelPath}`;
 }
 
 function getAndroidSceneViewerIntent(absoluteGlbUrl: string, title: string) {
@@ -32,67 +76,54 @@ function getAndroidSceneViewerIntent(absoluteGlbUrl: string, title: string) {
 }
 
 export default function DeviceRedirect({ work }: DeviceRedirectProps) {
-  const [isMobile, setIsMobile] = useState(false);
-  const [isIos, setIsIos] = useState(false);
-  const [isAndroid, setIsAndroid] = useState(false);
-  const [currentUrl, setCurrentUrl] = useState("");
+  const [deviceInfo, setDeviceInfo] =
+    useState<DeviceInfo>(initialDeviceInfo);
 
   useEffect(() => {
-    const ua = window.navigator.userAgent.toLowerCase();
-    const mobile =
-      /iphone|ipad|ipod|android|mobile|blackberry|iemobile|opera mini/i.test(
-        ua
-      );
-    const ios = /iphone|ipad|ipod/i.test(ua);
-    const android = /android/i.test(ua);
-
-    setIsMobile(mobile);
-    setIsIos(ios);
-    setIsAndroid(android);
-    setCurrentUrl(window.location.href);
+    setDeviceInfo(getDeviceInfo());
   }, []);
 
   const absoluteGlbUrl = useMemo(() => {
-    if (!work.modelGlb || typeof window === "undefined") return "";
-    const origin = window.location.origin;
-    return work.modelGlb.startsWith("http")
-      ? work.modelGlb
-      : `${origin}${work.modelGlb}`;
-  }, [work.modelGlb]);
+    return getAbsoluteModelUrl(work.modelGlb, deviceInfo.origin);
+  }, [work.modelGlb, deviceInfo.origin]);
 
-  const iosLink = getIosQuickLookLink(work.modelUsdz);
-  const androidIntent = absoluteGlbUrl
-    ? getAndroidSceneViewerIntent(absoluteGlbUrl, work.title)
-    : null;
+  const iosLink = useMemo(() => {
+    return getIosQuickLookLink(work.modelUsdz);
+  }, [work.modelUsdz]);
 
-  if (!isMobile) {
+  const androidIntent = useMemo(() => {
+    if (!absoluteGlbUrl) return null;
+    return getAndroidSceneViewerIntent(absoluteGlbUrl, work.title);
+  }, [absoluteGlbUrl, work.title]);
+
+  const hasIosAr = deviceInfo.isIos && Boolean(iosLink);
+  const hasAndroidAr = deviceInfo.isAndroid && Boolean(androidIntent);
+  const hasMobileAr = hasIosAr || hasAndroidAr;
+
+  const artworkViewer = (
+    <ArtworkViewer
+      title={work.title}
+      artistName={work.artistName}
+      coverImage={work.coverImage}
+      description={work.description}
+      medium={work.medium}
+      dimensions={work.dimensions}
+      year={work.year}
+    />
+  );
+
+  if (!deviceInfo.isReady || !deviceInfo.isMobile) {
     return (
       <div className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
-        <ArtworkViewer
-          title={work.title}
-          artistName={work.artistName}
-          coverImage={work.coverImage}
-          description={work.description}
-          medium={work.medium}
-          dimensions={work.dimensions}
-          year={work.year}
-        />
-        <QRCodePanel url={currentUrl} />
+        {artworkViewer}
+        <QRCodePanel url={deviceInfo.currentUrl} />
       </div>
     );
   }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
-      <ArtworkViewer
-        title={work.title}
-        artistName={work.artistName}
-        coverImage={work.coverImage}
-        description={work.description}
-        medium={work.medium}
-        dimensions={work.dimensions}
-        year={work.year}
-      />
+      {artworkViewer}
 
       <section className="rounded-[1.75rem] border border-black/8 bg-white p-5 md:p-6">
         <div className="flex items-start justify-between gap-4">
@@ -113,7 +144,7 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
         </p>
 
         <div className="mt-6 flex flex-col gap-3">
-          {isIos && iosLink ? (
+          {hasIosAr && iosLink ? (
             <a
               href={iosLink}
               rel="ar"
@@ -123,7 +154,7 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
             </a>
           ) : null}
 
-          {isAndroid && androidIntent ? (
+          {hasAndroidAr && androidIntent ? (
             <a
               href={androidIntent}
               className="inline-flex h-14 items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-medium text-white transition hover:opacity-90"
@@ -132,7 +163,7 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
             </a>
           ) : null}
 
-          {!((isIos && iosLink) || (isAndroid && androidIntent)) ? (
+          {!hasMobileAr ? (
             <div className="rounded-[1.25rem] bg-[#f7f6f2] px-4 py-4 text-sm leading-7 text-neutral-600">
               아직 이 작품의 AR 파일이 연결되지 않았습니다.
               <br />
