@@ -1,0 +1,347 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function authUid() {
+      return signedIn() ? request.auth.uid : "";
+    }
+
+    function authEmail() {
+      return signedIn() && request.auth.token.email is string
+        ? request.auth.token.email
+        : "";
+    }
+
+    function isAdmin() {
+      return authEmail() == "gallerykuns@gmail.com";
+    }
+
+    // Keep this list in sync with src/lib/artistAccess.ts.
+    function isAllowedArtistEmail() {
+      return authEmail() == "gallerykuns@gmail.com"
+        || authEmail() == "boramine5255@gmail.com"
+        || authEmail() == "wwwrosaweb@gmail.com"
+        || authEmail() == "chlwotjq127@gmail.com";
+    }
+
+    function expectedArtistSlug() {
+      return authEmail() == "gallerykuns@gmail.com" ? "kim-hwan"
+        : authEmail() == "boramine5255@gmail.com" ? "jung-boram"
+        : authEmail() == "wwwrosaweb@gmail.com" ? "rosa-kang"
+        : authEmail() == "chlwotjq127@gmail.com" ? "jessup-choi"
+        : "";
+    }
+
+    function expectedArtistName() {
+      return authEmail() == "gallerykuns@gmail.com" ? "Kim Hwan"
+        : authEmail() == "boramine5255@gmail.com" ? "Jung Boram"
+        : authEmail() == "wwwrosaweb@gmail.com" ? "Rosa Kang"
+        : authEmail() == "chlwotjq127@gmail.com" ? "Jessup Choi"
+        : "";
+    }
+
+    function expectedArtistNameKo() {
+      return authEmail() == "gallerykuns@gmail.com" ? "김환"
+        : authEmail() == "boramine5255@gmail.com" ? "정보람"
+        : authEmail() == "wwwrosaweb@gmail.com" ? "강로사"
+        : authEmail() == "chlwotjq127@gmail.com" ? "최재섭"
+        : "";
+    }
+
+    function expectedArtistRole() {
+      return isAdmin() ? "admin" : "artist";
+    }
+
+    function expectedArtistType() {
+      return "represented";
+    }
+
+    function expectedArtistStatus() {
+      return "active";
+    }
+
+    function hasArtistProfile(uid) {
+      return exists(/databases/$(database)/documents/artists/$(uid));
+    }
+
+    function currentArtistProfile() {
+      return get(/databases/$(database)/documents/artists/$(authUid()));
+    }
+
+    function isOwnArtistDoc(uid) {
+      return signedIn() && uid == authUid();
+    }
+
+    function isOptionalString(value) {
+      return value == null || value is string;
+    }
+
+    function isNumericString(value) {
+      return value is string
+        && value.matches('^[+-]?[0-9]+(\\.[0-9]+)?$');
+    }
+
+    // App writes these as numbers today, but this also tolerates legacy numeric strings.
+    function isOptionalNumberLike(value) {
+      return value == null
+        || value is int
+        || value is float
+        || isNumericString(value);
+    }
+
+    function isValidSideMode(value) {
+      return value == "canvas" || value == "image";
+    }
+
+    function artistCreateKeys() {
+      return [
+        "email",
+        "slug",
+        "name",
+        "nameKo",
+        "type",
+        "status",
+        "role",
+        "tagline",
+        "bio",
+        "bioEn",
+        "location",
+        "profileImageUrl",
+        "instagramUrl",
+        "youtubeUrl",
+        "cvUrl",
+        "artsyUrl",
+        "websiteUrl",
+        "createdAt",
+        "updatedAt"
+      ];
+    }
+
+    function artistSelfEditableKeys() {
+      return [
+        "name",
+        "nameKo",
+        "tagline",
+        "bio",
+        "bioEn",
+        "location",
+        "profileImageUrl",
+        "instagramUrl",
+        "youtubeUrl",
+        "cvUrl",
+        "artsyUrl",
+        "websiteUrl",
+        "updatedAt"
+      ];
+    }
+
+    function validArtistCreate(uid) {
+      return request.resource.data.keys().hasOnly(artistCreateKeys())
+        && request.resource.data.keys().hasAll([
+          "email",
+          "slug",
+          "name",
+          "type",
+          "status",
+          "role",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.email == authEmail()
+        && request.resource.data.slug == expectedArtistSlug()
+        && request.resource.data.name == expectedArtistName()
+        && request.resource.data.nameKo == expectedArtistNameKo()
+        && request.resource.data.type == expectedArtistType()
+        && request.resource.data.status == expectedArtistStatus()
+        && request.resource.data.role == expectedArtistRole()
+        && isOptionalString(request.resource.data.tagline)
+        && isOptionalString(request.resource.data.bio)
+        && isOptionalString(request.resource.data.bioEn)
+        && isOptionalString(request.resource.data.location)
+        && isOptionalString(request.resource.data.profileImageUrl)
+        && isOptionalString(request.resource.data.instagramUrl)
+        && isOptionalString(request.resource.data.youtubeUrl)
+        && isOptionalString(request.resource.data.cvUrl)
+        && isOptionalString(request.resource.data.artsyUrl)
+        && isOptionalString(request.resource.data.websiteUrl)
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && uid == authUid();
+    }
+
+    function validArtistSelfUpdate() {
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+
+      return changedKeys.hasOnly(artistSelfEditableKeys())
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.slug == resource.data.slug
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isOptionalString(request.resource.data.name)
+        && isOptionalString(request.resource.data.nameKo)
+        && isOptionalString(request.resource.data.tagline)
+        && isOptionalString(request.resource.data.bio)
+        && isOptionalString(request.resource.data.bioEn)
+        && isOptionalString(request.resource.data.location)
+        && isOptionalString(request.resource.data.profileImageUrl)
+        && isOptionalString(request.resource.data.instagramUrl)
+        && isOptionalString(request.resource.data.youtubeUrl)
+        && isOptionalString(request.resource.data.cvUrl)
+        && isOptionalString(request.resource.data.artsyUrl)
+        && isOptionalString(request.resource.data.websiteUrl)
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function workCreateKeys() {
+      return [
+        "title",
+        "year",
+        "medium",
+        "dimensions",
+        "description",
+        "coverImageUrl",
+        "widthCm",
+        "heightCm",
+        "depthCm",
+        "frontRotationXDeg",
+        "frontRotationYDeg",
+        "sideMode",
+        "showBackLabel",
+        "artistId",
+        "artistSlug",
+        "artistName",
+        "modelGlb",
+        "modelUsdz",
+        "generatedGlbUrl",
+        "isPublished",
+        "archived",
+        "createdAt",
+        "updatedAt"
+      ];
+    }
+
+    function workArtistEditableKeys() {
+      return [
+        "title",
+        "year",
+        "medium",
+        "dimensions",
+        "description",
+        "coverImageUrl",
+        "widthCm",
+        "heightCm",
+        "depthCm",
+        "frontRotationXDeg",
+        "frontRotationYDeg",
+        "sideMode",
+        "showBackLabel",
+        "archived",
+        "updatedAt"
+      ];
+    }
+
+    function validWorkFields() {
+      return request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && isOptionalString(request.resource.data.year)
+        && isOptionalString(request.resource.data.medium)
+        && isOptionalString(request.resource.data.dimensions)
+        && isOptionalString(request.resource.data.description)
+        && isOptionalString(request.resource.data.coverImageUrl)
+        && isOptionalNumberLike(request.resource.data.widthCm)
+        && isOptionalNumberLike(request.resource.data.heightCm)
+        && isOptionalNumberLike(request.resource.data.depthCm)
+        && isOptionalNumberLike(request.resource.data.frontRotationXDeg)
+        && isOptionalNumberLike(request.resource.data.frontRotationYDeg)
+        && isValidSideMode(request.resource.data.sideMode)
+        && request.resource.data.showBackLabel is bool
+        && request.resource.data.archived is bool
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validArtistWorkCreate() {
+      return hasArtistProfile(authUid())
+        && request.resource.data.keys().hasOnly(workCreateKeys())
+        && request.resource.data.keys().hasAll([
+          "title",
+          "sideMode",
+          "showBackLabel",
+          "artistId",
+          "artistSlug",
+          "artistName",
+          "modelGlb",
+          "modelUsdz",
+          "generatedGlbUrl",
+          "isPublished",
+          "archived",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.artistId == authUid()
+        && request.resource.data.artistSlug == currentArtistProfile().data.slug
+        && request.resource.data.artistName == currentArtistProfile().data.name
+        && request.resource.data.modelGlb == ""
+        && request.resource.data.modelUsdz == ""
+        && request.resource.data.generatedGlbUrl == ""
+        && request.resource.data.isPublished == false
+        && request.resource.data.archived == false
+        && request.resource.data.createdAt is timestamp
+        && validWorkFields();
+    }
+
+    function validArtistWorkUpdate() {
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+
+      return resource.data.artistId == authUid()
+        && changedKeys.hasOnly(workArtistEditableKeys())
+        && request.resource.data.artistId == resource.data.artistId
+        && request.resource.data.artistSlug == resource.data.artistSlug
+        && request.resource.data.artistName == resource.data.artistName
+        && request.resource.data.modelGlb == resource.data.modelGlb
+        && request.resource.data.modelUsdz == resource.data.modelUsdz
+        && request.resource.data.generatedGlbUrl == resource.data.generatedGlbUrl
+        && request.resource.data.isPublished == resource.data.isPublished
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validWorkFields();
+    }
+
+    match /artists/{uid} {
+      allow read: if true;
+
+      allow create: if isAdmin()
+        || (
+          isOwnArtistDoc(uid)
+          && isAllowedArtistEmail()
+          && !hasArtistProfile(uid)
+          && validArtistCreate(uid)
+        );
+
+      allow update: if isAdmin()
+        || (isOwnArtistDoc(uid) && validArtistSelfUpdate());
+
+      allow delete: if isAdmin();
+    }
+
+    match /works/{workId} {
+      allow read: if true;
+
+      allow create: if isAdmin()
+        || (signedIn() && validArtistWorkCreate());
+
+      allow update: if isAdmin()
+        || (signedIn() && validArtistWorkUpdate());
+
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ArtistWorkEditor from "@/components/artist/ArtistWorkEditor";
 
 export default function NewArtistWorkPage() {
   return (
@@ -31,14 +32,13 @@ export default function NewArtistWorkPage() {
             work.
           </h1>
 
-          <p className="mt-8 max-w-xl text-sm leading-7 text-neutral-600 md:text-[15px]">
-            작품 등록 폼은 Firestore 저장 구조와 연결한 뒤 활성화할 예정입니다.
+          <p className="mt-8 max-w-2xl text-sm leading-7 text-neutral-600 md:text-[15px]">
+            작품 정보를 입력하면 Firestore works 컬렉션에 새 문서를 만들고,
+            같은 폼 값으로 캔버스형 GLB를 바로 다운로드할 수 있습니다.
           </p>
         </section>
 
-        <section className="rounded-[1.5rem] border border-dashed border-black/10 bg-white px-6 py-8 text-sm leading-7 text-neutral-600">
-          새 작품 등록 기능은 준비 중입니다.
-        </section>
+        <ArtistWorkEditor mode="new" />
       </div>
     </main>
   );

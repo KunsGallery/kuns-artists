@@ -1,13 +1,70 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getArtistBySlug } from "@/data/artists";
+import { getArtistBySlug, type Artist } from "@/data/artists";
 import { works } from "@/data/works";
+import {
+  getPublicArtistBySlug,
+  type ArtistDoc,
+} from "@/lib/firebase/firestore";
+import { normalizeExternalUrl } from "@/lib/url";
+
+export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{
     slug: string;
   }>;
 };
+
+type PublicArtistDetail = {
+  slug: string;
+  name: string;
+  nameKo?: string;
+  type: Artist["type"];
+  tagline?: string;
+  bio?: string;
+  bioEn?: string;
+  location?: string;
+  profileImage?: string;
+  instagramUrl?: string;
+  youtubeUrl?: string;
+  cvUrl?: string;
+  artsyUrl?: string;
+  websiteUrl?: string;
+  archives?: Artist["archives"];
+};
+
+function mergePublicArtist(
+  staticArtist?: Artist,
+  firestoreArtist?: ArtistDoc | null
+): PublicArtistDetail | null {
+  const slug = firestoreArtist?.slug ?? staticArtist?.slug ?? "";
+  const name = firestoreArtist?.name ?? staticArtist?.name ?? "";
+  const type = firestoreArtist?.type ?? staticArtist?.type;
+
+  if (!slug || !name || !type) {
+    return null;
+  }
+
+  return {
+    slug,
+    name,
+    nameKo: firestoreArtist?.nameKo ?? staticArtist?.nameKo,
+    type,
+    tagline: firestoreArtist?.tagline ?? staticArtist?.tagline,
+    bio: firestoreArtist?.bio ?? staticArtist?.bio,
+    bioEn: firestoreArtist?.bioEn ?? staticArtist?.bioEn,
+    location: firestoreArtist?.location ?? staticArtist?.location,
+    profileImage: firestoreArtist?.profileImageUrl ?? staticArtist?.profileImage,
+    instagramUrl:
+      firestoreArtist?.instagramUrl ?? staticArtist?.links?.instagram,
+    youtubeUrl: firestoreArtist?.youtubeUrl ?? staticArtist?.links?.youtube,
+    cvUrl: firestoreArtist?.cvUrl ?? staticArtist?.links?.cv,
+    artsyUrl: firestoreArtist?.artsyUrl ?? staticArtist?.links?.artsy,
+    websiteUrl: firestoreArtist?.websiteUrl,
+    archives: staticArtist?.archives,
+  };
+}
 
 function ArchiveSection({
   title,
@@ -68,7 +125,12 @@ function ArchiveSection({
 
           if (item.href) {
             return (
-              <a key={`${title}-${index}`} href={item.href} target="_blank" rel="noreferrer">
+              <a
+                key={`${title}-${index}`}
+                href={item.href}
+                target="_blank"
+                rel="noreferrer"
+              >
                 {content}
               </a>
             );
@@ -83,13 +145,28 @@ function ArchiveSection({
 
 export default async function ArtistDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
+  const staticArtist = getArtistBySlug(slug);
+
+  let firestoreArtist: ArtistDoc | null = null;
+
+  try {
+    firestoreArtist = await getPublicArtistBySlug(slug);
+  } catch {
+    firestoreArtist = null;
+  }
+
+  const artist = mergePublicArtist(staticArtist, firestoreArtist);
 
   if (!artist || artist.type !== "represented") {
     notFound();
   }
 
   const artistWorks = works.filter((work) => work.artistSlug === artist.slug);
+  const instagramHref = normalizeExternalUrl(artist.instagramUrl);
+  const youtubeHref = normalizeExternalUrl(artist.youtubeUrl);
+  const cvHref = normalizeExternalUrl(artist.cvUrl);
+  const artsyHref = normalizeExternalUrl(artist.artsyUrl);
+  const websiteHref = normalizeExternalUrl(artist.websiteUrl);
 
   return (
     <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
@@ -204,9 +281,9 @@ export default async function ArtistDetailPage({ params }: PageProps) {
               ) : null}
 
               <div className="flex flex-wrap gap-2">
-                {artist.links?.instagram ? (
+                {instagramHref ? (
                   <a
-                    href={artist.links.instagram}
+                    href={instagramHref}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex h-10 items-center rounded-full border border-black/10 bg-white px-4 text-sm text-neutral-800 transition hover:border-black/20"
@@ -214,9 +291,9 @@ export default async function ArtistDetailPage({ params }: PageProps) {
                     Instagram
                   </a>
                 ) : null}
-                {artist.links?.youtube ? (
+                {youtubeHref ? (
                   <a
-                    href={artist.links.youtube}
+                    href={youtubeHref}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex h-10 items-center rounded-full border border-black/10 bg-white px-4 text-sm text-neutral-800 transition hover:border-black/20"
@@ -224,9 +301,9 @@ export default async function ArtistDetailPage({ params }: PageProps) {
                     YouTube
                   </a>
                 ) : null}
-                {artist.links?.cv ? (
+                {cvHref ? (
                   <a
-                    href={artist.links.cv}
+                    href={cvHref}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex h-10 items-center rounded-full border border-black/10 bg-white px-4 text-sm text-neutral-800 transition hover:border-black/20"
@@ -234,14 +311,24 @@ export default async function ArtistDetailPage({ params }: PageProps) {
                     CV
                   </a>
                 ) : null}
-                {artist.links?.artsy ? (
+                {artsyHref ? (
                   <a
-                    href={artist.links.artsy}
+                    href={artsyHref}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex h-10 items-center rounded-full border border-black/10 bg-white px-4 text-sm text-neutral-800 transition hover:border-black/20"
                   >
                     Artsy
+                  </a>
+                ) : null}
+                {websiteHref ? (
+                  <a
+                    href={websiteHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-10 items-center rounded-full border border-black/10 bg-white px-4 text-sm text-neutral-800 transition hover:border-black/20"
+                  >
+                    Website
                   </a>
                 ) : null}
               </div>

@@ -1,0 +1,43 @@
+export type Work = {
+  slug: string;
+  artistSlug: string;
+  artistName: string;
+  artistId?: string;
+  title: string;
+  year?: string;
+  medium?: string;
+  dimensions?: string;
+  description?: string;
+  coverImage?: string;
+  coverImageUrl?: string;
+  modelGlb?: string;
+  modelUsdz?: string;
+  widthCm?: number;
+  heightCm?: number;
+  depthCm?: number;
+  frontRotationXDeg?: number;
+  frontRotationYDeg?: number;
+  sideMode?: "canvas" | "image";
+  showBackLabel?: boolean;
+  generatedGlbUrl?: string;
+  generatedAt?: unknown;
+  isPublished?: boolean;
+  archived?: boolean;
+};
+
+export type WorkFormValues = {
+  title: string;
+  artistName: string;
+  year: string;
+  medium: string;
+  dimensions: string;
+  description: string;
+  widthCm: string;
+  heightCm: string;
+  depthCm: string;
+  coverImageUrl: string;
+  frontRotationXDeg: string;
+  frontRotationYDeg: string;
+  sideMode: "canvas" | "image";
+  showBackLabel: boolean;
+};

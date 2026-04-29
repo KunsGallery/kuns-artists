@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ArtistWorkEditor from "@/components/artist/ArtistWorkEditor";
 
 type EditArtistWorkPageProps = {
   params: Promise<{
@@ -41,14 +42,15 @@ export default async function EditArtistWorkPage({
             work.
           </h1>
 
-          <p className="mt-8 max-w-xl text-sm leading-7 text-neutral-600 md:text-[15px]">
+          <p className="mt-8 max-w-2xl text-sm leading-7 text-neutral-600 md:text-[15px]">
             작품 ID: {id}
+            <br />
+            Firestore에 저장된 본인 작품만 수정할 수 있으며, 현재 값으로 GLB도
+            다시 생성해 다운로드할 수 있습니다.
           </p>
         </section>
 
-        <section className="rounded-[1.5rem] border border-dashed border-black/10 bg-white px-6 py-8 text-sm leading-7 text-neutral-600">
-          작품 수정 기능은 준비 중입니다.
-        </section>
+        <ArtistWorkEditor mode="edit" workId={id} />
       </div>
     </main>
   );

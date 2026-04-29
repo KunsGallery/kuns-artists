@@ -1,9 +1,66 @@
 import Link from "next/link";
-import { getRepresentedArtists } from "@/data/artists";
+import {
+  getArtistBySlug,
+  getRepresentedArtists,
+  type Artist,
+} from "@/data/artists";
+import {
+  getPublicRepresentedArtists,
+  type ArtistDoc,
+} from "@/lib/firebase/firestore";
 
-const representedArtists = getRepresentedArtists();
+export const dynamic = "force-dynamic";
 
-export default function ArtistsPage() {
+type ArtistCardView = {
+  slug: string;
+  name: string;
+  nameKo?: string;
+  tagline?: string;
+  profileImage?: string;
+};
+
+function mergeArtistCard(
+  staticArtist?: Artist,
+  firestoreArtist?: ArtistDoc | null
+): ArtistCardView | null {
+  const slug = firestoreArtist?.slug ?? staticArtist?.slug ?? "";
+  const name = firestoreArtist?.name ?? staticArtist?.name ?? "";
+
+  if (!slug || !name) {
+    return null;
+  }
+
+  return {
+    slug,
+    name,
+    nameKo: firestoreArtist?.nameKo ?? staticArtist?.nameKo,
+    tagline: firestoreArtist?.tagline ?? staticArtist?.tagline,
+    profileImage: firestoreArtist?.profileImageUrl ?? staticArtist?.profileImage,
+  };
+}
+
+export default async function ArtistsPage() {
+  let representedArtists = getRepresentedArtists()
+    .map((artist) => mergeArtistCard(artist))
+    .filter((artist): artist is ArtistCardView => artist !== null);
+
+  try {
+    const publicArtists = await getPublicRepresentedArtists();
+
+    if (publicArtists.length > 0) {
+      representedArtists = publicArtists
+        .map((artist) =>
+          mergeArtistCard(
+            artist.slug ? getArtistBySlug(artist.slug) : undefined,
+            artist
+          )
+        )
+        .filter((artist): artist is ArtistCardView => artist !== null);
+    }
+  } catch {
+    // Keep static seed artists as a fallback when Firestore public reads fail.
+  }
+
   return (
     <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
       <section className="border-b border-black/5">

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import ArtworkViewer from "./ArtworkViewer";
 import QRCodePanel from "./QRCodePanel";
-import type { Work } from "@/data/works";
+import type { Work } from "@/types/work";
 
 type DeviceRedirectProps = {
   work: Work;
@@ -76,12 +76,13 @@ function getAndroidSceneViewerIntent(absoluteGlbUrl: string, title: string) {
 }
 
 export default function DeviceRedirect({ work }: DeviceRedirectProps) {
-  const [deviceInfo, setDeviceInfo] =
-    useState<DeviceInfo>(initialDeviceInfo);
+  const [deviceInfo] = useState<DeviceInfo>(() => {
+    if (typeof window === "undefined") {
+      return initialDeviceInfo;
+    }
 
-  useEffect(() => {
-    setDeviceInfo(getDeviceInfo());
-  }, []);
+    return getDeviceInfo();
+  });
 
   const absoluteGlbUrl = useMemo(() => {
     return getAbsoluteModelUrl(work.modelGlb, deviceInfo.origin);
