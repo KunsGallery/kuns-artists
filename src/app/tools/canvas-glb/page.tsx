@@ -19,6 +19,7 @@ import {
   getAllWorksForTool,
   type WorkToolDoc,
 } from "@/lib/firebase/firestore";
+import { uploadGlbBlobToR2 } from "@/lib/r2/client";
 
 type CanvasGlbFormState = {
   imageUrl: string;
@@ -49,6 +50,7 @@ const FRONT_ROTATION_X_OPTIONS = [
   "10",
   "15",
 ] as const;
+
 const FRONT_ROTATION_Y_OPTIONS = [
   "-90",
   "0",
@@ -87,6 +89,25 @@ function getSideModeLabel(sideMode: CanvasSideMode) {
   return sideMode === "canvas" ? "Canvas Beige" : "Image Edge";
 }
 
+function getUploadMetaFromWork(work: WorkToolDoc | null, form: CanvasGlbFormState) {
+  const extendedWork = work as
+    | (WorkToolDoc & {
+        slug?: string;
+        workSlug?: string;
+        artistSlug?: string;
+      })
+    | null;
+
+  return {
+    artistSlug: extendedWork?.artistSlug || "unknown-artist",
+    workSlug:
+      extendedWork?.slug ||
+      extendedWork?.workSlug ||
+      form.title ||
+      "canvas-work",
+  };
+}
+
 // This route stays public for quick iteration during implementation.
 // Move it under an admin-only route once the asset pipeline is connected.
 export default function CanvasGlbToolPage() {
@@ -98,9 +119,17 @@ export default function CanvasGlbToolPage() {
   const [worksErrorMessage, setWorksErrorMessage] = useState<string | null>(
     null
   );
+
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(
+    null
+  );
+  const [uploadedGlbUrl, setUploadedGlbUrl] = useState("");
+
   const selectedWork =
     availableWorks.find((work) => work.id === selectedWorkId) ?? null;
 
@@ -151,6 +180,8 @@ export default function CanvasGlbToolPage() {
     setToolMode(nextMode);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setUploadErrorMessage(null);
+    setUploadedGlbUrl("");
 
     if (nextMode === "select" && availableWorks.length === 0 && !isLoadingWorks) {
       await loadWorksForSelection();
@@ -161,6 +192,8 @@ export default function CanvasGlbToolPage() {
     setSelectedWorkId(nextWorkId);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setUploadErrorMessage(null);
+    setUploadedGlbUrl("");
 
     if (!nextWorkId) return;
 
@@ -171,11 +204,7 @@ export default function CanvasGlbToolPage() {
     applySelectedWork(work);
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
+  function validateAndGetNumbers() {
     const widthCm = Number(form.widthCm);
     const heightCm = Number(form.heightCm);
     const depthCm = Number(form.depthCm || String(DEFAULT_DEPTH_CM));
@@ -186,31 +215,78 @@ export default function CanvasGlbToolPage() {
       form.frontRotationYDeg || String(DEFAULT_FRONT_ROTATION_Y_DEG)
     );
 
+    if (!form.imageUrl.trim()) {
+      throw new Error("작품 이미지 URL이 필요합니다.");
+    }
+
+    if (!form.title.trim()) {
+      throw new Error("작품명이 필요합니다.");
+    }
+
+    if (!widthCm || Number.isNaN(widthCm)) {
+      throw new Error("작품의 가로 cm 값을 입력해주세요.");
+    }
+
+    if (!heightCm || Number.isNaN(heightCm)) {
+      throw new Error("작품의 세로 cm 값을 입력해주세요.");
+    }
+
+    if (!depthCm || Number.isNaN(depthCm)) {
+      throw new Error("작품의 두께 cm 값을 입력해주세요.");
+    }
+
+    return {
+      widthCm,
+      heightCm,
+      depthCm,
+      frontRotationXDeg,
+      frontRotationYDeg,
+    };
+  }
+
+  async function createCurrentGlbBlob() {
+    const {
+      widthCm,
+      heightCm,
+      depthCm,
+      frontRotationXDeg,
+      frontRotationYDeg,
+    } = validateAndGetNumbers();
+
+    return await createCanvasGlbBlob(
+      {
+        imageUrl: form.imageUrl,
+        title: form.title,
+        artistName: normalizeOptionalText(form.artistName),
+        year: normalizeOptionalText(form.year),
+        medium: normalizeOptionalText(form.medium),
+        dimensions: normalizeOptionalText(form.dimensions),
+        widthCm,
+        heightCm,
+        depthCm,
+      },
+      {
+        frontRotationXDeg,
+        frontRotationYDeg,
+        sideColor: form.sideColor || DEFAULT_SIDE_COLOR,
+        backColor: form.backColor || DEFAULT_BACK_COLOR,
+        sideMode: form.sideMode,
+        showBackLabel: form.showBackLabel,
+      }
+    );
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setUploadErrorMessage(null);
+
     setIsGenerating(true);
 
     try {
       const filename = createSafeGlbFilename(form.title);
-      const blob = await createCanvasGlbBlob(
-        {
-          imageUrl: form.imageUrl,
-          title: form.title,
-          artistName: normalizeOptionalText(form.artistName),
-          year: normalizeOptionalText(form.year),
-          medium: normalizeOptionalText(form.medium),
-          dimensions: normalizeOptionalText(form.dimensions),
-          widthCm,
-          heightCm,
-          depthCm,
-        },
-        {
-          frontRotationXDeg,
-          frontRotationYDeg,
-          sideColor: form.sideColor || DEFAULT_SIDE_COLOR,
-          backColor: form.backColor || DEFAULT_BACK_COLOR,
-          sideMode: form.sideMode,
-          showBackLabel: form.showBackLabel,
-        }
-      );
+      const blob = await createCurrentGlbBlob();
 
       downloadBlob(blob, filename);
       setSuccessMessage(
@@ -227,6 +303,44 @@ export default function CanvasGlbToolPage() {
     }
   }
 
+  async function handleGenerateAndUploadGlb() {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setUploadErrorMessage(null);
+    setUploadedGlbUrl("");
+
+    setIsUploading(true);
+
+    try {
+      const filename = createSafeGlbFilename(form.title);
+      const blob = await createCurrentGlbBlob();
+      const { artistSlug, workSlug } = getUploadMetaFromWork(
+        selectedWork,
+        form
+      );
+
+      const result = await uploadGlbBlobToR2({
+        blob,
+        filename,
+        artistSlug,
+        workSlug,
+      });
+
+      setUploadedGlbUrl(result.publicUrl);
+      setSuccessMessage(
+        "GLB가 생성되어 R2에 업로드되었습니다. 아직 Firestore generatedGlbUrl에는 자동 저장하지 않았습니다."
+      );
+    } catch (error) {
+      setUploadErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "GLB 업로드 중 오류가 발생했습니다."
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
       <div className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-8">
@@ -238,12 +352,21 @@ export default function CanvasGlbToolPage() {
             KÜN’S GALLERY
           </Link>
 
-          <Link
-            href="/admin"
-            className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
-          >
-            Admin
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin"
+              className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
+            >
+              Admin
+            </Link>
+
+            <Link
+              href="/artist/login"
+              className="inline-flex h-11 items-center rounded-full bg-black px-5 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
+              Artist Login
+            </Link>
+          </div>
         </header>
 
         <section className="grid gap-8 py-12 md:grid-cols-[1.08fr_0.92fr] md:items-end md:py-16">
@@ -261,7 +384,7 @@ export default function CanvasGlbToolPage() {
             <p className="mt-8 max-w-2xl text-sm leading-7 text-neutral-600 md:text-[15px]">
               작품 이미지 URL을 직접 입력하거나 Firestore 작품을 선택해, 앞면
               이미지와 옆면, 뒷면 정보 표현까지 조정 가능한 캔버스형 GLB를
-              브라우저에서 바로 생성해 다운로드할 수 있습니다.
+              브라우저에서 바로 생성해 다운로드하거나 R2에 업로드할 수 있습니다.
             </p>
           </div>
 
@@ -290,18 +413,13 @@ export default function CanvasGlbToolPage() {
                 뒷면으로 생성됩니다.
               </p>
               <p>
-                Back Label은 작품 비율과 무관하게 뒷면 중앙의 정사각형 캡션
-                패널처럼 배치됩니다.
-              </p>
-              <p>
                 Select Work Mode에서는 Firestore `works` 문서를 불러와 폼을
                 자동 채웁니다. `widthCm`, `heightCm`가 없는 작품은 dimensions를
                 자동 파싱하지 않으니 직접 입력해주세요.
               </p>
               <p>
-                외부 이미지 URL은 CORS 허용이 필요합니다. 빠른 테스트는
-                `/images/works/kim-hwan-sample-01.jpg` 같은 same-origin 경로가
-                가장 안전합니다.
+                R2 업로드는 generatedGlbUrl 자동 저장 전 단계입니다. 성공하면
+                public URL이 표시됩니다.
               </p>
             </div>
           </div>
@@ -419,7 +537,7 @@ export default function CanvasGlbToolPage() {
                   }
                   className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                   placeholder="/images/works/kim-hwan-sample-01.jpg"
-                  disabled={isGenerating}
+                  disabled={isGenerating || isUploading}
                 />
               </label>
 
@@ -433,7 +551,7 @@ export default function CanvasGlbToolPage() {
                   onChange={(event) => updateField("title", event.target.value)}
                   className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                   placeholder="Test Canvas"
-                  disabled={isGenerating}
+                  disabled={isGenerating || isUploading}
                 />
               </label>
 
@@ -450,7 +568,7 @@ export default function CanvasGlbToolPage() {
                     }
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                     placeholder="Kim Hwan"
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   />
                 </label>
 
@@ -464,7 +582,7 @@ export default function CanvasGlbToolPage() {
                     onChange={(event) => updateField("year", event.target.value)}
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                     placeholder="2026"
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   />
                 </label>
               </div>
@@ -479,7 +597,7 @@ export default function CanvasGlbToolPage() {
                   onChange={(event) => updateField("medium", event.target.value)}
                   className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                   placeholder="Acrylic and Pigment on Canvas"
-                  disabled={isGenerating}
+                  disabled={isGenerating || isUploading}
                 />
               </label>
 
@@ -495,7 +613,7 @@ export default function CanvasGlbToolPage() {
                   }
                   className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                   placeholder="116.8 x 91.0 cm"
-                  disabled={isGenerating}
+                  disabled={isGenerating || isUploading}
                 />
               </label>
 
@@ -515,7 +633,7 @@ export default function CanvasGlbToolPage() {
                     }
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                     placeholder="100"
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   />
                 </label>
 
@@ -534,7 +652,7 @@ export default function CanvasGlbToolPage() {
                     }
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                     placeholder="100"
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   />
                 </label>
 
@@ -553,7 +671,7 @@ export default function CanvasGlbToolPage() {
                     }
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                     placeholder={String(DEFAULT_DEPTH_CM)}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   />
                 </label>
               </div>
@@ -569,7 +687,7 @@ export default function CanvasGlbToolPage() {
                       updateField("frontRotationXDeg", event.target.value)
                     }
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   >
                     {FRONT_ROTATION_X_OPTIONS.map((rotation) => (
                       <option key={rotation} value={rotation}>
@@ -589,7 +707,7 @@ export default function CanvasGlbToolPage() {
                       updateField("frontRotationYDeg", event.target.value)
                     }
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   >
                     {FRONT_ROTATION_Y_OPTIONS.map((rotation) => (
                       <option key={rotation} value={rotation}>
@@ -612,7 +730,7 @@ export default function CanvasGlbToolPage() {
                       )
                     }
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   >
                     <option value="canvas">Canvas Beige</option>
                     <option value="image">Image Edge</option>
@@ -632,7 +750,7 @@ export default function CanvasGlbToolPage() {
                       updateField("sideColor", event.target.value)
                     }
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-2 text-sm text-neutral-900 outline-none transition focus:border-black/20"
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   />
                 </label>
 
@@ -647,7 +765,7 @@ export default function CanvasGlbToolPage() {
                       updateField("backColor", event.target.value)
                     }
                     className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-2 text-sm text-neutral-900 outline-none transition focus:border-black/20"
-                    disabled={isGenerating}
+                    disabled={isGenerating || isUploading}
                   />
                 </label>
 
@@ -663,7 +781,7 @@ export default function CanvasGlbToolPage() {
                         updateField("showBackLabel", event.target.checked)
                       }
                       className="h-4 w-4 rounded border-black/20"
-                      disabled={isGenerating}
+                      disabled={isGenerating || isUploading}
                     />
                     <span className="text-sm leading-6 text-neutral-600">
                       Show artwork info on the back.
@@ -678,15 +796,26 @@ export default function CanvasGlbToolPage() {
                   생성합니다.
                 </p>
 
-                <button
-                  type="submit"
-                  disabled={isGenerating}
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-black px-6 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-500"
-                >
-                  {isGenerating
-                    ? "Generating GLB..."
-                    : "GLB 생성 및 다운로드"}
-                </button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="submit"
+                    disabled={isGenerating || isUploading}
+                    className="inline-flex h-12 items-center justify-center rounded-full bg-black px-6 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-500"
+                  >
+                    {isGenerating
+                      ? "Generating GLB..."
+                      : "GLB 생성 및 다운로드"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateAndUploadGlb()}
+                    disabled={isGenerating || isUploading}
+                    className="inline-flex h-12 items-center justify-center rounded-full bg-[#a38c5d] px-6 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isUploading ? "R2 업로드 중..." : "GLB 생성 후 R2 업로드"}
+                  </button>
+                </div>
               </div>
             </div>
           </form>
@@ -770,6 +899,31 @@ export default function CanvasGlbToolPage() {
                 </div>
               ) : null}
 
+              {uploadedGlbUrl ? (
+                <div className="rounded-[1.5rem] border border-[#a38c5d]/30 bg-[#a38c5d]/10 p-4 text-sm leading-6 text-neutral-800">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-[#7d6a43]">
+                    Uploaded GLB URL
+                  </p>
+
+                  <a
+                    href={uploadedGlbUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 block break-all underline underline-offset-4"
+                  >
+                    {uploadedGlbUrl}
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(uploadedGlbUrl)}
+                    className="mt-4 inline-flex h-10 items-center rounded-full border border-black/10 bg-white px-4 text-xs font-medium text-neutral-900 transition hover:border-[#a38c5d]"
+                  >
+                    URL 복사
+                  </button>
+                </div>
+              ) : null}
+
               {successMessage ? (
                 <div className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-800">
                   {successMessage}
@@ -779,6 +933,12 @@ export default function CanvasGlbToolPage() {
               {errorMessage ? (
                 <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">
                   {errorMessage}
+                </div>
+              ) : null}
+
+              {uploadErrorMessage ? (
+                <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">
+                  {uploadErrorMessage}
                 </div>
               ) : null}
             </div>

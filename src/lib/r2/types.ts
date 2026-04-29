@@ -13,3 +13,8 @@ export type R2PresignResponse = {
   publicUrl: string;
   key: string;
 };
+
+export type R2UploadResult = {
+  publicUrl: string;
+  key: string;
+};
