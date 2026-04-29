@@ -47,24 +47,16 @@ export default function HomePage() {
             <nav className="flex items-center gap-2 md:gap-6">
               <Link
                 href="/artists"
-                className="hidden text-sm text-white/58 transition hover:text-[#f7f4ec] sm:inline-flex"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-5 text-[12px] font-semibold uppercase tracking-[0.12em] text-[#f7f4ec] transition duration-500 hover:border-[#a38c5d] hover:text-[#a38c5d]"
               >
                 Artists
-              </Link>
-
-              <Link
-                href="/ar/jessup-choi-sample-01"
-                className="hidden text-sm text-white/58 transition hover:text-[#f7f4ec] md:inline-flex"
-              >
-                AR Sample
               </Link>
 
               <Link
                 href="/artist/login"
                 className="inline-flex h-11 items-center justify-center rounded-full border border-[#a38c5d]/40 bg-[#a38c5d]/10 px-5 text-[12px] font-semibold uppercase tracking-[0.12em] text-[#f7f4ec] transition duration-500 hover:-translate-y-0.5 hover:border-[#a38c5d] hover:bg-[#a38c5d] hover:shadow-[0_0_30px_rgba(163,140,93,0.25)]"
               >
-                <span className="hidden sm:inline">Artist Login</span>
-                <span className="sm:hidden">Login</span>
+                Artist Login
               </Link>
             </nav>
           </header>

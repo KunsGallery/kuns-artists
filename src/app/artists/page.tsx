@@ -40,26 +40,37 @@ function mergeArtistCard(
 }
 
 export default async function ArtistsPage() {
-  let representedArtists = getRepresentedArtists()
-    .map((artist) => mergeArtistCard(artist))
-    .filter((artist): artist is ArtistCardView => artist !== null);
+  const staticArtists = getRepresentedArtists();
+  const mergedArtistsBySlug = new Map<string, ArtistCardView>();
+
+  for (const artist of staticArtists) {
+    const merged = mergeArtistCard(artist);
+
+    if (merged) {
+      mergedArtistsBySlug.set(merged.slug, merged);
+    }
+  }
 
   try {
     const publicArtists = await getPublicRepresentedArtists();
 
-    if (publicArtists.length > 0) {
-      representedArtists = publicArtists
-        .map((artist) =>
-          mergeArtistCard(
-            artist.slug ? getArtistBySlug(artist.slug) : undefined,
-            artist
-          )
-        )
-        .filter((artist): artist is ArtistCardView => artist !== null);
+    for (const artist of publicArtists) {
+      const merged = mergeArtistCard(
+        artist.slug ? getArtistBySlug(artist.slug) : undefined,
+        artist
+      );
+
+      if (merged) {
+        mergedArtistsBySlug.set(merged.slug, merged);
+      }
     }
   } catch {
     // Keep static seed artists as a fallback when Firestore public reads fail.
   }
+
+  const representedArtists = [...mergedArtistsBySlug.values()].sort((left, right) =>
+    left.name.localeCompare(right.name, "en")
+  );
 
   return (
     <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
