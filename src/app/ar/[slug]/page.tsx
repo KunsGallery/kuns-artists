@@ -1,8 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import DeviceRedirect from "@/components/ar/DeviceRedirect";
-import { getWorkBySlug } from "@/data/works";
 import { getArtistBySlug } from "@/data/artists";
+import { getWorkBySlug as getStaticWorkBySlug } from "@/data/works";
+import {
+  getPublicWorkBySlug,
+  resolveArtistWorkSlug,
+  type ArtistWorkDoc,
+} from "@/lib/firebase/firestore";
+import type { Work } from "@/types/work";
+
+export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{
@@ -10,9 +18,73 @@ type PageProps = {
   }>;
 };
 
+function mapPublicWork(
+  firestoreWork?: ArtistWorkDoc | null,
+  fallbackWork?: Work
+): Work | null {
+  const slug = firestoreWork
+    ? resolveArtistWorkSlug(firestoreWork)
+    : fallbackWork?.slug ?? "";
+  const artistSlug = firestoreWork?.artistSlug ?? fallbackWork?.artistSlug ?? "";
+  const artistName =
+    firestoreWork?.artistName ?? fallbackWork?.artistName ?? "";
+  const title = firestoreWork?.title ?? fallbackWork?.title ?? "";
+
+  if (!slug || !artistSlug || !artistName || !title) {
+    return null;
+  }
+
+  return {
+    slug,
+    artistSlug,
+    artistName,
+    title,
+    year: firestoreWork?.year ?? fallbackWork?.year,
+    medium: firestoreWork?.medium ?? fallbackWork?.medium,
+    dimensions: firestoreWork?.dimensions ?? fallbackWork?.dimensions,
+    description: firestoreWork?.description ?? fallbackWork?.description,
+    coverImage: firestoreWork?.coverImageUrl ?? fallbackWork?.coverImage,
+    coverImageUrl: firestoreWork?.coverImageUrl ?? fallbackWork?.coverImageUrl,
+    modelGlb:
+      firestoreWork?.generatedGlbUrl ??
+      firestoreWork?.modelGlb ??
+      fallbackWork?.modelGlb,
+    modelUsdz:
+      firestoreWork?.generatedUsdzUrl ??
+      firestoreWork?.modelUsdz ??
+      fallbackWork?.modelUsdz,
+    generatedGlbUrl:
+      firestoreWork?.generatedGlbUrl ?? fallbackWork?.generatedGlbUrl,
+    generatedUsdzUrl:
+      firestoreWork?.generatedUsdzUrl ?? fallbackWork?.generatedUsdzUrl,
+    widthCm: firestoreWork?.widthCm ?? fallbackWork?.widthCm,
+    heightCm: firestoreWork?.heightCm ?? fallbackWork?.heightCm,
+    depthCm: firestoreWork?.depthCm ?? fallbackWork?.depthCm,
+    frontRotationXDeg:
+      firestoreWork?.frontRotationXDeg ?? fallbackWork?.frontRotationXDeg,
+    frontRotationYDeg:
+      firestoreWork?.frontRotationYDeg ?? fallbackWork?.frontRotationYDeg,
+    sideMode: firestoreWork?.sideMode ?? fallbackWork?.sideMode,
+    showBackLabel:
+      firestoreWork?.showBackLabel ?? fallbackWork?.showBackLabel,
+    isPublished: firestoreWork?.isPublished ?? fallbackWork?.isPublished,
+    archived: firestoreWork?.archived ?? fallbackWork?.archived,
+  };
+}
+
 export default async function ArWorkPage({ params }: PageProps) {
   const { slug } = await params;
-  const work = getWorkBySlug(slug);
+  const staticWork = getStaticWorkBySlug(slug);
+
+  let firestoreWork: ArtistWorkDoc | null = null;
+
+  try {
+    firestoreWork = await getPublicWorkBySlug(slug);
+  } catch {
+    firestoreWork = null;
+  }
+
+  const work = mapPublicWork(firestoreWork, staticWork);
 
   if (!work) {
     notFound();
@@ -33,9 +105,9 @@ export default async function ArWorkPage({ params }: PageProps) {
             </Link>
 
             <nav className="flex items-center gap-2 md:gap-3">
-              {artist ? (
+              {work.artistSlug ? (
                 <Link
-                  href={`/artists/${artist.slug}`}
+                  href={`/artists/${work.artistSlug}`}
                   className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
                 >
                   Artist

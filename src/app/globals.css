@@ -1,24 +1,72 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f5f3ee;
-  --foreground: #0a0a0a;
+  --background: #050505;
+  --foreground: #ffffff;
+  --accent-gold: #a38c5d;   /* 전속 작가용: 권위와 전통 */
+  --accent-silver: #707070; /* 프로젝트용: 세련된 현대미 */
+  --line: rgba(255, 255, 255, 0.05);
 }
 
-html {
-  background: var(--background);
-  color: var(--foreground);
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
-  background: var(--background);
+  background: 
+    radial-gradient(circle at 50% 0%, rgba(163, 140, 93, 0.05), transparent 50%),
+    var(--background);
+  font-family: "Pretendard Variable", -apple-system, sans-serif;
   color: var(--foreground);
-  font-family:
-    Arial,
-    "Apple SD Gothic Neo",
-    "Noto Sans KR",
-    "Malgun Gothic",
-    sans-serif;
+  /* 미세한 노이즈 텍스처 효과로 디지털 차가움 상쇄 */
+  background-image: url("https://www.transparenttextures.com/patterns/carbon-fibre.png"); 
+}
+
+.luxury-serif {
+  font-family: "Cormorant Garamond", serif;
+  font-style: italic;
+}
+
+.luxury-container {
+  width: min(100% - 3rem, 1560px);
+  margin-inline: auto;
+}
+
+/* 전속 작가 라벨 */
+.label-represented {
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  color: var(--accent-gold);
+  border-left: 1px solid var(--accent-gold);
+  padding-left: 12px;
+  text-transform: uppercase;
+}
+
+/* 프로젝트 아티스트 라벨 */
+.label-project {
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  color: var(--accent-silver);
+  border-left: 1px solid var(--accent-silver);
+  padding-left: 12px;
+  text-transform: uppercase;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-full bg-white px-10 h-12 text-[12px] font-bold text-black transition-all duration-500 hover:bg-[#a38c5d] hover:text-white hover:shadow-[0_0_20px_rgba(163,140,93,0.3)];
+}
+
+/* 커스텀 스크롤바 */
+.custom-scrollbar::-webkit-scrollbar { width: 1px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--accent-gold); }
+
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-reveal {
+  animation: reveal 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

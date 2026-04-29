@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -79,6 +78,7 @@ export type ArtistWorkDoc = {
   modelGlb?: string;
   modelUsdz?: string;
   generatedGlbUrl?: string;
+  generatedUsdzUrl?: string;
   isPublished?: boolean;
   archived?: boolean;
   createdAt?: unknown;
@@ -139,6 +139,37 @@ function toOptionalBoolean(value: unknown) {
 
 function toOptionalSideMode(value: unknown) {
   return value === "canvas" || value === "image" ? value : undefined;
+}
+
+function toSafeSlugPart(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function buildWorkSlug(title: string, artistSlug: string, documentId: string) {
+  const artistPrefix = toSafeSlugPart(artistSlug) || "artist";
+  const titlePart = toSafeSlugPart(title);
+
+  if (titlePart) {
+    return `${artistPrefix}-${titlePart}`;
+  }
+
+  return `${artistPrefix}-work-${documentId.slice(0, 6).toLowerCase()}`;
+}
+
+export function resolveArtistWorkSlug(
+  work: Pick<ArtistWorkDoc, "id" | "slug" | "title" | "artistSlug">
+) {
+  if (work.slug) {
+    return work.slug;
+  }
+
+  return buildWorkSlug(work.title ?? "", work.artistSlug ?? "artist", work.id);
 }
 
 function getTimestampMillis(value: unknown) {
@@ -217,6 +248,7 @@ function toArtistWorkDoc(id: string, rawData: Record<string, unknown>): ArtistWo
     modelGlb: toOptionalString(rawData.modelGlb),
     modelUsdz: toOptionalString(rawData.modelUsdz),
     generatedGlbUrl: toOptionalString(rawData.generatedGlbUrl),
+    generatedUsdzUrl: toOptionalString(rawData.generatedUsdzUrl),
     isPublished: toOptionalBoolean(rawData.isPublished),
     archived: toOptionalBoolean(rawData.archived),
     createdAt: rawData.createdAt,
@@ -354,6 +386,63 @@ export async function getPublicRepresentedArtists(): Promise<ArtistDoc[]> {
     );
 }
 
+export async function getPublicWorkBySlug(
+  slug: string
+): Promise<ArtistWorkDoc | null> {
+  const snapshot = await getDocs(
+    query(collection(db, "works"), where("slug", "==", slug), limit(1))
+  );
+
+  if (snapshot.empty) {
+    const fallbackSnapshot = await getDocs(collection(db, "works"));
+    const fallbackWorks = fallbackSnapshot.docs
+      .map((document) =>
+        toArtistWorkDoc(
+          document.id,
+          document.data() as Record<string, unknown>
+        )
+      )
+      .filter((work) => work.isPublished === true);
+
+    return (
+      fallbackWorks.find((work) => resolveArtistWorkSlug(work) === slug) ?? null
+    );
+  }
+
+  const work = toArtistWorkDoc(
+    snapshot.docs[0].id,
+    snapshot.docs[0].data() as Record<string, unknown>
+  );
+
+  return work.isPublished === true ? work : null;
+}
+
+export async function getPublicWorksForArtistSlug(
+  artistSlug: string
+): Promise<ArtistWorkDoc[]> {
+  const snapshot = await getDocs(
+    query(collection(db, "works"), where("artistSlug", "==", artistSlug))
+  );
+
+  return snapshot.docs
+    .map((document) =>
+      toArtistWorkDoc(
+        document.id,
+        document.data() as Record<string, unknown>
+      )
+    )
+    .filter((work) => work.isPublished === true)
+    .sort((left, right) => {
+      const timeCompare =
+        getTimestampMillis(right.updatedAt ?? right.createdAt) -
+        getTimestampMillis(left.updatedAt ?? left.createdAt);
+
+      if (timeCompare !== 0) return timeCompare;
+
+      return (left.title ?? "").localeCompare(right.title ?? "", "en");
+    });
+}
+
 export async function getWorkById(workId: string): Promise<ArtistWorkDoc | null> {
   const snapshot = await getDoc(doc(db, "works", workId));
 
@@ -370,8 +459,16 @@ export async function createWorkForArtist(
   artist: ArtistDoc,
   payload: ArtistWorkSavePayload
 ) {
-  const document = await addDoc(collection(db, "works"), {
+  const documentRef = doc(collection(db, "works"));
+  const slug = buildWorkSlug(
+    payload.title,
+    artist.slug ?? artistId,
+    documentRef.id
+  );
+
+  await setDoc(documentRef, {
     ...buildArtistWorkCreatePayload(artistId, artist, payload),
+    slug,
     modelGlb: "",
     modelUsdz: "",
     generatedGlbUrl: "",
@@ -381,7 +478,7 @@ export async function createWorkForArtist(
     updatedAt: serverTimestamp(),
   });
 
-  return document.id;
+  return documentRef.id;
 }
 
 export async function updateWorkForArtist(

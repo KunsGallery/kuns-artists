@@ -20,6 +20,7 @@ export type Work = {
   sideMode?: "canvas" | "image";
   showBackLabel?: boolean;
   generatedGlbUrl?: string;
+  generatedUsdzUrl?: string;
   generatedAt?: unknown;
   isPublished?: boolean;
   archived?: boolean;

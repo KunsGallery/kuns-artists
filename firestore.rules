@@ -200,6 +200,7 @@ service cloud.firestore {
 
     function workCreateKeys() {
       return [
+        "slug",
         "title",
         "year",
         "medium",
@@ -269,6 +270,7 @@ service cloud.firestore {
       return hasArtistProfile(authUid())
         && request.resource.data.keys().hasOnly(workCreateKeys())
         && request.resource.data.keys().hasAll([
+          "slug",
           "title",
           "sideMode",
           "showBackLabel",
@@ -283,6 +285,8 @@ service cloud.firestore {
           "createdAt",
           "updatedAt"
         ])
+        && request.resource.data.slug is string
+        && request.resource.data.slug.size() > 0
         && request.resource.data.artistId == authUid()
         && request.resource.data.artistSlug == currentArtistProfile().data.slug
         && request.resource.data.artistName == currentArtistProfile().data.name
@@ -300,12 +304,14 @@ service cloud.firestore {
 
       return resource.data.artistId == authUid()
         && changedKeys.hasOnly(workArtistEditableKeys())
+        && request.resource.data.slug == resource.data.slug
         && request.resource.data.artistId == resource.data.artistId
         && request.resource.data.artistSlug == resource.data.artistSlug
         && request.resource.data.artistName == resource.data.artistName
         && request.resource.data.modelGlb == resource.data.modelGlb
         && request.resource.data.modelUsdz == resource.data.modelUsdz
         && request.resource.data.generatedGlbUrl == resource.data.generatedGlbUrl
+        && request.resource.data.generatedUsdzUrl == resource.data.generatedUsdzUrl
         && request.resource.data.isPublished == resource.data.isPublished
         && request.resource.data.createdAt == resource.data.createdAt
         && validWorkFields();

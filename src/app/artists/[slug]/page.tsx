@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getArtistBySlug, type Artist } from "@/data/artists";
-import { works } from "@/data/works";
+import { works as staticWorks } from "@/data/works";
+import type { Work } from "@/types/work";
 import {
   getPublicArtistBySlug,
+  getPublicWorksForArtistSlug,
+  resolveArtistWorkSlug,
   type ArtistDoc,
+  type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
 import { normalizeExternalUrl } from "@/lib/url";
 
@@ -63,6 +67,90 @@ function mergePublicArtist(
     artsyUrl: firestoreArtist?.artsyUrl ?? staticArtist?.links?.artsy,
     websiteUrl: firestoreArtist?.websiteUrl,
     archives: staticArtist?.archives,
+  };
+}
+
+function findStaticFallbackWork(
+  artistSlug: string,
+  firestoreWork: ArtistWorkDoc
+) {
+  const normalizedTitle = firestoreWork.title?.trim().toLowerCase() ?? "";
+  const normalizedCover = firestoreWork.coverImageUrl?.trim() ?? "";
+
+  return staticWorks.find((work) => {
+    if (work.artistSlug !== artistSlug) {
+      return false;
+    }
+
+    if (firestoreWork.slug && work.slug === firestoreWork.slug) {
+      return true;
+    }
+
+    if (normalizedTitle && work.title.trim().toLowerCase() === normalizedTitle) {
+      return true;
+    }
+
+    if (normalizedCover && work.coverImage === normalizedCover) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
+function mergePublicWork(
+  artistSlug: string,
+  firestoreWork?: ArtistWorkDoc | null,
+  staticWork?: Work
+): Work | null {
+  const fallbackWork =
+    staticWork ?? (firestoreWork ? findStaticFallbackWork(artistSlug, firestoreWork) : undefined);
+  const slug = firestoreWork
+    ? resolveArtistWorkSlug(firestoreWork)
+    : fallbackWork?.slug ?? "";
+  const title = firestoreWork?.title ?? fallbackWork?.title ?? "";
+  const artistName =
+    firestoreWork?.artistName ?? fallbackWork?.artistName ?? "";
+
+  if (!slug || !title || !artistSlug || !artistName) {
+    return null;
+  }
+
+  return {
+    slug,
+    artistSlug,
+    artistName,
+    title,
+    year: firestoreWork?.year ?? fallbackWork?.year,
+    medium: firestoreWork?.medium ?? fallbackWork?.medium,
+    dimensions: firestoreWork?.dimensions ?? fallbackWork?.dimensions,
+    description: firestoreWork?.description ?? fallbackWork?.description,
+    coverImage: firestoreWork?.coverImageUrl ?? fallbackWork?.coverImage,
+    coverImageUrl: firestoreWork?.coverImageUrl ?? fallbackWork?.coverImageUrl,
+    modelGlb:
+      firestoreWork?.generatedGlbUrl ??
+      firestoreWork?.modelGlb ??
+      fallbackWork?.modelGlb,
+    modelUsdz:
+      firestoreWork?.generatedUsdzUrl ??
+      firestoreWork?.modelUsdz ??
+      fallbackWork?.modelUsdz,
+    generatedGlbUrl:
+      firestoreWork?.generatedGlbUrl ?? fallbackWork?.generatedGlbUrl,
+    generatedUsdzUrl:
+      firestoreWork?.generatedUsdzUrl ?? fallbackWork?.generatedUsdzUrl,
+    widthCm: firestoreWork?.widthCm ?? fallbackWork?.widthCm,
+    heightCm: firestoreWork?.heightCm ?? fallbackWork?.heightCm,
+    depthCm: firestoreWork?.depthCm ?? fallbackWork?.depthCm,
+    frontRotationXDeg:
+      firestoreWork?.frontRotationXDeg ?? fallbackWork?.frontRotationXDeg,
+    frontRotationYDeg:
+      firestoreWork?.frontRotationYDeg ?? fallbackWork?.frontRotationYDeg,
+    sideMode: firestoreWork?.sideMode ?? fallbackWork?.sideMode,
+    showBackLabel:
+      firestoreWork?.showBackLabel ?? fallbackWork?.showBackLabel,
+    isPublished: firestoreWork?.isPublished ?? fallbackWork?.isPublished,
+    archived: firestoreWork?.archived ?? fallbackWork?.archived,
   };
 }
 
@@ -146,13 +234,27 @@ function ArchiveSection({
 export default async function ArtistDetailPage({ params }: PageProps) {
   const { slug } = await params;
   const staticArtist = getArtistBySlug(slug);
+  const staticArtistWorks = staticWorks.filter((work) => work.artistSlug === slug);
 
   let firestoreArtist: ArtistDoc | null = null;
+  let artistWorks = staticArtistWorks;
 
   try {
     firestoreArtist = await getPublicArtistBySlug(slug);
   } catch {
     firestoreArtist = null;
+  }
+
+  try {
+    const firestoreWorks = await getPublicWorksForArtistSlug(slug);
+
+    if (firestoreWorks.length > 0) {
+      artistWorks = firestoreWorks
+        .map((work) => mergePublicWork(slug, work))
+        .filter((work): work is Work => work !== null);
+    }
+  } catch {
+    artistWorks = staticArtistWorks;
   }
 
   const artist = mergePublicArtist(staticArtist, firestoreArtist);
@@ -161,7 +263,6 @@ export default async function ArtistDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const artistWorks = works.filter((work) => work.artistSlug === artist.slug);
   const instagramHref = normalizeExternalUrl(artist.instagramUrl);
   const youtubeHref = normalizeExternalUrl(artist.youtubeUrl);
   const cvHref = normalizeExternalUrl(artist.cvUrl);
@@ -216,38 +317,43 @@ export default async function ArtistDetailPage({ params }: PageProps) {
           <div className="border-t border-black/5 py-8 md:py-10">
             <div className="grid gap-4 md:grid-cols-4">
               {artistWorks.length > 0 ? (
-                artistWorks.slice(0, 4).map((work, index) => (
-                  <Link
-                    key={work.slug}
-                    href={`/ar/${work.slug}`}
-                    className="group overflow-hidden rounded-[1.6rem] border border-black/8 bg-white transition hover:-translate-y-0.5 hover:border-black/15 hover:shadow-[0_24px_60px_rgba(0,0,0,0.05)]"
-                  >
-                    <div className="overflow-hidden bg-[#ece8df]">
-                      {work.coverImage ? (
-                        <img
-                          src={work.coverImage}
-                          alt={work.title}
-                          className="h-[250px] w-full object-cover transition group-hover:scale-[1.02]"
-                        />
-                      ) : (
-                        <div className="flex h-[250px] items-center justify-center text-sm text-neutral-400">
-                          No Image
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                        Selected Artwork
-                      </p>
-                      <h3 className="mt-3 text-base font-medium tracking-[-0.02em] text-neutral-950">
-                        {work.title}
-                      </h3>
-                      <p className="mt-2 text-sm text-neutral-500">
-                        {index + 1}/{artistWorks.length}
-                      </p>
-                    </div>
-                  </Link>
-                ))
+                artistWorks.slice(0, 4).map((work, index) => {
+                  const artworkImage =
+                    work.coverImageUrl ?? work.coverImage ?? "";
+
+                  return (
+                    <Link
+                      key={work.slug}
+                      href={`/ar/${work.slug}`}
+                      className="group overflow-hidden rounded-[1.6rem] border border-black/8 bg-white transition hover:-translate-y-0.5 hover:border-black/15 hover:shadow-[0_24px_60px_rgba(0,0,0,0.05)]"
+                    >
+                      <div className="overflow-hidden bg-[#ece8df]">
+                        {artworkImage ? (
+                          <img
+                            src={artworkImage}
+                            alt={work.title}
+                            className="h-[250px] w-full object-cover transition group-hover:scale-[1.02]"
+                          />
+                        ) : (
+                          <div className="flex h-[250px] items-center justify-center text-sm text-neutral-400">
+                            No Image
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                          Selected Artwork
+                        </p>
+                        <h3 className="mt-3 text-base font-medium tracking-[-0.02em] text-neutral-950">
+                          {work.title}
+                        </h3>
+                        <p className="mt-2 text-sm text-neutral-500">
+                          {index + 1}/{artistWorks.length}
+                        </p>
+                      </div>
+                    </Link>
+                  );
+                })
               ) : (
                 <div className="col-span-full rounded-[1.6rem] border border-dashed border-black/10 bg-white px-6 py-10 text-sm text-neutral-600">
                   아직 연결된 작품이 없습니다.
