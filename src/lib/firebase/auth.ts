@@ -40,7 +40,28 @@ export async function assertAllowedArtist(user: User) {
   const existingArtistDoc = await getArtistProfileByUid(user.uid);
 
   if (existingArtistDoc) {
-    return existingArtistDoc;
+    return {
+      ...existingArtistDoc,
+      email: allowedArtist.email,
+      slug: existingArtistDoc.slug ?? allowedArtist.slug,
+      name: existingArtistDoc.name ?? allowedArtist.name,
+      nameKo: existingArtistDoc.nameKo ?? allowedArtist.nameKo,
+      type: allowedArtist.type,
+      status: allowedArtist.status,
+      role: allowedArtist.role,
+      tagline: existingArtistDoc.tagline ?? allowedArtist.tagline,
+      bio: existingArtistDoc.bio ?? allowedArtist.bio,
+      bioEn: existingArtistDoc.bioEn ?? allowedArtist.bioEn,
+      location: existingArtistDoc.location ?? allowedArtist.location,
+      profileImageUrl:
+        existingArtistDoc.profileImageUrl ?? allowedArtist.profileImageUrl,
+      instagramUrl:
+        existingArtistDoc.instagramUrl ?? allowedArtist.instagramUrl,
+      youtubeUrl: existingArtistDoc.youtubeUrl ?? allowedArtist.youtubeUrl,
+      cvUrl: existingArtistDoc.cvUrl ?? allowedArtist.cvUrl,
+      artsyUrl: existingArtistDoc.artsyUrl ?? allowedArtist.artsyUrl,
+      websiteUrl: existingArtistDoc.websiteUrl ?? allowedArtist.websiteUrl,
+    };
   }
 
   return await createArtistProfileFromSeed(user.uid, allowedArtist);

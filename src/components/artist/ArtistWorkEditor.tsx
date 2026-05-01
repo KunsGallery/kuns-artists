@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import ArtistWorkGlbForm from "./ArtistWorkGlbForm";
 import {
   createWorkForArtist,
-  getArtistProfileByUid,
   getWorkById,
   updateWorkForArtist,
   type ArtistDoc,
@@ -81,87 +79,86 @@ export default function ArtistWorkEditor({
   workId,
 }: ArtistWorkEditorProps) {
   const router = useRouter();
-  const [uid, setUid] = useState("");
-  const [artist, setArtist] = useState<ArtistDoc | null>(null);
   const [work, setWork] = useState<ArtistWorkDoc | null>(null);
   const [initialValues, setInitialValues] = useState<Partial<WorkFormValues>>();
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [editorErrorMessage, setEditorErrorMessage] = useState("");
+  const { artist, uid, isLoading, errorMessage } = useProtectedArtist({
+    fallbackErrorMessage: "작품 정보를 불러오는 중 오류가 발생했습니다.",
+  });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let isActive = true;
+
+    void (async () => {
+      if (!artist || !uid) {
+        await Promise.resolve();
+
+        if (isActive) {
+          setWork(null);
+          setInitialValues(undefined);
+          setEditorErrorMessage("");
+        }
+
+        return;
+      }
+
       try {
-        setIsLoading(true);
-        setErrorMessage("");
-
-        if (!user) {
-          setUid("");
-          setArtist(null);
-          setWork(null);
-          setInitialValues(undefined);
-          setErrorMessage("로그인이 필요합니다.");
-          return;
-        }
-
-        setUid(user.uid);
-
-        const artistDoc = await getArtistProfileByUid(user.uid);
-
-        if (!artistDoc) {
-          setArtist(null);
-          setWork(null);
-          setInitialValues(undefined);
-          setErrorMessage("등록된 작가 정보가 없습니다.");
-          return;
-        }
-
-        setArtist(artistDoc);
+        setEditorErrorMessage("");
 
         if (mode === "edit") {
           if (!workId) {
             setWork(null);
             setInitialValues(undefined);
-            setErrorMessage("작품 ID가 없습니다.");
+            setEditorErrorMessage("작품 ID가 없습니다.");
             return;
           }
 
           const workDoc = await getWorkById(workId);
 
-          if (!workDoc) {
-            setWork(null);
-            setInitialValues(undefined);
-            setErrorMessage("해당 작품을 찾을 수 없습니다.");
+          if (!isActive) {
             return;
           }
 
-          if ((workDoc.artistId ?? "") !== user.uid) {
+          if (!workDoc) {
             setWork(null);
             setInitialValues(undefined);
-            setErrorMessage("본인 작품만 수정할 수 있습니다.");
+            setEditorErrorMessage("해당 작품을 찾을 수 없습니다.");
+            return;
+          }
+
+          if ((workDoc.artistId ?? "") !== uid) {
+            setWork(null);
+            setInitialValues(undefined);
+            setEditorErrorMessage("본인 작품만 수정할 수 있습니다.");
             return;
           }
 
           setWork(workDoc);
-          setInitialValues(buildInitialValues(artistDoc, workDoc));
+          setInitialValues(buildInitialValues(artist, workDoc));
           return;
         }
 
         setWork(null);
-        setInitialValues(buildInitialValues(artistDoc));
+        setInitialValues(buildInitialValues(artist));
       } catch (error) {
-        const message =
+        if (!isActive) {
+          return;
+        }
+
+        setWork(null);
+        setInitialValues(undefined);
+        setEditorErrorMessage(
           error instanceof Error
             ? error.message
-            : "작품 정보를 불러오는 중 오류가 발생했습니다.";
-
-        setErrorMessage(message);
-      } finally {
-        setIsLoading(false);
+            : "작품 정보를 불러오는 중 오류가 발생했습니다."
+        );
       }
-    });
+    })();
 
-    return () => unsubscribe();
-  }, [mode, workId]);
+    return () => {
+      isActive = false;
+    };
+  }, [artist, mode, uid, workId]);
 
   async function handleSave(values: WorkFormValues) {
     if (!uid) {
@@ -215,10 +212,10 @@ export default function ArtistWorkEditor({
     );
   }
 
-  if (errorMessage) {
+  if (errorMessage || editorErrorMessage) {
     return (
       <section className="rounded-[2rem] border border-red-200 bg-white px-6 py-8 text-sm leading-7 text-red-600">
-        {errorMessage}
+        {errorMessage || editorErrorMessage}
       </section>
     );
   }

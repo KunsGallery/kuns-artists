@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LogoutButton from "@/components/auth/LogoutButton";
 import ArtistWorkEditor from "@/components/artist/ArtistWorkEditor";
 
 export default function NewArtistWorkPage() {
@@ -13,12 +14,18 @@ export default function NewArtistWorkPage() {
             KÜN’S GALLERY
           </Link>
 
-          <Link
-            href="/artist/works"
-            className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
-          >
-            Works
-          </Link>
+          <div className="flex items-center gap-2 md:gap-3">
+            <Link
+              href="/artist/works"
+              className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
+            >
+              Works
+            </Link>
+
+            <LogoutButton className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm">
+              Logout
+            </LogoutButton>
+          </div>
         </header>
 
         <section className="py-12 md:py-16">

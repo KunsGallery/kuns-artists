@@ -2,14 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
-import { logout } from "@/lib/firebase/auth";
-import {
-  getArtistProfileByUid,
-  updateArtistProfile,
-  type ArtistDoc,
-} from "@/lib/firebase/firestore";
+import LogoutButton from "@/components/auth/LogoutButton";
+import { useProtectedArtist } from "@/hooks/useProtectedArtist";
+import { updateArtistProfile } from "@/lib/firebase/firestore";
 
 type FormState = {
   name: string;
@@ -42,66 +37,35 @@ const initialForm: FormState = {
 };
 
 export default function ArtistProfilePage() {
-  const [uid, setUid] = useState("");
-  const [artist, setArtist] = useState<ArtistDoc | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      try {
-        setIsLoading(true);
-        setErrorMessage("");
-        setMessage("");
-
-        if (!user) {
-          setArtist(null);
-          setErrorMessage("로그인이 필요합니다.");
-          return;
-        }
-
-        setUid(user.uid);
-
-        const artistDoc = await getArtistProfileByUid(user.uid);
-
-        if (!artistDoc) {
-          setArtist(null);
-          setErrorMessage("등록된 작가 정보가 없습니다.");
-          return;
-        }
-
-        setArtist(artistDoc);
-        setForm({
-          name: artistDoc.name || "",
-          nameKo: artistDoc.nameKo || "",
-          tagline: artistDoc.tagline || "",
-          bio: artistDoc.bio || "",
-          bioEn: artistDoc.bioEn || "",
-          location: artistDoc.location || "",
-          profileImageUrl: artistDoc.profileImageUrl || "",
-          instagramUrl: artistDoc.instagramUrl || "",
-          youtubeUrl: artistDoc.youtubeUrl || "",
-          cvUrl: artistDoc.cvUrl || "",
-          artsyUrl: artistDoc.artsyUrl || "",
-          websiteUrl: artistDoc.websiteUrl || "",
-        });
-      } catch (error) {
-        const msg =
-          error instanceof Error
-            ? error.message
-            : "작가 정보를 불러오는 중 오류가 발생했습니다.";
-
-        setErrorMessage(msg);
-      } finally {
-        setIsLoading(false);
-      }
+  const { artist, uid, isLoading, errorMessage: accessErrorMessage } =
+    useProtectedArtist({
+      fallbackErrorMessage: "작가 정보를 불러오는 중 오류가 발생했습니다.",
     });
 
-    return () => unsubscribe();
-  }, []);
+  useEffect(() => {
+    if (!artist) {
+      return;
+    }
+
+    setForm({
+      name: artist.name || "",
+      nameKo: artist.nameKo || "",
+      tagline: artist.tagline || "",
+      bio: artist.bio || "",
+      bioEn: artist.bioEn || "",
+      location: artist.location || "",
+      profileImageUrl: artist.profileImageUrl || "",
+      instagramUrl: artist.instagramUrl || "",
+      youtubeUrl: artist.youtubeUrl || "",
+      cvUrl: artist.cvUrl || "",
+      artsyUrl: artist.artsyUrl || "",
+      websiteUrl: artist.websiteUrl || "",
+    });
+  }, [artist]);
 
   const handleChange = (key: keyof FormState, value: string) => {
     setForm((prev) => ({
@@ -146,11 +110,6 @@ export default function ArtistProfilePage() {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = "/artist/login";
-  };
-
   return (
     <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
       <section className="border-b border-black/5">
@@ -171,13 +130,11 @@ export default function ArtistProfilePage() {
                 Dashboard
               </Link>
 
-              <button
-                type="button"
-                onClick={handleLogout}
+              <LogoutButton
                 className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
               >
                 Logout
-              </button>
+              </LogoutButton>
             </div>
           </header>
 
@@ -326,9 +283,9 @@ export default function ArtistProfilePage() {
                   </div>
                 ) : null}
 
-                {errorMessage ? (
+                {errorMessage || accessErrorMessage ? (
                   <div className="rounded-[1.25rem] bg-[#f7f6f2] px-4 py-4 text-sm leading-7 text-red-600">
-                    {errorMessage}
+                    {errorMessage || accessErrorMessage}
                   </div>
                 ) : null}
 

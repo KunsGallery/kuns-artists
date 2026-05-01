@@ -2,61 +2,57 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
-import {
-  getArtistProfileByUid,
-  getWorksForArtist,
-  type ArtistDoc,
-  type ArtistWorkDoc,
-} from "@/lib/firebase/firestore";
+import LogoutButton from "@/components/auth/LogoutButton";
+import { useProtectedArtist } from "@/hooks/useProtectedArtist";
+import { getWorksForArtist, type ArtistWorkDoc } from "@/lib/firebase/firestore";
 
 export default function ArtistWorksPage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [artist, setArtist] = useState<ArtistDoc | null>(null);
   const [works, setWorks] = useState<ArtistWorkDoc[]>([]);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [worksErrorMessage, setWorksErrorMessage] = useState("");
+  const { artist, uid, isLoading, errorMessage } = useProtectedArtist({
+    fallbackErrorMessage: "작가 정보를 불러오는 중 오류가 발생했습니다.",
+  });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let isActive = true;
+
+    void (async () => {
+      if (!uid) {
+        await Promise.resolve();
+
+        if (isActive) {
+          setWorks([]);
+          setWorksErrorMessage("");
+        }
+
+        return;
+      }
+
       try {
-        setIsLoading(true);
-        setErrorMessage("");
+        setWorksErrorMessage("");
+        const artistWorks = await getWorksForArtist(uid);
 
-        if (!user) {
-          setArtist(null);
-          setWorks([]);
-          setErrorMessage("로그인이 필요합니다.");
-          return;
+        if (isActive) {
+          setWorks(artistWorks);
         }
-
-        const artistDoc = await getArtistProfileByUid(user.uid);
-
-        if (!artistDoc) {
-          setArtist(null);
-          setWorks([]);
-          setErrorMessage("등록된 작가 정보가 없습니다.");
-          return;
-        }
-
-        const artistWorks = await getWorksForArtist(user.uid);
-
-        setArtist(artistDoc);
-        setWorks(artistWorks);
       } catch (error) {
-        const message =
+        if (!isActive) {
+          return;
+        }
+
+        setWorks([]);
+        setWorksErrorMessage(
           error instanceof Error
             ? error.message
-            : "작품 목록을 불러오는 중 오류가 발생했습니다.";
-
-        setErrorMessage(message);
-      } finally {
-        setIsLoading(false);
+            : "작품 목록을 불러오는 중 오류가 발생했습니다."
+        );
       }
-    });
+    })();
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      isActive = false;
+    };
+  }, [uid]);
 
   return (
     <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
@@ -69,12 +65,18 @@ export default function ArtistWorksPage() {
             KÜN’S GALLERY
           </Link>
 
-          <Link
-            href="/artist/dashboard"
-            className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
-          >
-            Dashboard
-          </Link>
+          <div className="flex items-center gap-2 md:gap-3">
+            <Link
+              href="/artist/dashboard"
+              className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
+            >
+              Dashboard
+            </Link>
+
+            <LogoutButton className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm">
+              Logout
+            </LogoutButton>
+          </div>
         </header>
 
         <section className="py-12 md:py-16">
@@ -95,9 +97,9 @@ export default function ArtistWorksPage() {
           </p>
         </section>
 
-        {errorMessage ? (
+        {errorMessage || worksErrorMessage ? (
           <section className="rounded-[1.5rem] bg-white px-6 py-6 text-sm leading-7 text-red-600">
-            {errorMessage}
+            {errorMessage || worksErrorMessage}
           </section>
         ) : null}
 
@@ -124,7 +126,7 @@ export default function ArtistWorksPage() {
             </div>
           ) : null}
 
-          {!isLoading && works.length === 0 && !errorMessage ? (
+          {!isLoading && works.length === 0 && !errorMessage && !worksErrorMessage ? (
             <div className="rounded-[1.5rem] border border-dashed border-black/10 bg-white px-5 py-5 text-sm leading-7 text-neutral-600">
               아직 저장된 작품이 없습니다. 새 작품 등록으로 첫 작품을 추가해보세요.
             </div>

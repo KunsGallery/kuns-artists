@@ -1,60 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
-import { logout } from "@/lib/firebase/auth";
-import {
-  getArtistProfileByUid,
-  type ArtistDoc,
-} from "@/lib/firebase/firestore";
+import LogoutButton from "@/components/auth/LogoutButton";
+import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 
 export default function ArtistDashboardPage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [artist, setArtist] = useState<ArtistDoc | null>(null);
-  const [errorMessage, setErrorMessage] = useState("");
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      try {
-        setIsLoading(true);
-        setErrorMessage("");
-
-        if (!user) {
-          setArtist(null);
-          setErrorMessage("로그인이 필요합니다.");
-          return;
-        }
-
-        const artistDoc = await getArtistProfileByUid(user.uid);
-
-        if (!artistDoc) {
-          setArtist(null);
-          setErrorMessage("등록된 작가 정보가 없습니다.");
-          return;
-        }
-
-        setArtist(artistDoc);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "작가 정보를 불러오는 중 오류가 발생했습니다.";
-
-        setErrorMessage(message);
-      } finally {
-        setIsLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = "/artist/login";
-  };
+  const { artist, errorMessage, isLoading } = useProtectedArtist({
+    fallbackErrorMessage: "작가 정보를 불러오는 중 오류가 발생했습니다.",
+  });
 
   return (
     <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
@@ -83,13 +36,11 @@ export default function ArtistDashboardPage() {
                 Works
               </Link>
 
-              <button
-                type="button"
-                onClick={handleLogout}
+              <LogoutButton
                 className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
               >
                 Logout
-              </button>
+              </LogoutButton>
             </div>
           </header>
 
