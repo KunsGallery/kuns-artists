@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import ArtistWorkGlbForm from "./ArtistWorkGlbForm";
+import type { ArtistWorkPublicationState } from "./ArtistWorkGlbForm";
 import {
   createWorkForArtist,
   getWorkById,
@@ -22,6 +23,20 @@ type ArtistWorkEditorProps = {
 function normalizeOptionalText(value: string) {
   const trimmed = value.trim();
   return trimmed || undefined;
+}
+
+function getPublicationState(
+  work?: ArtistWorkDoc | null
+): ArtistWorkPublicationState {
+  if (work?.archived === true) {
+    return "archived";
+  }
+
+  if (work?.isPublished === true) {
+    return "published";
+  }
+
+  return "pending";
 }
 
 function buildInitialValues(
@@ -109,7 +124,7 @@ export default function ArtistWorkEditor({
           if (!workId) {
             setWork(null);
             setInitialValues(undefined);
-            setEditorErrorMessage("작품 ID가 없습니다.");
+            setEditorErrorMessage("작품 정보를 불러오지 못했습니다.");
             return;
           }
 
@@ -122,7 +137,7 @@ export default function ArtistWorkEditor({
           if (!workDoc) {
             setWork(null);
             setInitialValues(undefined);
-            setEditorErrorMessage("해당 작품을 찾을 수 없습니다.");
+            setEditorErrorMessage("작품 정보를 불러오지 못했습니다.");
             return;
           }
 
@@ -162,11 +177,11 @@ export default function ArtistWorkEditor({
 
   async function handleSave(values: WorkFormValues) {
     if (!uid) {
-      throw new Error("로그인 정보가 없습니다.");
+      throw new Error("로그인 정보를 확인할 수 없습니다.");
     }
 
     if (!artist) {
-      throw new Error("작가 프로필 정보가 없습니다.");
+      throw new Error("작가 정보를 불러오지 못했습니다.");
     }
 
     const title = values.title.trim();
@@ -178,13 +193,13 @@ export default function ArtistWorkEditor({
     const payload = buildSavePayload(values);
 
     if (mode === "new") {
-      const newWorkId = await createWorkForArtist(uid, artist, payload);
-      router.push(`/artist/works/${newWorkId}/edit`);
+      await createWorkForArtist(uid, artist, payload);
+      router.push("/artist/works?saved=1");
       return "작품이 저장되었습니다.";
     }
 
     if (!workId) {
-      throw new Error("작품 ID가 없습니다.");
+      throw new Error("작품 정보를 불러오지 못했습니다.");
     }
 
     if ((work?.artistId ?? "") !== uid) {
@@ -201,7 +216,7 @@ export default function ArtistWorkEditor({
         : current
     );
 
-    return "작품 정보가 저장되었습니다.";
+    return "작품이 저장되었습니다.";
   }
 
   if (isLoading) {
@@ -223,10 +238,12 @@ export default function ArtistWorkEditor({
   return (
     <ArtistWorkGlbForm
       mode={mode}
-      workId={workId}
       initialValues={initialValues}
       onSave={handleSave}
-      saveButtonLabel={mode === "new" ? "작품 저장" : "작품 수정 저장"}
+      saveButtonLabel={mode === "new" ? "작품 저장" : "변경사항 저장"}
+      artistSlug={artist?.slug}
+      workSlug={work?.slug}
+      publicationState={getPublicationState(work)}
     />
   );
 }

@@ -342,7 +342,7 @@ export default function CanvasGlbToolPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
+    <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950">
       <div className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-8">
         <header className="flex items-center justify-between">
           <Link
@@ -811,7 +811,7 @@ export default function CanvasGlbToolPage() {
                     type="button"
                     onClick={() => void handleGenerateAndUploadGlb()}
                     disabled={isGenerating || isUploading}
-                    className="inline-flex h-12 items-center justify-center rounded-full bg-[#a38c5d] px-6 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-12 items-center justify-center rounded-full bg-black px-6 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isUploading ? "R2 업로드 중..." : "GLB 생성 후 R2 업로드"}
                   </button>
@@ -900,8 +900,8 @@ export default function CanvasGlbToolPage() {
               ) : null}
 
               {uploadedGlbUrl ? (
-                <div className="rounded-[1.5rem] border border-[#a38c5d]/30 bg-[#a38c5d]/10 p-4 text-sm leading-6 text-neutral-800">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-[#7d6a43]">
+                <div className="rounded-[1.5rem] border border-[rgba(243,112,33,0.18)] bg-[rgba(255,255,255,0.05)] p-4 text-sm leading-6 text-[var(--foreground)]">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--kuns-orange)]">
                     Uploaded GLB URL
                   </p>
 
@@ -917,7 +917,7 @@ export default function CanvasGlbToolPage() {
                   <button
                     type="button"
                     onClick={() => navigator.clipboard.writeText(uploadedGlbUrl)}
-                    className="mt-4 inline-flex h-10 items-center rounded-full border border-black/10 bg-white px-4 text-xs font-medium text-neutral-900 transition hover:border-[#a38c5d]"
+                    className="mt-4 inline-flex h-10 items-center rounded-full border border-[rgba(247,241,232,0.14)] bg-[rgba(255,255,255,0.07)] px-4 text-xs font-medium text-[var(--foreground)] transition hover:border-[rgba(243,112,33,0.38)]"
                   >
                     URL 복사
                   </button>

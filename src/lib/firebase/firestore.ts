@@ -12,6 +12,12 @@ import {
 } from "firebase/firestore";
 import { db } from "./client";
 import type { AllowedArtistSeed } from "@/lib/artistAccess";
+import type {
+  ArtistArchiveLink,
+  ArtistArchiveLinkType,
+  ArtistCvItem,
+  ArtistCvType,
+} from "@/types/artist";
 
 export type ArtistRole = "admin" | "artist";
 export type ArtistType = "represented" | "project";
@@ -20,6 +26,7 @@ export type WorkSideMode = "canvas" | "image";
 
 export type ArtistDoc = {
   id: string;
+  source?: "Firestore" | "Seed";
   slug?: string;
   name?: string;
   nameKo?: string;
@@ -37,6 +44,8 @@ export type ArtistDoc = {
   cvUrl?: string;
   artsyUrl?: string;
   websiteUrl?: string;
+  cvItems?: ArtistCvItem[];
+  archiveLinks?: ArtistArchiveLink[];
   createdAt?: unknown;
   updatedAt?: unknown;
 };
@@ -54,6 +63,28 @@ export type ArtistProfileUpdatePayload = {
   cvUrl?: string;
   artsyUrl?: string;
   websiteUrl?: string;
+};
+
+export type ArtistAdminSavePayload = {
+  email?: string;
+  slug: string;
+  name: string;
+  nameKo: string;
+  type: ArtistType;
+  status: ArtistStatus;
+  role: ArtistRole;
+  tagline: string;
+  bio: string;
+  bioEn: string;
+  location: string;
+  profileImageUrl: string;
+  instagramUrl: string;
+  youtubeUrl: string;
+  cvUrl: string;
+  artsyUrl: string;
+  websiteUrl: string;
+  cvItems?: ArtistCvItem[];
+  archiveLinks?: ArtistArchiveLink[];
 };
 
 export type ArtistWorkDoc = {
@@ -114,6 +145,16 @@ export type ArtistWorkSavePayload = {
   frontRotationYDeg?: number;
   sideMode?: WorkSideMode;
   showBackLabel?: boolean;
+};
+
+export type ArtistWorkAdminUpdatePayload = {
+  isPublished?: boolean;
+  archived?: boolean;
+  coverImageUrl?: string;
+  modelGlb?: string;
+  modelUsdz?: string;
+  generatedGlbUrl?: string;
+  generatedUsdzUrl?: string;
 };
 
 function toOptionalString(value: unknown) {
@@ -197,9 +238,132 @@ function toOptionalArtistRole(value: unknown) {
   return value === "admin" || value === "artist" ? value : undefined;
 }
 
+function toOptionalArtistCvType(value: unknown): ArtistCvType | undefined {
+  return value === "solo" ||
+    value === "group" ||
+    value === "fair" ||
+    value === "award" ||
+    value === "collection" ||
+    value === "publication" ||
+    value === "residency" ||
+    value === "education" ||
+    value === "other"
+    ? value
+    : undefined;
+}
+
+function toOptionalArtistArchiveLinkType(
+  value: unknown
+): ArtistArchiveLinkType | undefined {
+  return value === "interview" ||
+    value === "article" ||
+    value === "video" ||
+    value === "catalog" ||
+    value === "press" ||
+    value === "website" ||
+    value === "other"
+    ? value
+    : undefined;
+}
+
+function createFallbackId(prefix: string, index: number) {
+  const randomPart =
+    typeof globalThis.crypto !== "undefined" &&
+    typeof globalThis.crypto.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+  return `${prefix}-${index}-${randomPart}`;
+}
+
+function toArtistCvItem(
+  value: unknown,
+  index: number
+): ArtistCvItem | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+
+  return {
+    id: toOptionalString(raw.id) ?? createFallbackId("cv", index),
+    year: toOptionalString(raw.year) ?? "",
+    type: toOptionalArtistCvType(raw.type) ?? "other",
+    title: toOptionalString(raw.title) ?? "",
+    venue: toOptionalString(raw.venue) ?? "",
+    location: toOptionalString(raw.location) ?? "",
+    note: toOptionalString(raw.note),
+    order:
+      toOptionalNumber(raw.order) ??
+      toOptionalNumber(raw.sortOrder) ??
+      index,
+  };
+}
+
+function toArtistArchiveLink(
+  value: unknown,
+  index: number
+): ArtistArchiveLink | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+
+  return {
+    id: toOptionalString(raw.id) ?? createFallbackId("archive", index),
+    year: toOptionalString(raw.year) ?? "",
+    type: toOptionalArtistArchiveLinkType(raw.type) ?? "other",
+    title: toOptionalString(raw.title) ?? "",
+    source: toOptionalString(raw.source) ?? "",
+    url: toOptionalString(raw.url) ?? "",
+    description: toOptionalString(raw.description),
+    order:
+      toOptionalNumber(raw.order) ??
+      toOptionalNumber(raw.sortOrder) ??
+      index,
+  };
+}
+
+function toArtistCvItems(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const items = value
+    .map((entry, index) => toArtistCvItem(entry, index))
+    .filter((entry): entry is ArtistCvItem => entry !== null);
+
+  return items.length > 0 ? items : [];
+}
+
+function toArtistArchiveLinks(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const items = value
+    .map((entry, index) => toArtistArchiveLink(entry, index))
+    .filter((entry): entry is ArtistArchiveLink => entry !== null);
+
+  return items.length > 0 ? items : [];
+}
+
+function toSafeArtistSlugPart(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
 function toArtistDoc(id: string, rawData: Record<string, unknown>): ArtistDoc {
   return {
     id,
+    source: "Firestore",
     slug: toOptionalString(rawData.slug),
     name: toOptionalString(rawData.name),
     nameKo: toOptionalString(rawData.nameKo),
@@ -217,6 +381,8 @@ function toArtistDoc(id: string, rawData: Record<string, unknown>): ArtistDoc {
     cvUrl: toOptionalString(rawData.cvUrl),
     artsyUrl: toOptionalString(rawData.artsyUrl),
     websiteUrl: toOptionalString(rawData.websiteUrl),
+    cvItems: toArtistCvItems(rawData.cvItems),
+    archiveLinks: toArtistArchiveLinks(rawData.archiveLinks),
     createdAt: rawData.createdAt,
     updatedAt: rawData.updatedAt,
   };
@@ -256,6 +422,134 @@ function toArtistWorkDoc(id: string, rawData: Record<string, unknown>): ArtistWo
   };
 }
 
+function toArtistAdminPayload(payload: ArtistAdminSavePayload) {
+  function toPersistedText(value: string | undefined) {
+    return value?.trim() ?? "";
+  }
+
+  const normalizedPayload = {
+    slug: toSafeArtistSlugPart(payload.slug) || payload.slug.trim(),
+    name: payload.name.trim(),
+    nameKo: payload.nameKo.trim(),
+    type: payload.type,
+    status: payload.status,
+    role: payload.role,
+    tagline: payload.tagline.trim(),
+    bio: payload.bio.trim(),
+    bioEn: payload.bioEn.trim(),
+    location: payload.location.trim(),
+    profileImageUrl: payload.profileImageUrl.trim(),
+    instagramUrl: payload.instagramUrl.trim(),
+    youtubeUrl: payload.youtubeUrl.trim(),
+    cvUrl: payload.cvUrl.trim(),
+    artsyUrl: payload.artsyUrl.trim(),
+    websiteUrl: payload.websiteUrl.trim(),
+  };
+
+  const withOptionalCollections = {
+    ...normalizedPayload,
+    ...(payload.cvItems !== undefined
+      ? {
+          cvItems: payload.cvItems.map((item, index) => ({
+            id:
+              toOptionalString(item.id) ??
+              createFallbackId("cv", index),
+            year: item.year.trim(),
+            type: toOptionalArtistCvType(item.type) ?? "other",
+            title: item.title.trim(),
+            venue: item.venue.trim(),
+            location: item.location.trim(),
+            note: toPersistedText(item.note),
+            order: Number.isFinite(item.order) ? item.order : index,
+          })),
+        }
+      : {}),
+    ...(payload.archiveLinks !== undefined
+      ? {
+          archiveLinks: payload.archiveLinks.map((item, index) => ({
+            id:
+              toOptionalString(item.id) ??
+              createFallbackId("archive", index),
+            year: item.year.trim(),
+            type: toOptionalArtistArchiveLinkType(item.type) ?? "other",
+            title: item.title.trim(),
+            source: item.source.trim(),
+            url: item.url.trim(),
+            description: toPersistedText(item.description),
+            order: Number.isFinite(item.order) ? item.order : index,
+          })),
+        }
+      : {}),
+  };
+
+  return payload.email !== undefined
+    ? { ...withOptionalCollections, email: payload.email.trim() }
+    : withOptionalCollections;
+}
+
+export async function findArtistDocIdBySlug(slug: string): Promise<string | null> {
+  const normalizedSlug = slug.trim();
+
+  if (!normalizedSlug) {
+    return null;
+  }
+
+  const slugSnapshot = await getDocs(
+    query(
+      collection(db, "artists"),
+      where("slug", "==", normalizedSlug),
+      limit(1)
+    )
+  );
+
+  if (!slugSnapshot.empty) {
+    return slugSnapshot.docs[0].id;
+  }
+
+  const docSnapshot = await getDoc(doc(db, "artists", normalizedSlug));
+
+  if (docSnapshot.exists()) {
+    return docSnapshot.id;
+  }
+
+  return null;
+}
+
+async function resolveArtistAdminDocId(
+  artistId: string,
+  slug?: string
+): Promise<string | null> {
+  if (slug) {
+    const resolvedBySlug = await findArtistDocIdBySlug(slug);
+
+    if (resolvedBySlug) {
+      return resolvedBySlug;
+    }
+  }
+
+  const fallbackSnapshot = await getDoc(doc(db, "artists", artistId));
+
+  return fallbackSnapshot.exists() ? fallbackSnapshot.id : null;
+}
+
+async function updateArtistAdminDocument(
+  docId: string,
+  payload: ArtistAdminSavePayload
+) {
+  const cleanPayload = toArtistAdminPayload(payload);
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log("Admin artist save payload", cleanPayload);
+  }
+
+  await updateDoc(doc(db, "artists", docId), {
+    ...cleanPayload,
+    updatedAt: serverTimestamp(),
+  });
+
+  return docId;
+}
+
 function buildArtistWorkEditablePayload(payload: ArtistWorkSavePayload) {
   return {
     title: payload.title.trim(),
@@ -287,14 +581,24 @@ function buildArtistWorkCreatePayload(
   };
 }
 
-export async function getAllWorksForTool(): Promise<WorkToolDoc[]> {
-  const snapshot = await getDocs(collection(db, "works"));
-  const works = snapshot.docs.map((document) =>
-    toArtistWorkDoc(
-      document.id,
-      document.data() as Record<string, unknown>
-    )
+async function fetchAllArtistDocs() {
+  const snapshot = await getDocs(collection(db, "artists"));
+
+  return snapshot.docs.map((document) =>
+    toArtistDoc(document.id, document.data() as Record<string, unknown>)
   );
+}
+
+async function fetchAllWorkDocs() {
+  const snapshot = await getDocs(collection(db, "works"));
+
+  return snapshot.docs.map((document) =>
+    toArtistWorkDoc(document.id, document.data() as Record<string, unknown>)
+  );
+}
+
+export async function getAllWorksForTool(): Promise<WorkToolDoc[]> {
+  const works = await fetchAllWorkDocs();
 
   return works
     .sort((left, right) => {
@@ -319,6 +623,19 @@ export async function getAllWorksForTool(): Promise<WorkToolDoc[]> {
       heightCm: work.heightCm,
       depthCm: work.depthCm,
     }));
+}
+
+export async function getAllWorksForAdmin(): Promise<ArtistWorkDoc[]> {
+  return (await fetchAllWorkDocs()).sort((left, right) => {
+    const artistCompare = (left.artistName ?? "").localeCompare(
+      right.artistName ?? "",
+      "en"
+    );
+
+    if (artistCompare !== 0) return artistCompare;
+
+    return (left.title ?? "").localeCompare(right.title ?? "", "en");
+  });
 }
 
 export async function getWorksForArtist(
@@ -349,19 +666,74 @@ export async function getWorksForArtist(
 export async function getPublicArtistBySlug(
   slug: string
 ): Promise<ArtistDoc | null> {
-  const snapshot = await getDocs(
-    query(collection(db, "artists"), where("slug", "==", slug), limit(1))
-  );
+  const normalizedSlug = slug.trim();
 
-  if (snapshot.empty) {
+  if (!normalizedSlug) {
     return null;
   }
 
-  const document = snapshot.docs[0];
+  const queryCandidates: ArtistDoc[] = [];
 
-  return toArtistDoc(
-    document.id,
-    document.data() as Record<string, unknown>
+  const slugSnapshot = await getDocs(
+    query(
+      collection(db, "artists"),
+      where("slug", "==", normalizedSlug),
+      limit(1)
+    )
+  );
+
+  if (!slugSnapshot.empty) {
+    const document = slugSnapshot.docs[0];
+    queryCandidates.push(
+      toArtistDoc(document.id, document.data() as Record<string, unknown>)
+    );
+  }
+
+  const idSnapshot = await getDoc(doc(db, "artists", normalizedSlug));
+
+  if (idSnapshot.exists()) {
+    queryCandidates.push(
+      toArtistDoc(idSnapshot.id, idSnapshot.data() as Record<string, unknown>)
+    );
+  }
+
+  const matchedQueryCandidate = queryCandidates.find(
+    (artist) =>
+      artist.status === "active" &&
+      (artist.slug === normalizedSlug || artist.id === normalizedSlug)
+  );
+
+  if (matchedQueryCandidate) {
+    return matchedQueryCandidate;
+  }
+
+  const allArtists = await fetchAllArtistDocs();
+  const matchedFallback = allArtists.find(
+    (artist) =>
+      artist.status === "active" &&
+      (artist.slug === normalizedSlug || artist.id === normalizedSlug)
+  );
+
+  return matchedFallback ?? null;
+}
+
+export async function getAllArtistsForAdmin(): Promise<ArtistDoc[]> {
+  return (await fetchAllArtistDocs()).sort((left, right) => {
+    const typeOrder = left.type === right.type ? 0 : left.type === "represented" ? -1 : 1;
+
+    if (typeOrder !== 0) return typeOrder;
+
+    const statusOrder = left.status === right.status ? 0 : left.status === "active" ? -1 : 1;
+
+    if (statusOrder !== 0) return statusOrder;
+
+    return (left.name ?? "").localeCompare(right.name ?? "", "en");
+  });
+}
+
+export async function getAllArtistsForPublicDisplay(): Promise<ArtistDoc[]> {
+  return (await fetchAllArtistDocs()).filter(
+    (artist) => artist.status === "active"
   );
 }
 
@@ -389,49 +761,142 @@ export async function getPublicRepresentedArtists(): Promise<ArtistDoc[]> {
 export async function getPublicWorkBySlug(
   slug: string
 ): Promise<ArtistWorkDoc | null> {
-  const snapshot = await getDocs(
-    query(collection(db, "works"), where("slug", "==", slug), limit(1))
+  const result = await getWorkBySlugForPublicRoute(slug);
+
+  if (!result.work) {
+    console.warn("[firestore] public work not found", { slug });
+    return null;
+  }
+
+  if (result.unpublished) {
+    console.warn("[firestore] public work is not published", {
+      slug,
+      workId: result.work.id,
+    });
+    return null;
+  }
+
+  return result.work;
+}
+
+export async function getWorkBySlugOrId(
+  slug: string
+): Promise<ArtistWorkDoc | null> {
+  const normalizedSlug = slug.trim();
+
+  if (!normalizedSlug) {
+    return null;
+  }
+
+  const slugSnapshot = await getDocs(
+    query(collection(db, "works"), where("slug", "==", normalizedSlug), limit(1))
   );
 
-  if (snapshot.empty) {
-    const fallbackSnapshot = await getDocs(collection(db, "works"));
-    const fallbackWorks = fallbackSnapshot.docs
-      .map((document) =>
-        toArtistWorkDoc(
-          document.id,
-          document.data() as Record<string, unknown>
-        )
-      )
-      .filter((work) => work.isPublished === true);
+  if (!slugSnapshot.empty) {
+    const document = slugSnapshot.docs[0];
 
-    return (
-      fallbackWorks.find((work) => resolveArtistWorkSlug(work) === slug) ?? null
+    return toArtistWorkDoc(
+      document.id,
+      document.data() as Record<string, unknown>
     );
   }
 
-  const work = toArtistWorkDoc(
-    snapshot.docs[0].id,
-    snapshot.docs[0].data() as Record<string, unknown>
+  const idSnapshot = await getDoc(doc(db, "works", normalizedSlug));
+
+  if (idSnapshot.exists()) {
+    return toArtistWorkDoc(
+      idSnapshot.id,
+      idSnapshot.data() as Record<string, unknown>
+    );
+  }
+
+  const allWorks = await fetchAllWorkDocs();
+
+  return (
+    allWorks.find(
+      (work) => resolveArtistWorkSlug(work) === normalizedSlug
+    ) ?? null
+  );
+}
+
+export async function getArtistWorkForShareByIdOrSlug(
+  idOrSlug: string
+): Promise<ArtistWorkDoc | null> {
+  const normalizedValue = idOrSlug.trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const docSnapshot = await getDoc(doc(db, "works", normalizedValue));
+
+  if (docSnapshot.exists()) {
+    return toArtistWorkDoc(
+      docSnapshot.id,
+      docSnapshot.data() as Record<string, unknown>
+    );
+  }
+
+  const slugSnapshot = await getDocs(
+    query(
+      collection(db, "works"),
+      where("slug", "==", normalizedValue),
+      limit(1)
+    )
   );
 
-  return work.isPublished === true ? work : null;
+  if (!slugSnapshot.empty) {
+    const document = slugSnapshot.docs[0];
+
+    return toArtistWorkDoc(
+      document.id,
+      document.data() as Record<string, unknown>
+    );
+  }
+
+  const allWorks = await fetchAllWorkDocs();
+
+  return (
+    allWorks.find(
+      (work) => resolveArtistWorkSlug(work) === normalizedValue
+    ) ?? null
+  );
+}
+
+export async function getWorkBySlugForPublicRoute(slug: string): Promise<{
+  work: ArtistWorkDoc | null;
+  unpublished: boolean;
+}> {
+  const work = await getWorkBySlugOrId(slug);
+
+  if (!work) {
+    return {
+      work: null,
+      unpublished: false,
+    };
+  }
+
+  return {
+    work,
+    unpublished: work.isPublished !== true,
+  };
 }
 
 export async function getPublicWorksForArtistSlug(
   artistSlug: string
 ): Promise<ArtistWorkDoc[]> {
-  const snapshot = await getDocs(
-    query(collection(db, "works"), where("artistSlug", "==", artistSlug))
-  );
+  const snapshot = await getDocs(collection(db, "works"));
 
   return snapshot.docs
     .map((document) =>
-      toArtistWorkDoc(
-        document.id,
-        document.data() as Record<string, unknown>
-      )
+      toArtistWorkDoc(document.id, document.data() as Record<string, unknown>)
     )
-    .filter((work) => work.isPublished === true)
+    .filter(
+      (work) =>
+        work.artistSlug === artistSlug &&
+        work.isPublished === true &&
+        work.archived !== true
+    )
     .sort((left, right) => {
       const timeCompare =
         getTimestampMillis(right.updatedAt ?? right.createdAt) -
@@ -452,6 +917,90 @@ export async function getWorkById(workId: string): Promise<ArtistWorkDoc | null>
     snapshot.id,
     snapshot.data() as Record<string, unknown>
   );
+}
+
+export async function createProjectArtistForAdmin(
+  payload: ArtistAdminSavePayload
+) {
+  const documentRef = doc(collection(db, "artists"));
+
+  await setDoc(documentRef, {
+    ...toArtistAdminPayload(payload),
+    type: "project",
+    status: "active",
+    role: "artist",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return documentRef.id;
+}
+
+export async function updateArtistForAdmin(
+  artistId: string,
+  payload: ArtistAdminSavePayload
+) {
+  const resolvedDocId = await resolveArtistAdminDocId(artistId, payload.slug);
+
+  if (!resolvedDocId) {
+    throw new Error(
+      `Firestore artist document not found for slug: ${payload.slug || artistId}`
+    );
+  }
+
+  return updateArtistAdminDocument(resolvedDocId, payload);
+}
+
+export async function updateArtistForAdminBySlug(
+  slug: string,
+  payload: ArtistAdminSavePayload
+) {
+  const resolvedDocId = await findArtistDocIdBySlug(slug);
+
+  if (!resolvedDocId) {
+    throw new Error(`Firestore artist document not found for slug: ${slug}`);
+  }
+
+  return updateArtistAdminDocument(resolvedDocId, payload);
+}
+
+export async function updateWorkForAdmin(
+  workId: string,
+  payload: ArtistWorkAdminUpdatePayload
+) {
+  const updatePayload: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  };
+
+  if (payload.isPublished !== undefined) {
+    updatePayload.isPublished = payload.isPublished;
+  }
+
+  if (payload.archived !== undefined) {
+    updatePayload.archived = payload.archived;
+  }
+
+  if (payload.coverImageUrl !== undefined) {
+    updatePayload.coverImageUrl = payload.coverImageUrl.trim();
+  }
+
+  if (payload.modelGlb !== undefined) {
+    updatePayload.modelGlb = payload.modelGlb.trim();
+  }
+
+  if (payload.modelUsdz !== undefined) {
+    updatePayload.modelUsdz = payload.modelUsdz.trim();
+  }
+
+  if (payload.generatedGlbUrl !== undefined) {
+    updatePayload.generatedGlbUrl = payload.generatedGlbUrl.trim();
+  }
+
+  if (payload.generatedUsdzUrl !== undefined) {
+    updatePayload.generatedUsdzUrl = payload.generatedUsdzUrl.trim();
+  }
+
+  await updateDoc(doc(db, "works", workId), updatePayload);
 }
 
 export async function createWorkForArtist(

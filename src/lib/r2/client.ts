@@ -4,16 +4,50 @@ import type {
   R2UploadResult,
 } from "./types";
 
+export const R2_IMAGE_UPLOAD_CONTENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+export const R2_IMAGE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+
+function isAllowedImageContentType(contentType: string) {
+  return (
+    R2_IMAGE_UPLOAD_CONTENT_TYPES as readonly string[]
+  ).includes(contentType);
+}
+
+function getFriendlyUploadErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    if (
+      error.message === "이미지 파일은 10MB 이하만 업로드할 수 있습니다." ||
+      error.message ===
+        "이미지 파일은 JPG, PNG, WEBP 형식만 업로드할 수 있습니다."
+    ) {
+      return error.message;
+    }
+  }
+
+  return "이미지 업로드에 실패했습니다. 파일 형식, 용량 또는 네트워크 상태를 확인해주세요.";
+}
+
 export async function requestR2UploadUrl(
   payload: R2PresignRequest
 ): Promise<R2PresignResponse> {
-  const response = await fetch("/.netlify/functions/r2-presign-upload", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch("/.netlify/functions/r2-presign-upload", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error("이미지 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.");
+  }
 
   const data = (await response.json()) as
     | R2PresignResponse
@@ -23,7 +57,7 @@ export async function requestR2UploadUrl(
     throw new Error(
       "error" in data && data.error
         ? data.error
-        : "R2 upload URL request failed."
+        : "이미지 업로드에 실패했습니다. 잠시 후 다시 시도해주세요."
     );
   }
 
@@ -36,16 +70,20 @@ export async function uploadBlobToR2(
 ): Promise<R2UploadResult> {
   const presigned = await requestR2UploadUrl(payload);
 
-  const uploadResponse = await fetch(presigned.uploadUrl, {
-    method: "PUT",
-    headers: {
-      "content-type": payload.contentType,
-    },
-    body: blob,
-  });
+  try {
+    const uploadResponse = await fetch(presigned.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "content-type": payload.contentType,
+      },
+      body: blob,
+    });
 
-  if (!uploadResponse.ok) {
-    throw new Error("R2 upload failed.");
+    if (!uploadResponse.ok) {
+      throw new Error("이미지 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    }
+  } catch {
+    throw new Error("이미지 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.");
   }
 
   return {
@@ -72,4 +110,38 @@ export async function uploadGlbBlobToR2({
     artistSlug,
     workSlug,
   });
+}
+
+export async function uploadImageFileToR2({
+  file,
+  target,
+  artistSlug,
+  workSlug,
+}: {
+  file: File;
+  target: "profile" | "work-image";
+  artistSlug?: string;
+  workSlug?: string;
+}): Promise<R2UploadResult> {
+  if (!isAllowedImageContentType(file.type)) {
+    throw new Error(
+      "이미지 파일은 JPG, PNG, WEBP 형식만 업로드할 수 있습니다."
+    );
+  }
+
+  if (file.size > R2_IMAGE_UPLOAD_MAX_BYTES) {
+    throw new Error("이미지 파일은 10MB 이하만 업로드할 수 있습니다.");
+  }
+
+  try {
+    return await uploadBlobToR2(file, {
+      filename: file.name,
+      contentType: file.type,
+      target,
+      artistSlug,
+      workSlug,
+    });
+  } catch (error) {
+    throw new Error(getFriendlyUploadErrorMessage(error));
+  }
 }

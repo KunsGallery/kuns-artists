@@ -1,88 +1,86 @@
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { artists } from "@/data/artists";
 
+export const metadata: Metadata = {
+  title: "Artists Archive",
+  description:
+    "Official artist pages, selected works, and archival records for KÜN’S Gallery represented artists.",
+};
+
 const representedArtists = [...artists]
   .filter((artist) => artist.type === "represented")
-  .sort((a, b) => a.name.localeCompare(b.name));
+  .sort((a, b) => a.name.localeCompare(b.name, "en"));
 
-const featureItems = [
+const featuredArtists = representedArtists.slice(0, 4);
+
+const archiveNotes = [
   {
-    label: "Archive",
-    title: "A living archive for represented artists.",
-    description:
-      "작가의 소개, 작품, 링크, 전시 기록을 하나의 정제된 디지털 아카이브로 정리합니다.",
+    title: "Works",
+    description: "선별된 작품 이미지를 중심으로 각 작가의 현재 흐름을 보여줍니다.",
   },
   {
-    label: "AR Viewing",
-    title: "From image to spatial encounter.",
-    description:
-      "작품 이미지를 기반으로 캔버스형 GLB를 생성하고, 모바일 AR 경험으로 확장합니다.",
+    title: "CV",
+    description: "전시와 이력은 깔끔하게 정리되어, 필요한 순간 바로 읽히도록 구성됩니다.",
   },
   {
-    label: "Artist CMS",
-    title: "A private update room for artists.",
-    description:
-      "작가는 직접 프로필과 작품 정보를 업데이트하고, 갤러리는 검수 후 공개합니다.",
+    title: "Press & Archive",
+    description: "기사, 인터뷰, 기록 자료가 한곳에 모여 작가 페이지의 맥락을 보완합니다.",
   },
 ];
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen text-[var(--foreground)]">
-      <section className="relative min-h-screen overflow-hidden border-b border-white/10">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#a38c5d]/50 to-transparent" />
-        <div className="pointer-events-none absolute left-1/2 top-[-18rem] h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-[#a38c5d]/10 blur-3xl" />
+    <main className="theme-dark min-h-screen text-[var(--foreground)]">
+      <section className="relative overflow-hidden border-b border-white/10">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--kuns-orange)]/45 to-transparent" />
+        <div className="pointer-events-none absolute left-1/2 top-[-18rem] h-[40rem] w-[40rem] -translate-x-1/2 rounded-full bg-[var(--kuns-orange)]/12 blur-3xl" />
+        <div className="pointer-events-none absolute right-[-8rem] top-[12rem] hidden h-64 w-64 rounded-full border border-white/10 lg:block" />
 
-        <div className="luxury-container relative flex min-h-screen flex-col">
+        <div className="luxury-container relative">
           <header className="flex items-center justify-between gap-5 py-6 md:py-8">
             <Link href="/" className="group">
-              <p className="text-[11px] uppercase tracking-[0.34em] text-[#f7f4ec] transition group-hover:text-[#a38c5d]">
+              <p className="text-[11px] uppercase tracking-[0.34em] text-[var(--foreground)] transition group-hover:text-[var(--kuns-orange)]">
                 KÜN’S GALLERY
               </p>
               <p className="mt-1 hidden text-xs tracking-[-0.02em] text-white/42 md:block">
-                Represented Artists · Digital Archive · AR Viewing
+                Official artist archive
               </p>
             </Link>
 
-            <nav className="flex items-center gap-2 md:gap-6">
+            <nav className="flex items-center gap-2 md:gap-3">
               <Link
                 href="/artists"
-                className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-5 text-[12px] font-semibold uppercase tracking-[0.12em] text-[#f7f4ec] transition duration-500 hover:border-[#a38c5d] hover:text-[#a38c5d]"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.035] px-5 text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--foreground)] transition duration-500 hover:border-[var(--kuns-orange)]/35 hover:text-[var(--kuns-orange)]"
               >
                 Artists
               </Link>
 
               <Link
                 href="/artist/login"
-                className="inline-flex h-11 items-center justify-center rounded-full border border-[#a38c5d]/40 bg-[#a38c5d]/10 px-5 text-[12px] font-semibold uppercase tracking-[0.12em] text-[#f7f4ec] transition duration-500 hover:-translate-y-0.5 hover:border-[#a38c5d] hover:bg-[#a38c5d] hover:shadow-[0_0_30px_rgba(163,140,93,0.25)]"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] px-5 text-[11px] font-medium uppercase tracking-[0.12em] text-white/72 transition duration-500 hover:border-[var(--kuns-orange)]/30 hover:bg-[var(--kuns-orange)]/8 hover:text-[var(--foreground)]"
               >
                 Artist Login
               </Link>
             </nav>
           </header>
 
-          <div className="grid flex-1 gap-12 py-12 md:grid-cols-[1.08fr_0.92fr] md:items-center md:py-20">
-            <section className="max-w-5xl animate-reveal">
-              <p className="label-represented">Private Digital Archive</p>
+          <div className="grid gap-14 pb-14 pt-8 md:pb-20 md:pt-10 lg:grid-cols-[1.06fr_0.94fr] lg:items-end lg:min-h-[calc(100vh-8rem)]">
+            <section className="max-w-4xl animate-reveal">
+              <p className="label-represented">KÜN’S GALLERY</p>
 
-              <h1 className="luxury-serif mt-8 max-w-5xl text-[4.35rem] font-normal leading-[0.86] tracking-[-0.085em] text-[#f7f4ec] sm:text-[6.4rem] md:text-[8.2rem] lg:text-[9.3rem]">
-                KÜN’S
-                <br />
+              <h1 className="luxury-serif mt-7 max-w-4xl text-[3.8rem] font-normal leading-[0.84] tracking-[-0.08em] text-[var(--foreground)] sm:text-[5.7rem] md:text-[7.4rem] lg:text-[8.6rem]">
                 Artists
+                <br />
+                Archive
               </h1>
 
-              <div className="mt-8 grid max-w-4xl gap-8 md:grid-cols-[0.78fr_1.22fr] md:items-start">
-                <p className="pt-2 text-[10px] uppercase tracking-[0.34em] text-white/36">
-                  Seoul · Since 2022
-                </p>
-
-                <p className="max-w-2xl text-[15px] leading-8 text-white/58 md:text-[17px] md:leading-9">
-                  KÜN’S GALLERY의 전속 작가를 위한 디지털 아카이브이자,
-                  작품을 실제 공간으로 확장하기 위한 AR 뷰잉 시스템입니다.
-                  기록은 조용하게 정리되고, 작품은 더 가까운 경험으로
-                  이동합니다.
-                </p>
-              </div>
+              <p className="mt-7 max-w-2xl text-[16px] leading-8 text-white/60 md:text-[18px] md:leading-9">
+                Official artist pages, selected works, and archival records.
+                KÜN’S Gallery의 전속 작가를 한눈에 소개하고, 조용하지만 분명한
+                톤으로 아카이브의 성격을 드러냅니다.
+              </p>
 
               <div className="mt-10 flex flex-wrap gap-3">
                 <Link href="/artists" className="btn-primary">
@@ -90,119 +88,207 @@ export default function HomePage() {
                 </Link>
 
                 <Link href="/artist/login" className="btn-secondary">
-                  Update Profile
+                  Artist Login
                 </Link>
+              </div>
+
+              <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3 text-[11px] uppercase tracking-[0.24em] text-white/36">
+                <span>Represented artists</span>
+                <span className="h-px w-8 bg-white/14" />
+                <span>Selected works</span>
+                <span className="h-px w-8 bg-white/14" />
+                <span>Archive records</span>
               </div>
             </section>
 
             <aside className="relative animate-reveal-delay-1">
-              <div className="pointer-events-none absolute -left-8 -top-8 hidden h-32 w-32 rounded-full border border-[#a38c5d]/20 md:block" />
-              <div className="pointer-events-none absolute -bottom-8 -right-8 hidden h-44 w-44 rounded-full border border-white/10 md:block" />
+              <div className="pointer-events-none absolute -left-4 top-8 hidden h-28 w-28 rounded-full border border-[var(--kuns-orange)]/18 md:block" />
 
-              <div className="luxury-card relative overflow-hidden rounded-[2.25rem] p-5 md:p-6">
-                <div className="border-b border-white/10 pb-5">
-                  <div className="flex items-start justify-between gap-6">
+              <div className="luxury-card overflow-hidden rounded-[2rem]">
+                <div className="border-b border-white/10 p-6 md:p-7">
+                  <p className="luxury-label text-[10px]">Archive Preview</p>
+                  <div className="mt-5 flex items-end justify-between gap-6">
                     <div>
-                      <p className="label-represented">
-                        Represented Artists
+                      <p className="text-[1.15rem] font-medium tracking-[-0.04em] text-[var(--foreground)] md:text-[1.25rem]">
+                        A calm front door for the gallery&apos;s artists.
                       </p>
-                      <p className="mt-3 max-w-xs text-sm leading-6 text-white/45">
-                        Alphabetical order by English name
+                      <p className="mt-3 max-w-md text-sm leading-7 text-white/52">
+                        작가별 페이지는 공개용 소개와 아카이브를 한 흐름으로
+                        보여주도록 설계됩니다.
                       </p>
                     </div>
 
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#a38c5d]/30 bg-[#a38c5d]/10 text-sm text-[#d9c590]">
-                      {representedArtists.length}
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-[var(--kuns-orange)]/25 bg-[var(--kuns-orange)]/10 text-sm text-[var(--foreground)]">
+                      04
                     </div>
                   </div>
                 </div>
 
-                <div className="divide-y divide-white/10">
-                  {representedArtists.map((artist, index) => (
-                    <Link
-                      key={artist.slug}
-                      href={`/artists/${artist.slug}`}
-                      className="group grid grid-cols-[3.2rem_minmax(0,1fr)_auto] items-center gap-4 py-5"
+                <div className="grid gap-px bg-white/10 md:grid-cols-2">
+                  {archiveNotes.map((note) => (
+                    <div
+                      key={note.title}
+                      className="bg-[rgba(255,255,255,0.03)] p-6 transition duration-500 hover:bg-[rgba(243,112,33,0.06)]"
                     >
-                      <p className="text-xs tracking-[0.2em] text-white/28">
-                        {String(index + 1).padStart(2, "0")}
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--kuns-orange)]">
+                        {note.title}
                       </p>
-
-                      <div className="min-w-0">
-                        <h2 className="truncate text-[1.35rem] font-medium tracking-[-0.045em] text-[#f7f4ec] transition group-hover:text-[#a38c5d] md:text-[1.7rem]">
-                          {artist.name}
-                        </h2>
-
-                        {artist.nameKo ? (
-                          <p className="mt-1 text-sm text-white/42">
-                            {artist.nameKo}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <span className="text-sm text-white/32 transition duration-300 group-hover:translate-x-1 group-hover:text-[#a38c5d]">
-                        Enter
-                      </span>
-                    </Link>
+                      <p className="mt-4 text-sm leading-7 text-white/54">
+                        {note.description}
+                      </p>
+                    </div>
                   ))}
+
+                  <div className="bg-[rgba(255,255,255,0.03)] p-6 md:col-span-2">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-white/36">
+                      Official note
+                    </p>
+                    <p className="mt-4 max-w-2xl text-sm leading-7 text-white/56">
+                      작품, CV, Press & Archive, Share Card를 하나의 공식
+                      아카이브 안에서 정돈해, 작가 페이지가 항상 일관된
+                      인상을 유지하도록 돕습니다.
+                    </p>
+                  </div>
                 </div>
               </div>
             </aside>
           </div>
-
-          <section className="grid gap-4 border-t border-white/10 py-6 md:grid-cols-3 md:py-8">
-            {featureItems.map((item, index) => (
-              <div
-                key={item.label}
-                className="group border border-white/10 bg-white/[0.035] p-6 backdrop-blur-md transition duration-500 hover:border-[#a38c5d]/40 hover:bg-[#a38c5d]/[0.06]"
-                style={{
-                  animationDelay: `${index * 120}ms`,
-                }}
-              >
-                <div className="flex items-center justify-between gap-6">
-                  <p className="text-[10px] uppercase tracking-[0.32em] text-[#a38c5d]">
-                    {item.label}
-                  </p>
-                  <span className="h-px w-8 bg-white/18 transition duration-500 group-hover:w-12 group-hover:bg-[#a38c5d]" />
-                </div>
-
-                <h3 className="luxury-serif mt-8 text-[1.65rem] font-normal leading-[1.05] tracking-[-0.045em] text-[#f7f4ec] md:text-[2rem]">
-                  {item.title}
-                </h3>
-
-                <p className="mt-5 text-sm leading-7 text-white/52">
-                  {item.description}
-                </p>
-              </div>
-            ))}
-          </section>
         </div>
       </section>
 
       <section className="border-b border-white/10">
-        <div className="luxury-container grid gap-8 py-14 md:grid-cols-[0.8fr_1.2fr] md:py-20">
+        <div className="luxury-container py-14 md:py-20">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="label-represented">Featured Artists</p>
+              <h2 className="luxury-serif mt-5 text-5xl font-normal leading-[0.95] tracking-[-0.07em] text-[var(--foreground)] md:text-7xl">
+                Represented
+                <br />
+                artists preview
+              </h2>
+            </div>
+
+            <p className="max-w-xl text-[15px] leading-8 text-white/54 md:text-[16px] md:leading-9">
+              전속 작가 4명을 미리 보여주는 영역입니다. 각 카드에서 바로
+              상세 페이지로 이동할 수 있어, 홈에서 아카이브로의 흐름이 자연스럽게
+              이어집니다.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            {featuredArtists.map((artist, index) => (
+              <Link
+                key={artist.slug}
+                href={`/artists/${artist.slug}`}
+                className="group overflow-hidden rounded-[1.6rem] border border-white/10 bg-white/[0.03] transition duration-500 hover:-translate-y-1 hover:border-[var(--kuns-orange)]/35 hover:bg-[var(--kuns-orange)]/[0.05]"
+              >
+                <div className="relative aspect-[4/5] overflow-hidden bg-[var(--background-soft)]">
+                  <Image
+                    src={artist.profileImage ?? "/images/artists/jessup-choi.jpg"}
+                    alt={artist.name}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
+                    className="object-cover transition duration-700 group-hover:scale-[1.03]"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#121212]/90 via-[#121212]/28 to-transparent" />
+
+                  <div className="absolute left-5 top-5 flex items-center gap-3">
+                    <span className="rounded-full border border-white/12 bg-black/18 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-white/70">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+
+                  <div className="absolute inset-x-5 bottom-5">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--kuns-orange)]">
+                      Represented Artist
+                    </p>
+                    <p className="mt-3 text-[1.8rem] leading-[1] tracking-[-0.055em] text-[var(--foreground)] transition group-hover:text-[var(--kuns-orange)]">
+                      {artist.name}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 p-5">
+                  {artist.nameKo ? (
+                    <p className="text-sm text-white/46">{artist.nameKo}</p>
+                  ) : null}
+
+                  {artist.tagline ? (
+                    <p className="text-[14px] leading-7 text-white/60">
+                      {artist.tagline}
+                    </p>
+                  ) : null}
+
+                  <div className="flex items-center justify-between pt-1 text-[11px] uppercase tracking-[0.22em] text-white/34">
+                    <span>{artist.location ?? "Seoul, Korea"}</span>
+                    <span className="transition duration-300 group-hover:translate-x-1 group-hover:text-[var(--kuns-orange)]">
+                      View
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b border-white/10">
+        <div className="luxury-container grid gap-8 py-14 md:grid-cols-[0.92fr_1.08fr] md:gap-12 md:py-20">
           <div>
-            <p className="label-represented">System Note</p>
-            <h2 className="luxury-serif mt-5 max-w-lg text-5xl font-normal leading-[0.95] tracking-[-0.07em] text-[#f7f4ec] md:text-7xl">
-              From archive
+            <p className="label-represented">Platform Note</p>
+            <h2 className="luxury-serif mt-5 max-w-lg text-5xl font-normal leading-[0.95] tracking-[-0.07em] text-[var(--foreground)] md:text-7xl">
+              One archive,
               <br />
-              to placement.
+              many entries.
             </h2>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2">
-            <p className="text-[15px] leading-8 text-white/56 md:text-[16px] md:leading-9">
-              작가 페이지는 단순한 소개 페이지가 아니라, 작품과 기록이
-              업데이트되는 살아 있는 디지털 프로필로 설계됩니다.
+          <div className="space-y-6">
+            <p className="max-w-3xl text-[15px] leading-8 text-white/58 md:text-[16px] md:leading-9">
+              KÜN’S Gallery Artists는 전속 작가를 위한 공식 아카이브입니다.
+              작품, 이력, Press & Archive, Share Card가 같은 기준으로 정리되어
+              작가별 페이지가 늘 깔끔하고 일관된 인상을 유지합니다.
             </p>
 
-            <p className="text-[15px] leading-8 text-white/56 md:text-[16px] md:leading-9">
-              작품 정보와 이미지는 캔버스형 GLB 생성 도구와 연결되고, 이후
-              관리자의 검수와 승인을 거쳐 공개 AR 경험으로 확장됩니다.
+            <p className="max-w-3xl text-[15px] leading-8 text-white/58 md:text-[16px] md:leading-9">
+              관람자는 조용한 서사로 작가를 만나고, 갤러리는 필요한 정보와
+              기록을 한곳에서 관리할 수 있습니다. 기술보다 인상과 흐름이 먼저
+              드러나도록 구성한 공개형 아카이브입니다.
             </p>
           </div>
         </div>
       </section>
+
+      <footer>
+        <div className="luxury-container py-14 md:py-20">
+          <div className="luxury-card rounded-[2rem] p-7 md:p-10">
+            <div className="grid gap-8 md:grid-cols-[1.05fr_auto] md:items-end">
+              <div>
+                <p className="label-represented">Footer CTA</p>
+                <h2 className="luxury-serif mt-5 max-w-2xl text-4xl font-normal leading-[0.95] tracking-[-0.07em] text-[var(--foreground)] md:text-6xl">
+                  View represented
+                  <br />
+                  artists or log in.
+                </h2>
+                <p className="mt-5 max-w-xl text-[15px] leading-8 text-white/54 md:text-[16px] md:leading-9">
+                  가장 중요한 진입점만 남겨, 홈에서 바로 아카이브와 작가
+                  관리 흐름으로 이어집니다.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Link href="/artists" className="btn-primary">
+                  View Represented Artists
+                </Link>
+
+                <Link href="/artist/login" className="btn-secondary">
+                  Artist Login
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }

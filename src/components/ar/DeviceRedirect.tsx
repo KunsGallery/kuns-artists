@@ -169,7 +169,7 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
               아직 이 작품의 AR 파일이 연결되지 않았습니다.
               <br />
               <span className="text-neutral-500">
-                `public/models` 안의 GLB, USDZ 파일 경로를 확인해주세요.
+                AR용 3D 파일 경로를 확인해주세요.
               </span>
             </div>
           ) : null}

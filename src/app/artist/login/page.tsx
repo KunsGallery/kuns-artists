@@ -99,7 +99,7 @@ export default function ArtistLoginPage() {
   }, [router]);
 
   return (
-    <main className="min-h-screen bg-[#f5f3ee] text-neutral-950">
+    <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-5 py-6 md:px-8 md:py-8">
         <header className="flex items-center justify-between">
           <Link
@@ -113,14 +113,14 @@ export default function ArtistLoginPage() {
             href="/artists"
             className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
           >
-            Artists
+            작가 목록
           </Link>
         </header>
 
         <section className="grid flex-1 gap-10 py-12 md:grid-cols-[1.02fr_0.98fr] md:items-center md:py-16">
           <div className="max-w-4xl">
             <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
-              Artist Login
+              작가 로그인
             </p>
 
             <h1 className="mt-5 text-5xl font-semibold tracking-[-0.04em] text-neutral-950 md:text-7xl md:leading-[0.95]">

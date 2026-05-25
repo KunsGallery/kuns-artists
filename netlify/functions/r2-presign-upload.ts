@@ -71,6 +71,10 @@ function sanitizeSegment(value: string | undefined, fallback: string) {
   return sanitized || fallback;
 }
 
+function sanitizeFilename(value: string) {
+  return sanitizeSegment(value.replace(/\.[^/.]+$/, ""), "upload");
+}
+
 function getExtension(filename: string, target: R2UploadTarget) {
   const lower = filename.toLowerCase();
 
@@ -91,12 +95,18 @@ function getExtension(filename: string, target: R2UploadTarget) {
 function createObjectKey(payload: Required<Pick<PresignBody, "filename" | "target">> & PresignBody) {
   const prefix = TARGET_PREFIX[payload.target];
   const artistSlug = sanitizeSegment(payload.artistSlug, "unknown-artist");
+  const workSlug = sanitizeSegment(payload.workSlug, "temp-work");
+  const safeFilename = sanitizeFilename(payload.filename);
   const baseName = sanitizeSegment(payload.workSlug || payload.filename, "upload");
   const extension = getExtension(payload.filename, payload.target);
   const stamp = Date.now();
 
   if (payload.target === "profile") {
-    return `${prefix}/${artistSlug}/${baseName}-${stamp}.${extension}`;
+    return `${prefix}/${artistSlug}/${stamp}-${safeFilename}.${extension}`;
+  }
+
+  if (payload.target === "work-image") {
+    return `${prefix}/${artistSlug}/${workSlug}/${stamp}-${safeFilename}.${extension}`;
   }
 
   if (payload.target === "cv") {

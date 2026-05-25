@@ -1,25 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --background: #050505;
-  --background-soft: #0b0a08;
-  --foreground: #f7f4ec;
-  --muted: rgba(247, 244, 236, 0.58);
-  --muted-strong: rgba(247, 244, 236, 0.74);
+  --background: #171717;
+  --background-deep: #0d0d0d;
+  --background-soft: #242424;
 
-  --accent-gold: #a38c5d;
-  --accent-gold-soft: rgba(163, 140, 93, 0.18);
-  --accent-silver: #8a8a8a;
-  --accent-silver-soft: rgba(138, 138, 138, 0.18);
+  --foreground: #f7f1e8;
+  --muted: rgba(247, 241, 232, 0.62);
+  --muted-strong: rgba(247, 241, 232, 0.78);
 
-  --line: rgba(247, 244, 236, 0.09);
-  --line-strong: rgba(247, 244, 236, 0.16);
+  --kuns-orange: #f37021;
+  --kuns-orange-hover: #ff7a2f;
+  --kuns-orange-soft: rgba(243, 112, 33, 0.14);
 
+  --line: rgba(247, 241, 232, 0.1);
+  --line-strong: rgba(247, 241, 232, 0.18);
   --panel: rgba(255, 255, 255, 0.045);
   --panel-strong: rgba(255, 255, 255, 0.07);
+  --field: rgba(255, 255, 255, 0.085);
+  --field-disabled: rgba(255, 255, 255, 0.055);
 
-  --black: #050505;
-  --white: #f7f4ec;
+  --black: #0d0d0d;
+  --white: #f7f1e8;
 }
 
 * {
@@ -28,7 +30,7 @@
 
 html {
   min-height: 100%;
-  background: var(--background);
+  background: var(--background-deep);
   color: var(--foreground);
   scroll-behavior: smooth;
 }
@@ -37,9 +39,17 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 50% -10%, rgba(163, 140, 93, 0.12), transparent 34rem),
-    radial-gradient(circle at 92% 12%, rgba(255, 255, 255, 0.045), transparent 28rem),
-    linear-gradient(180deg, #070706 0%, #050505 52%, #0a0907 100%);
+    radial-gradient(
+      circle at 50% -10%,
+      rgba(243, 112, 33, 0.16),
+      transparent 34rem
+    ),
+    radial-gradient(
+      circle at 92% 12%,
+      rgba(255, 255, 255, 0.04),
+      transparent 28rem
+    ),
+    linear-gradient(180deg, #121212 0%, #171717 52%, #0d0d0d 100%);
   color: var(--foreground);
   font-family:
     Arial,
@@ -61,8 +71,8 @@ body::before {
   pointer-events: none;
   opacity: 0.32;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+    linear-gradient(rgba(247, 241, 232, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(247, 241, 232, 0.02) 1px, transparent 1px);
   background-size: 46px 46px;
   mask-image: radial-gradient(circle at 50% 20%, black, transparent 72%);
 }
@@ -73,11 +83,11 @@ body::after {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.06;
+  opacity: 0.05;
   background-image:
-    radial-gradient(circle at 20% 30%, #ffffff 0 1px, transparent 1px),
-    radial-gradient(circle at 80% 60%, #ffffff 0 1px, transparent 1px),
-    radial-gradient(circle at 40% 80%, #ffffff 0 1px, transparent 1px);
+    radial-gradient(circle at 20% 30%, rgba(243, 112, 33, 0.45) 0 1px, transparent 1px),
+    radial-gradient(circle at 80% 60%, rgba(255, 255, 255, 0.32) 0 1px, transparent 1px),
+    radial-gradient(circle at 40% 80%, rgba(243, 112, 33, 0.22) 0 1px, transparent 1px);
   background-size: 23px 23px, 31px 31px, 37px 37px;
 }
 
@@ -103,8 +113,8 @@ img {
 }
 
 ::selection {
-  background: var(--accent-gold);
-  color: #050505;
+  background: var(--kuns-orange);
+  color: var(--background-deep);
 }
 
 /* Typography */
@@ -136,12 +146,11 @@ img {
 
 .luxury-card {
   border: 1px solid var(--line);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.035));
+  background: var(--panel);
   backdrop-filter: blur(22px);
   box-shadow:
-    0 28px 90px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    0 26px 80px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .luxury-label {
@@ -180,11 +189,11 @@ img {
 }
 
 .luxury-link:hover {
-  color: var(--foreground);
+  color: var(--kuns-orange);
 }
 
 .luxury-link:hover::after {
-  opacity: 0.85;
+  opacity: 0.9;
   transform: scaleX(1);
   transform-origin: left;
 }
@@ -194,7 +203,7 @@ img {
 }
 
 .luxury-focus:focus-visible {
-  box-shadow: 0 0 0 3px rgba(163, 140, 93, 0.32);
+  box-shadow: 0 0 0 3px var(--kuns-orange-soft);
 }
 
 /* Artist Labels */
@@ -212,11 +221,11 @@ img {
 }
 
 .label-represented {
-  color: var(--accent-gold);
+  color: var(--kuns-orange);
 }
 
 .label-project {
-  color: var(--accent-silver);
+  color: var(--muted-strong);
 }
 
 /* Buttons */
@@ -226,10 +235,10 @@ img {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid rgba(247, 244, 236, 0.88);
-  background: var(--foreground);
+  border: 1px solid var(--kuns-orange);
+  background: var(--kuns-orange);
   padding-inline: 2.5rem;
-  color: var(--black);
+  color: var(--background-deep);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -244,10 +253,10 @@ img {
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  border-color: var(--accent-gold);
-  background: var(--accent-gold);
-  color: var(--foreground);
-  box-shadow: 0 0 30px rgba(163, 140, 93, 0.28);
+  border-color: var(--kuns-orange-hover);
+  background: var(--kuns-orange-hover);
+  color: var(--background-deep);
+  box-shadow: 0 0 30px rgba(243, 112, 33, 0.24);
 }
 
 .btn-secondary {
@@ -256,8 +265,8 @@ img {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid var(--line-strong);
-  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  background: var(--panel);
   padding-inline: 2rem;
   color: var(--foreground);
   font-size: 12px;
@@ -273,14 +282,183 @@ img {
 
 .btn-secondary:hover {
   transform: translateY(-2px);
-  border-color: rgba(163, 140, 93, 0.48);
-  background: rgba(163, 140, 93, 0.12);
+  border-color: var(--kuns-orange);
+  background: rgba(243, 112, 33, 0.12);
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--kuns-orange-soft);
+}
+
+.theme-dark {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.theme-dark :where(
+    [class*="bg-white"],
+    [class*="bg-white/"],
+    [class*="bg-[#f7f6f2]"],
+    [class*="bg-[#f5f3ee]"],
+    [class*="bg-[#faf8f3]"],
+    [class*="bg-[#faf8f4]"],
+    [class*="bg-[#fcfbf8]"]
+  ) {
+  background-color: var(--panel) !important;
+}
+
+.theme-dark :where([class*="bg-neutral-950"], [class*="bg-black"]) {
+  background-color: var(--kuns-orange) !important;
+  color: var(--background-deep) !important;
+}
+
+.theme-dark :where([class*="bg-neutral-900"], [class*="bg-neutral-800"]) {
+  background-color: var(--background-soft) !important;
+}
+
+.theme-dark :where([class*="bg-[#ece8df]"]) {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.theme-dark :where([class*="bg-amber-50"]) {
+  background-color: rgba(243, 112, 33, 0.1) !important;
+  color: var(--foreground) !important;
+  border-color: rgba(243, 112, 33, 0.22) !important;
+}
+
+.theme-dark :where([class*="bg-emerald-50"]) {
+  background-color: rgba(243, 112, 33, 0.08) !important;
+  color: var(--foreground) !important;
+  border-color: rgba(243, 112, 33, 0.22) !important;
+}
+
+.theme-dark :where([class*="bg-slate-50"]) {
+  background-color: rgba(255, 255, 255, 0.055) !important;
+  color: var(--muted-strong) !important;
+  border-color: var(--line) !important;
+}
+
+.theme-dark :where([class*="bg-red-50"], [class*="bg-[#fff3f1]"]) {
+  background-color: rgba(127, 29, 29, 0.28) !important;
+  color: #ffd7d3 !important;
+  border-color: rgba(248, 113, 113, 0.28) !important;
+}
+
+.theme-dark :where(
+    [class*="border-black/20"],
+    [class*="border-black/15"],
+    [class*="border-black/10"],
+    [class*="border-black/8"],
+    [class*="border-black/5"]
+  ) {
+  border-color: var(--line) !important;
+}
+
+.theme-dark :where([class*="border-amber-200"], [class*="border-emerald-200"], [class*="border-red-200"], [class*="border-slate-200"]) {
+  border-color: var(--line-strong) !important;
+}
+
+.theme-dark :where(
+    [class*="text-neutral-950"],
+    [class*="text-neutral-900"],
+    [class*="text-neutral-800"]
+  ) {
+  color: var(--foreground) !important;
+}
+
+.theme-dark :where([class*="text-neutral-700"]) {
+  color: var(--muted-strong) !important;
+}
+
+.theme-dark :where(
+    [class*="text-neutral-600"],
+    [class*="text-neutral-500"],
+    [class*="text-neutral-400"]
+  ) {
+  color: var(--muted) !important;
+}
+
+.theme-dark :where([class*="text-amber-900"], [class*="text-emerald-800"], [class*="text-red-700"], [class*="text-red-600"], [class*="text-slate-700"]) {
+  color: var(--foreground) !important;
+}
+
+.theme-dark :where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    textarea,
+    select
+  ) {
+  background: var(--field) !important;
+  border-color: rgba(247, 241, 232, 0.16) !important;
+  color: var(--foreground) !important;
+  caret-color: var(--kuns-orange);
+  color-scheme: dark;
+}
+
+.theme-dark :where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover,
+    textarea:hover,
+    select:hover
+  ) {
+  border-color: rgba(243, 112, 33, 0.38) !important;
+}
+
+.theme-dark :where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):disabled,
+    textarea:disabled,
+    select:disabled
+  ) {
+  background: var(--field-disabled) !important;
+  border-color: rgba(247, 241, 232, 0.12) !important;
+  color: rgba(247, 241, 232, 0.54) !important;
+  opacity: 1;
+}
+
+.theme-dark :where(input::placeholder, textarea::placeholder) {
+  color: rgba(247, 241, 232, 0.42) !important;
+}
+
+.theme-dark :where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+    textarea:focus-visible,
+    select:focus-visible
+  ) {
+  outline: none;
+  border-color: var(--kuns-orange) !important;
+  box-shadow: 0 0 0 3px var(--kuns-orange-soft);
+}
+
+.theme-dark :where(select option, select optgroup) {
+  background-color: var(--background-soft);
+  color: var(--foreground);
+}
+
+.theme-dark :where(button[class*="bg-neutral-950"], a[class*="bg-neutral-950"], button[class*="bg-black"], a[class*="bg-black"]) {
+  background-color: var(--kuns-orange) !important;
+  color: var(--background-deep) !important;
+}
+
+.theme-dark :where(button[class*="hover:bg-neutral-800"]:hover, a[class*="hover:bg-neutral-800"]:hover) {
+  background-color: var(--kuns-orange-hover) !important;
+}
+
+.theme-dark :where(button[class*="bg-white"], a[class*="bg-white"], button[class*="bg-[#f7f6f2]"], a[class*="bg-[#f7f6f2]"]) {
+  background-color: var(--panel) !important;
+}
+
+.theme-dark :where(button[class*="hover:border-black/20"]:hover, a[class*="hover:border-black/20"]:hover) {
+  border-color: var(--line-strong) !important;
+}
+
+.theme-dark :where(button:hover, a:hover) {
+  border-color: var(--line-strong);
 }
 
 /* Scrollbar */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: var(--accent-gold) transparent;
+  scrollbar-color: var(--kuns-orange) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -293,7 +471,7 @@ img {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--accent-gold);
+  background: var(--kuns-orange);
 }
 
 /* Animation */
