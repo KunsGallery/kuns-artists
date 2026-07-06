@@ -112,6 +112,30 @@ export async function uploadGlbBlobToR2({
   });
 }
 
+export async function uploadGlbFileToR2({
+  blob,
+  filename,
+  artistSlug,
+  workSlug,
+}: {
+  blob: Blob;
+  filename: string;
+  artistSlug?: string;
+  workSlug?: string;
+}): Promise<R2UploadResult> {
+  try {
+    return await uploadBlobToR2(blob, {
+      filename,
+      contentType: "model/gltf-binary",
+      target: "ar-model",
+      artistSlug,
+      workSlug,
+    });
+  } catch {
+    throw new Error("AR 준비용 파일 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.");
+  }
+}
+
 export async function uploadImageFileToR2({
   file,
   target,

@@ -22,6 +22,7 @@ export type Work = {
   generatedGlbUrl?: string;
   generatedUsdzUrl?: string;
   generatedAt?: unknown;
+  displayOrder?: number;
   isPublished?: boolean;
   archived?: boolean;
 };

@@ -13,6 +13,7 @@ import {
   type ArtistWorkAdminUpdatePayload,
   type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
+import { hasArAsset } from "@/lib/workDisplay";
 
 type WorkFormValues = ArtistWorkAdminUpdatePayload;
 type StatusFilter = "all" | "pending" | "published" | "archived";
@@ -56,6 +57,7 @@ function toFormValues(work: ArtistWorkDoc): WorkFormValues {
     modelUsdz: work.modelUsdz || "",
     generatedGlbUrl: work.generatedGlbUrl || "",
     generatedUsdzUrl: work.generatedUsdzUrl || "",
+    displayOrder: work.displayOrder,
   };
 }
 
@@ -93,6 +95,39 @@ function getWorkStatusMessage(status: Exclude<StatusFilter, "all">) {
   }
 
   return "Review Pending: 아직 공개되지 않습니다.";
+}
+
+function getWorkDisplayOrderLabel(work: ArtistWorkDoc) {
+  return Number.isFinite(work.displayOrder as number)
+    ? `Order ${work.displayOrder}`
+    : "No order";
+}
+
+function parseOptionalNumberInput(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function hasArAssetInForm(form: WorkFormValues) {
+  return Boolean(
+    [
+      form.generatedGlbUrl,
+      form.modelGlb,
+      form.generatedUsdzUrl,
+      form.modelUsdz,
+    ].some((value) => value?.trim())
+  );
+}
+
+function getPublicWorkSlug(work: ArtistWorkDoc) {
+  return work.slug?.trim() || resolveArtistWorkSlug(work) || work.id?.trim() || "";
 }
 
 function isProjectArtistWork(work: ArtistWorkDoc) {
@@ -265,17 +300,20 @@ function WorkListCard({
 
         <div className="min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="truncate text-[16px] font-semibold tracking-[-0.03em] text-neutral-950">
-                {work.title || "Untitled"}
-              </h3>
-              <p className="mt-1 truncate text-sm text-neutral-500">
-                {work.artistName || "Unknown artist"}
-              </p>
-              <p className="mt-0.5 text-sm text-neutral-500">
-                {work.year || "Year not set"}
-              </p>
-            </div>
+              <div className="min-w-0">
+                <h3 className="truncate text-[16px] font-semibold tracking-[-0.03em] text-neutral-950">
+                  {work.title || "Untitled"}
+                </h3>
+                <p className="mt-1 truncate text-sm text-neutral-500">
+                  {work.artistName || "Unknown artist"}
+                </p>
+                <p className="mt-0.5 text-sm text-neutral-500">
+                  {work.year || "Year not set"}
+                </p>
+                <p className="mt-1 text-[11px] uppercase tracking-[0.22em] text-neutral-400">
+                  {getWorkDisplayOrderLabel(work)}
+                </p>
+              </div>
 
             <Badge tone={getWorkStatusTone(status)}>
               {getWorkStatusLabel(status)}
@@ -294,9 +332,9 @@ function WorkListCard({
               tone={work.dimensions ? "green" : "gray"}
             />
             <MiniStatus
-              label="AR file"
-              value={work.generatedGlbUrl ? "있음" : "없음"}
-              tone={work.generatedGlbUrl ? "green" : "gray"}
+              label="AR status"
+              value={hasArAsset(work) ? "AR Ready" : "Missing AR Files"}
+              tone={hasArAsset(work) ? "green" : "gray"}
             />
           </div>
         </div>
@@ -353,11 +391,13 @@ function TextField({
   value,
   onChange,
   placeholder,
+  helpText,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  helpText?: string;
 }) {
   return (
     <label className="block">
@@ -371,6 +411,11 @@ function TextField({
         onChange={(event) => onChange(event.target.value)}
         className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
       />
+      {helpText ? (
+        <p className="mt-2 text-[11px] leading-5 text-neutral-500">
+          {helpText}
+        </p>
+      ) : null}
     </label>
   );
 }
@@ -488,6 +533,9 @@ export default function AdminWorksPage() {
   const [saveMessage, setSaveMessage] = useState("");
   const [saveErrorMessage, setSaveErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingArTestFile, setIsGeneratingArTestFile] = useState(false);
+  const [arTestFileMessage, setArTestFileMessage] = useState("");
+  const [arTestFileErrorMessage, setArTestFileErrorMessage] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [artistFilter, setArtistFilter] = useState<ArtistFilter>("all");
 
@@ -567,6 +615,8 @@ export default function AdminWorksPage() {
   useEffect(() => {
     if (!selectedWork) {
       setSelectedForm(EMPTY_FORM);
+      setArTestFileMessage("");
+      setArTestFileErrorMessage("");
       if (selectedWorkId && filteredWorks.length === 0) {
         setSelectedWorkId("");
       }
@@ -578,14 +628,18 @@ export default function AdminWorksPage() {
     }
 
     setSelectedForm(toFormValues(selectedWork));
+    setArTestFileMessage("");
+    setArTestFileErrorMessage("");
   }, [filteredWorks.length, selectedWork, selectedWorkId]);
 
   const selectedStatus = selectedWork ? getWorkStatus(selectedWork) : null;
-  const selectedWorkSlug = selectedWork ? resolveArtistWorkSlug(selectedWork) : "";
+  const selectedWorkSlug = selectedWork ? getPublicWorkSlug(selectedWork) : "";
   const artistHref = selectedWork?.artistSlug
     ? `/artists/${selectedWork.artistSlug}`
     : "";
+  const publicWorkHref = selectedWorkSlug ? `/works/${selectedWorkSlug}` : "";
   const arHref = selectedWorkSlug ? `/ar/${selectedWorkSlug}` : "";
+  const arReadyFromForm = hasArAssetInForm(selectedForm);
 
   function updateSelectedField<K extends keyof WorkFormValues>(
     key: K,
@@ -619,6 +673,117 @@ export default function AdminWorksPage() {
       );
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleGenerateArTestFile() {
+    if (!selectedWork) {
+      return;
+    }
+
+    const coverImageUrl =
+      selectedForm.coverImageUrl?.trim() || selectedWork.coverImageUrl?.trim() || "";
+    const widthCm = selectedWork.widthCm;
+    const heightCm = selectedWork.heightCm;
+    const artistSlugForUpload =
+      selectedWork.artistSlug?.trim() || selectedWork.id?.trim() || "";
+    const workSlugForUpload = selectedWorkSlug || selectedWork.id?.trim() || "";
+
+    if (!coverImageUrl) {
+      setArTestFileErrorMessage("작품 이미지가 필요합니다.");
+      setArTestFileMessage("");
+      return;
+    }
+
+    if (!widthCm || !heightCm) {
+      setArTestFileErrorMessage(
+        "AR 테스트 파일 생성을 위해 작품의 가로/세로 크기가 필요합니다."
+      );
+      setArTestFileMessage("");
+      return;
+    }
+
+    if (!artistSlugForUpload || !workSlugForUpload) {
+      setArTestFileErrorMessage("작가 또는 작품 주소 정보를 확인할 수 없습니다.");
+      setArTestFileMessage("");
+      return;
+    }
+
+    setIsGeneratingArTestFile(true);
+    setArTestFileMessage("");
+    setArTestFileErrorMessage("");
+
+    try {
+      const [
+        { createCanvasGlbBlob, createSafeGlbFilename },
+        { uploadGlbFileToR2 },
+      ] = await Promise.all([
+        import("@/lib/ar/createCanvasGlb"),
+        import("@/lib/r2/client"),
+      ]);
+
+      const glbBlob = await createCanvasGlbBlob(
+        {
+          imageUrl: coverImageUrl,
+          title: selectedWork.title || "Artwork",
+          widthCm,
+          heightCm,
+          depthCm: selectedWork.depthCm,
+          artistName: selectedWork.artistName,
+          year: selectedWork.year,
+          medium: selectedWork.medium,
+          dimensions: selectedWork.dimensions,
+        },
+        {
+          sideMode: "canvas",
+          showBackLabel: false,
+          frontRotationXDeg: selectedWork.frontRotationXDeg,
+          frontRotationYDeg: selectedWork.frontRotationYDeg,
+        }
+      );
+
+      const filename = createSafeGlbFilename(
+        selectedWork.title || selectedWork.slug || selectedWork.id || "artwork"
+      );
+      const uploadResult = await uploadGlbFileToR2({
+        blob: glbBlob,
+        filename,
+        artistSlug: artistSlugForUpload,
+        workSlug: workSlugForUpload,
+      });
+
+      setSelectedForm((current) => ({
+        ...current,
+        generatedGlbUrl: uploadResult.publicUrl,
+      }));
+      setWorks((current) =>
+        current.map((work) =>
+          work.id === selectedWork.id
+            ? {
+                ...work,
+                generatedGlbUrl: uploadResult.publicUrl,
+              }
+            : work
+        )
+      );
+      setArTestFileMessage(
+        "AR 테스트 파일이 생성되었습니다. 변경사항 저장을 눌러 반영해주세요."
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message ===
+          "AR 준비용 파일 업로드에 실패했습니다. 잠시 후 다시 시도해주세요."
+      ) {
+        setArTestFileErrorMessage(error.message);
+      } else {
+        setArTestFileErrorMessage(
+          "AR 테스트 파일 생성에 실패했습니다. 이미지 URL과 작품 크기를 확인해주세요."
+        );
+      }
+      setArTestFileMessage("");
+    } finally {
+      setIsGeneratingArTestFile(false);
     }
   }
 
@@ -930,12 +1095,100 @@ export default function AdminWorksPage() {
                       description="보관 처리 시 공개 목록에서 제외됩니다."
                     />
                   </div>
+
+                  <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)] md:items-end">
+                    <label className="block">
+                      <span className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                        Display Order
+                      </span>
+                      <input
+                        type="number"
+                        step="1"
+                        value={selectedForm.displayOrder ?? ""}
+                        onChange={(event) =>
+                          updateSelectedField(
+                            "displayOrder",
+                            parseOptionalNumberInput(event.target.value)
+                          )
+                        }
+                        placeholder="빈 값 가능"
+                        className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
+                      />
+                    </label>
+
+                    <div className="rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 py-4">
+                      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                        노출 순서
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-neutral-600">
+                        숫자가 낮을수록 작가 페이지에서 먼저 표시됩니다.
+                      </p>
+                    </div>
+                  </div>
                 </SectionCard>
 
                 <SectionCard
                   title="4. AR / File Links"
                   description="기술 용어는 그대로 유지하고, 필요한 파일 URL을 직접 관리합니다."
                 >
+                  <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#171717] shadow-sm">
+                    <div className="h-1 w-full bg-gradient-to-r from-[#F37021] via-[#ff9b5a] to-transparent" />
+                    <div className="px-4 py-4 md:px-5 md:py-5">
+                      <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                        AR File Connection Guide
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-white/70">
+                        GLB는 웹/Android AR Preview에 우선 사용됩니다. USDZ는 iOS Quick Look용으로 연결할 수 있습니다. 저장 후 GLB 또는 USDZ URL이 하나라도 있으면 /works와 /ar 페이지에서 AR Preview Available로 표시됩니다.
+                      </p>
+                      <p className="mt-3 text-[11px] uppercase tracking-[0.24em] text-white/38">
+                        현재는 URL을 직접 입력합니다.
+                      </p>
+
+                      <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-white/[0.03] px-4 py-4">
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                          AR Test File
+                        </p>
+                        <p className="mt-2 text-sm leading-7 text-white/68">
+                          작품 이미지와 크기를 기준으로 간단한 GLB 테스트 파일을 생성해 R2에 업로드합니다.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void handleGenerateArTestFile()}
+                          disabled={isGeneratingArTestFile}
+                          className="mt-4 inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isGeneratingArTestFile
+                            ? "AR 테스트 파일 생성 중..."
+                            : "AR 테스트 파일 자동 생성"}
+                        </button>
+
+                        {arTestFileMessage ? (
+                          <p className="mt-3 text-sm leading-6 text-emerald-200">
+                            {arTestFileMessage}
+                          </p>
+                        ) : null}
+
+                        {arTestFileErrorMessage ? (
+                          <p className="mt-3 text-sm leading-6 text-amber-200">
+                            {arTestFileErrorMessage}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.25rem] border border-white/10 bg-[#171717] px-4 py-4 text-sm leading-7 text-white/70">
+                    <div className="h-px w-12 bg-gradient-to-r from-[#F37021] to-transparent" />
+                    <p className="mt-3 text-[11px] uppercase tracking-[0.24em] text-white/42">
+                      Status: {arReadyFromForm ? "AR Ready" : "Missing AR Files"}
+                    </p>
+                    <p className="mt-2">
+                      {arReadyFromForm
+                        ? "GLB 또는 USDZ URL이 연결되어 공개 AR Preview가 활성화됩니다."
+                        : "GLB 또는 USDZ URL을 연결하면 공개 페이지에서 AR Preview가 활성화됩니다."}
+                    </p>
+                  </div>
+
                   <div className="grid gap-4 md:grid-cols-2">
                     <TextField
                       label="generatedGlbUrl"
@@ -943,6 +1196,8 @@ export default function AdminWorksPage() {
                       onChange={(value) =>
                         updateSelectedField("generatedGlbUrl", value)
                       }
+                      placeholder="https://..."
+                      helpText="자동 생성 또는 업로드된 GLB URL을 연결합니다."
                     />
                     <TextField
                       label="generatedUsdzUrl"
@@ -950,11 +1205,15 @@ export default function AdminWorksPage() {
                       onChange={(value) =>
                         updateSelectedField("generatedUsdzUrl", value)
                       }
+                      placeholder="https://..."
+                      helpText="자동 생성 또는 업로드된 USDZ URL을 연결합니다."
                     />
                     <TextField
                       label="modelGlb"
                       value={selectedForm.modelGlb || ""}
                       onChange={(value) => updateSelectedField("modelGlb", value)}
+                      placeholder="https://..."
+                      helpText="수동으로 준비한 GLB URL을 연결합니다."
                     />
                     <TextField
                       label="modelUsdz"
@@ -962,6 +1221,8 @@ export default function AdminWorksPage() {
                       onChange={(value) =>
                         updateSelectedField("modelUsdz", value)
                       }
+                      placeholder="https://..."
+                      helpText="수동으로 준비한 USDZ URL을 연결합니다."
                     />
                   </div>
 
@@ -977,6 +1238,15 @@ export default function AdminWorksPage() {
                       artistSlug={selectedWork.artistSlug}
                       workSlug={selectedWork.slug || selectedWork.id || undefined}
                     />
+                  </div>
+
+                  <div className="rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 py-4 text-sm leading-7 text-neutral-600">
+                    저장 후 공개 작품 상세 페이지와 AR Preview 페이지에서 상태가 반영됩니다.
+                  </div>
+
+                  <div className="rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 py-4 text-sm leading-7 text-neutral-600">
+                    <p>작품 상세: /works/{selectedWorkSlug || "work-slug"}</p>
+                    <p>AR Preview: /ar/{selectedWorkSlug || "work-slug"}</p>
                   </div>
                 </SectionCard>
 
@@ -1000,6 +1270,19 @@ export default function AdminWorksPage() {
                         className="inline-flex h-12 items-center justify-center rounded-full border border-black/10 bg-white px-6 text-sm text-neutral-900 transition hover:border-black/20 sm:w-auto"
                       >
                         작가 페이지 열기
+                        </Link>
+                      ) : null}
+
+                    {publicWorkHref ? (
+                      <Link
+                        href={publicWorkHref}
+                        className={`inline-flex h-12 items-center justify-center rounded-full px-6 text-sm transition sm:w-auto ${
+                          selectedStatus === "published"
+                            ? "border border-[#F37021]/30 bg-[#fff7f1] text-[#b85d18] hover:border-[#F37021]/40"
+                            : "border border-black/10 bg-white text-neutral-900 hover:border-black/20"
+                        }`}
+                      >
+                        작품 상세 열기
                       </Link>
                     ) : null}
 
@@ -1016,6 +1299,16 @@ export default function AdminWorksPage() {
                   <p className="text-sm leading-6 text-neutral-500">
                     작품 상태가 저장된 뒤 공개 페이지와 AR 페이지에서 이어서 확인할 수 있습니다.
                   </p>
+
+                  {selectedWorkSlug ? (
+                    <div className="rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 py-4 text-sm leading-7 text-neutral-600">
+                      <p>작품 상세: /works/{selectedWorkSlug}</p>
+                      <p>AR Preview: /ar/{selectedWorkSlug}</p>
+                      <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                        저장 후 공개 작품 상세 페이지와 AR Preview 페이지에서 상태가 반영됩니다.
+                      </p>
+                    </div>
+                  ) : null}
                 </SectionCard>
               </>
             ) : (

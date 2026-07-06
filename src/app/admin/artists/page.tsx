@@ -8,9 +8,12 @@ import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import {
   createProjectArtistForAdmin,
   getAllArtistsForAdmin,
+  getWorksForArtist,
+  resolveArtistWorkSlug,
   updateArtistForAdmin,
   type ArtistAdminSavePayload,
   type ArtistDoc,
+  type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
 import {
   ARTIST_ARCHIVE_LINK_TYPE_OPTIONS,
@@ -43,6 +46,14 @@ const EMPTY_PROJECT_FORM: ArtistFormValues = {
   cvUrl: "",
   artsyUrl: "",
   websiteUrl: "",
+  portfolioPdfUrl: "",
+  portfolioPdfLabel: "",
+  featuredWorkId: "",
+  featuredWorkSlug: "",
+  featuredWorkTitle: "",
+  featuredWorkImageUrl: "",
+  galleryNote: "",
+  galleryNoteEn: "",
   cvItems: [],
   archiveLinks: [],
 };
@@ -66,6 +77,14 @@ function toFormValues(artist: ArtistDoc): ArtistFormValues {
     cvUrl: artist.cvUrl || "",
     artsyUrl: artist.artsyUrl || "",
     websiteUrl: artist.websiteUrl || "",
+    portfolioPdfUrl: artist.portfolioPdfUrl || "",
+    portfolioPdfLabel: artist.portfolioPdfLabel || "",
+    featuredWorkId: artist.featuredWorkId || "",
+    featuredWorkSlug: artist.featuredWorkSlug || "",
+    featuredWorkTitle: artist.featuredWorkTitle || "",
+    featuredWorkImageUrl: artist.featuredWorkImageUrl || "",
+    galleryNote: artist.galleryNote || "",
+    galleryNoteEn: artist.galleryNoteEn || "",
     cvItems: sortArtistCvItems(artist.cvItems ?? []),
     archiveLinks: sortArtistArchiveLinks(artist.archiveLinks ?? []),
   };
@@ -382,6 +401,23 @@ function normalizeArchiveLinkOrder(items: ArtistArchiveLink[]) {
   }));
 }
 
+function getArtistWorkImageUrl(work: ArtistWorkDoc) {
+  return work.coverImageUrl?.trim() || "";
+}
+
+function getArtistWorkSlug(work: ArtistWorkDoc) {
+  return work.slug?.trim() || resolveArtistWorkSlug(work) || work.id?.trim() || "";
+}
+
+function getArtistWorkSelectionValue(work: ArtistWorkDoc) {
+  return {
+    featuredWorkId: work.id?.trim() || "",
+    featuredWorkSlug: getArtistWorkSlug(work),
+    featuredWorkTitle: work.title?.trim() || "",
+    featuredWorkImageUrl: getArtistWorkImageUrl(work),
+  };
+}
+
 function serializeArtistFormValues(form: ArtistFormValues) {
   return JSON.stringify({
     ...form,
@@ -452,6 +488,12 @@ export default function AdminArtistsPage() {
   const [expandedArchiveGroups, setExpandedArchiveGroups] = useState<
     Partial<Record<ArtistArchiveLink["type"], boolean>>
   >({});
+  const [selectedArtistWorks, setSelectedArtistWorks] = useState<ArtistWorkDoc[]>(
+    []
+  );
+  const [isLoadingSelectedArtistWorks, setIsLoadingSelectedArtistWorks] =
+    useState(false);
+  const [selectedArtistWorksError, setSelectedArtistWorksError] = useState("");
 
   async function loadArtists(nextSelectedArtistId?: string) {
     const result = await getAllArtistsForAdmin();
@@ -536,6 +578,53 @@ export default function AdminArtistsPage() {
     }
   }, [artists, selectedArtistId]);
 
+  useEffect(() => {
+    let isActive = true;
+    const nextArtist = artists.find((entry) => entry.id === selectedArtistId);
+
+    if (!nextArtist) {
+      setSelectedArtistWorks([]);
+      setSelectedArtistWorksError("");
+      setIsLoadingSelectedArtistWorks(false);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    setIsLoadingSelectedArtistWorks(true);
+    setSelectedArtistWorksError("");
+
+    void getWorksForArtist(nextArtist.id)
+      .then((works) => {
+        if (!isActive) {
+          return;
+        }
+
+        setSelectedArtistWorks(works);
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return;
+        }
+
+        setSelectedArtistWorks([]);
+        setSelectedArtistWorksError(
+          error instanceof Error
+            ? error.message
+            : "대표 작품 후보를 불러오는 중 오류가 발생했습니다."
+        );
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsLoadingSelectedArtistWorks(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [artists, selectedArtistId]);
+
   const filteredArtists = useMemo(() => {
     const query = artistSearch.trim().toLowerCase();
 
@@ -581,6 +670,57 @@ export default function AdminArtistsPage() {
     () => groupAdminArchiveLinks(archiveLinks),
     [archiveLinks]
   );
+  const publishedSelectedArtistWorks = useMemo(
+    () =>
+      selectedArtistWorks.filter(
+        (work) => work.isPublished === true && work.archived !== true
+      ),
+    [selectedArtistWorks]
+  );
+  const selectedFeaturedWork = useMemo(() => {
+    const featuredWorkId = selectedForm.featuredWorkId?.trim() || "";
+    const featuredWorkSlug = selectedForm.featuredWorkSlug?.trim() || "";
+    const featuredWorkTitle = selectedForm.featuredWorkTitle?.trim() || "";
+
+    if (!featuredWorkId && !featuredWorkSlug && !featuredWorkTitle) {
+      return null;
+    }
+
+    return (
+      publishedSelectedArtistWorks.find((work) => {
+        const workSlug = getArtistWorkSlug(work);
+        return (
+          (featuredWorkId && work.id === featuredWorkId) ||
+          (featuredWorkSlug && workSlug === featuredWorkSlug) ||
+          (featuredWorkTitle && (work.title ?? "").trim() === featuredWorkTitle)
+        );
+      }) ?? null
+    );
+  }, [
+    publishedSelectedArtistWorks,
+    selectedForm.featuredWorkId,
+    selectedForm.featuredWorkSlug,
+    selectedForm.featuredWorkTitle,
+  ]);
+  const selectedFeaturedWorkPreview =
+    selectedFeaturedWork ??
+    (selectedForm.featuredWorkTitle?.trim() ||
+    selectedForm.featuredWorkSlug?.trim() ||
+    selectedForm.featuredWorkImageUrl?.trim()
+      ? {
+          id: selectedForm.featuredWorkId?.trim() || "",
+          slug: selectedForm.featuredWorkSlug?.trim() || "",
+          title: selectedForm.featuredWorkTitle?.trim() || "",
+          coverImageUrl: selectedForm.featuredWorkImageUrl?.trim() || "",
+          year: "",
+        }
+      : null);
+  const hasFeaturedWorkSelection = Boolean(
+    selectedForm.featuredWorkId?.trim() ||
+      selectedForm.featuredWorkSlug?.trim() ||
+      selectedForm.featuredWorkTitle?.trim() ||
+      selectedForm.featuredWorkImageUrl?.trim()
+  );
   const isSelectedFormDirty = useMemo(() => {
     if (!selectedArtistBaseline) {
       return false;
@@ -624,6 +764,30 @@ export default function AdminArtistsPage() {
     setProjectForm((current) => ({
       ...current,
       [key]: value,
+    }));
+  }
+
+  function clearFeaturedWork() {
+    setSelectedForm((current) => ({
+      ...current,
+      featuredWorkId: "",
+      featuredWorkSlug: "",
+      featuredWorkTitle: "",
+      featuredWorkImageUrl: "",
+    }));
+  }
+
+  function setFeaturedWork(work: ArtistWorkDoc | null) {
+    if (!work) {
+      clearFeaturedWork();
+      return;
+    }
+
+    const selection = getArtistWorkSelectionValue(work);
+
+    setSelectedForm((current) => ({
+      ...current,
+      ...selection,
     }));
   }
 
@@ -1388,6 +1552,78 @@ export default function AdminArtistsPage() {
                       />
                     </div>
 
+                    <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-5 md:p-6">
+                      <div className="max-w-3xl">
+                        <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-400">
+                          Gallery Note
+                        </p>
+                        <h5 className="mt-3 text-xl font-semibold tracking-[-0.03em] text-neutral-950">
+                          갤러리 노트
+                        </h5>
+                        <p className="mt-2 text-sm leading-6 text-neutral-500">
+                          KÜN’S Gallery가 작가의 작업을 공식적으로 소개하는 큐레이토리얼 코멘트입니다.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-5 md:grid-cols-2">
+                        <TextareaField
+                          label="Gallery Note KR"
+                          value={selectedForm.galleryNote || ""}
+                          onChange={(value) =>
+                            updateSelectedField("galleryNote", value)
+                          }
+                          rows={8}
+                          placeholder="KÜN’S Gallery가 바라보는 작가의 작업 세계와 주요 특징을 작성해주세요."
+                        />
+                        <TextareaField
+                          label="Gallery Note EN"
+                          value={selectedForm.galleryNoteEn || ""}
+                          onChange={(value) =>
+                            updateSelectedField("galleryNoteEn", value)
+                          }
+                          rows={8}
+                          placeholder="Write KÜN’S Gallery’s curatorial note on the artist’s practice."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-5 md:p-6">
+                      <div className="max-w-3xl">
+                        <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-400">
+                          Portfolio PDF
+                        </p>
+                        <h5 className="mt-3 text-xl font-semibold tracking-[-0.03em] text-neutral-950">
+                          포트폴리오 PDF
+                        </h5>
+                        <p className="mt-2 text-sm leading-6 text-neutral-500">
+                          갤러리가 제작한 작가 포트폴리오 PDF 링크를 등록합니다.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-5 md:grid-cols-2">
+                        <TextField
+                          label="Portfolio PDF URL"
+                          value={selectedForm.portfolioPdfUrl || ""}
+                          onChange={(value) =>
+                            updateSelectedField("portfolioPdfUrl", value)
+                          }
+                          placeholder="https://..."
+                        />
+                        <TextField
+                          label="Button Label, optional"
+                          value={selectedForm.portfolioPdfLabel || ""}
+                          onChange={(value) =>
+                            updateSelectedField("portfolioPdfLabel", value)
+                          }
+                          placeholder="Download Portfolio"
+                        />
+                      </div>
+
+                      <p className="text-sm leading-6 text-neutral-500">
+                        입력한 PDF 링크는 공개 작가 페이지에 버튼으로 표시됩니다.
+                      </p>
+                    </div>
+
                     <TextField
                       label="location"
                       value={selectedForm.location}
@@ -1404,6 +1640,162 @@ export default function AdminArtistsPage() {
                       target="profile"
                       artistSlug={selectedArtist?.slug}
                     />
+
+                    <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-5 md:p-6">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-400">
+                            Featured Work
+                          </p>
+                          <h5 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-neutral-950">
+                            대표 작품
+                          </h5>
+                          <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500">
+                            공개 작가 페이지와 작가 목록에서 우선적으로 보여줄 대표 작품을 선택합니다.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={clearFeaturedWork}
+                          disabled={!hasFeaturedWorkSelection}
+                          className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm text-[var(--foreground)] transition hover:border-[#F37021]/40 hover:bg-[#F37021]/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          대표 작품 없음
+                        </button>
+                      </div>
+
+                      {selectedArtistWorksError ? (
+                        <div className="rounded-[1.25rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-900">
+                          {selectedArtistWorksError}
+                        </div>
+                      ) : null}
+
+                      {isLoadingSelectedArtistWorks ? (
+                        <p className="text-sm leading-6 text-[var(--muted)]">
+                          선택한 작가의 작품을 불러오는 중입니다.
+                        </p>
+                      ) : publishedSelectedArtistWorks.length > 0 ? (
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          {publishedSelectedArtistWorks.map((work) => {
+                            const isSelected =
+                              (selectedForm.featuredWorkId?.trim() &&
+                                selectedForm.featuredWorkId === work.id) ||
+                              (selectedForm.featuredWorkSlug?.trim() &&
+                                getArtistWorkSlug(work) ===
+                                  selectedForm.featuredWorkSlug);
+                            const imageUrl = getArtistWorkImageUrl(work);
+
+                            return (
+                              <button
+                                key={work.id}
+                                type="button"
+                                onClick={() => setFeaturedWork(work)}
+                                className={`group rounded-[1.35rem] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(0,0,0,0.08)] ${
+                                  isSelected
+                                    ? "border-[#F37021]/50 bg-[#F37021]/10 ring-1 ring-[#F37021]/20"
+                                    : "border-black/10 bg-white/[0.06] hover:border-black/15"
+                                }`}
+                              >
+                                <div className="flex gap-3">
+                                  <div className="h-20 w-16 shrink-0 overflow-hidden rounded-[1rem] border border-white/10 bg-[#1f1f1f]">
+                                    {imageUrl ? (
+                                      <img
+                                        src={imageUrl}
+                                        alt={work.title || "Untitled"}
+                                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] text-[10px] uppercase tracking-[0.24em] text-white/40">
+                                        No image
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.22em] text-emerald-700">
+                                        Published
+                                      </span>
+                                      {isSelected ? (
+                                        <span className="inline-flex rounded-full border border-[#F37021]/30 bg-[#F37021]/12 px-2 py-0.5 text-[10px] uppercase tracking-[0.22em] text-[#b45d1e]">
+                                          Selected
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <p className="mt-2 text-sm font-medium leading-6 text-[var(--foreground)]">
+                                      {work.title || "Untitled"}
+                                    </p>
+                                    <p className="mt-1 text-xs leading-5 text-white/55">
+                                      {work.year || "—"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : selectedArtist ? (
+                        <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-[var(--muted)]">
+                          공개된 작품이 아직 없습니다. 작품을 공개한 뒤 대표 작품을 선택할 수 있습니다.
+                        </div>
+                      ) : null}
+
+                      {hasFeaturedWorkSelection ? (
+                        <div className="rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-4">
+                          {selectedFeaturedWorkPreview ? (
+                            <div className="flex flex-col gap-4 md:flex-row md:items-start">
+                              <div className="h-24 w-20 shrink-0 overflow-hidden rounded-[1rem] border border-white/10 bg-[#1f1f1f]">
+                                {selectedFeaturedWorkPreview.coverImageUrl?.trim() ? (
+                                  <img
+                                    src={selectedFeaturedWorkPreview.coverImageUrl}
+                                    alt={
+                                      selectedFeaturedWorkPreview.title || "Featured work"
+                                    }
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] text-[10px] uppercase tracking-[0.24em] text-white/40">
+                                    No image
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <p className="text-[10px] uppercase tracking-[0.28em] text-white/45">
+                                  Selected Featured Work
+                                </p>
+                                <p className="text-sm leading-6 text-[var(--foreground)]">
+                                  {selectedFeaturedWorkPreview.title || "Untitled"}
+                                </p>
+                                <p className="text-xs leading-5 text-white/55">
+                                  {selectedFeaturedWorkPreview.slug || "선택된 대표 작품의 slug를 확인할 수 없습니다."}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-[10px] uppercase tracking-[0.28em] text-white/45">
+                                Selected Featured Work
+                              </p>
+                              <p className="text-sm leading-6 text-amber-900">
+                                선택한 대표 작품을 확인할 수 없습니다.
+                              </p>
+                              <p className="text-xs leading-5 text-amber-800/75">
+                                {selectedForm.featuredWorkTitle?.trim() ||
+                                  selectedForm.featuredWorkSlug?.trim() ||
+                                  selectedForm.featuredWorkId?.trim() ||
+                                  "저장된 대표 작품 정보가 없습니다."}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="rounded-[1.35rem] border border-dashed border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-[var(--muted)]">
+                          대표 작품 없음
+                        </div>
+                      )}
+                    </div>
 
                     <div className="grid gap-5 md:grid-cols-2">
                       <TextField
@@ -2170,6 +2562,41 @@ export default function AdminArtistsPage() {
                   rows={4}
                 />
 
+                <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-5 md:p-6">
+                  <div className="max-w-3xl">
+                    <p className="text-[11px] uppercase tracking-[0.28em] text-white/45">
+                      Gallery Note
+                    </p>
+                    <h5 className="mt-3 text-xl font-semibold tracking-[-0.03em] text-[#F7F1E8]">
+                      갤러리 노트
+                    </h5>
+                    <p className="mt-2 text-sm leading-6 text-white/62">
+                      KÜN’S Gallery가 작가의 작업을 공식적으로 소개하는 큐레이토리얼 코멘트입니다.
+                    </p>
+                  </div>
+
+                  <div className="mt-5 grid gap-5 md:grid-cols-2">
+                    <TextareaField
+                      label="Gallery Note KR"
+                      value={projectForm.galleryNote || ""}
+                      onChange={(value) =>
+                        updateProjectField("galleryNote", value)
+                      }
+                      rows={7}
+                      placeholder="KÜN’S Gallery가 바라보는 작가의 작업 세계와 주요 특징을 작성해주세요."
+                    />
+                    <TextareaField
+                      label="Gallery Note EN"
+                      value={projectForm.galleryNoteEn || ""}
+                      onChange={(value) =>
+                        updateProjectField("galleryNoteEn", value)
+                      }
+                      rows={7}
+                      placeholder="Write KÜN’S Gallery’s curatorial note on the artist’s practice."
+                    />
+                  </div>
+                </div>
+
                 <TextField
                   label="location"
                   value={projectForm.location}
@@ -2253,11 +2680,13 @@ function TextField({
   value,
   onChange,
   disabled,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }) {
   return (
     <label className="block">
@@ -2268,6 +2697,7 @@ function TextField({
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
         className="mt-2 h-13 w-full rounded-[1.25rem] border border-white/15 bg-white/[0.085] px-4 text-sm text-[#F7F1E8] placeholder:text-white/35 outline-none transition focus:border-[#F37021] disabled:cursor-not-allowed disabled:bg-white/[0.055] disabled:text-white/45"
         disabled={disabled}
       />
@@ -2281,12 +2711,14 @@ function TextareaField({
   rows,
   onChange,
   disabled,
+  placeholder,
 }: {
   label: string;
   value: string;
   rows: number;
   onChange: (value: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }) {
   return (
     <label className="block">
@@ -2297,6 +2729,7 @@ function TextareaField({
         value={value}
         rows={rows}
         onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
         className="mt-2 w-full rounded-[1.25rem] border border-white/15 bg-white/[0.085] px-4 py-4 text-sm leading-7 text-[#F7F1E8] placeholder:text-white/35 outline-none transition focus:border-[#F37021] disabled:cursor-not-allowed disabled:bg-white/[0.055] disabled:text-white/45"
         disabled={disabled}
       />

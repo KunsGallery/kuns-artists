@@ -40,6 +40,23 @@ export type ArtistArchiveLink = {
   order: number;
 };
 
+export type ArtistFeaturedWork = {
+  featuredWorkId?: string;
+  featuredWorkSlug?: string;
+  featuredWorkTitle?: string;
+  featuredWorkImageUrl?: string;
+};
+
+export type ArtistGalleryNote = {
+  galleryNote?: string;
+  galleryNoteEn?: string;
+};
+
+export type ArtistPortfolioPdf = {
+  portfolioPdfUrl?: string;
+  portfolioPdfLabel?: string;
+};
+
 export const ARTIST_CV_TYPE_OPTIONS: Array<{
   value: ArtistCvType;
   label: string;

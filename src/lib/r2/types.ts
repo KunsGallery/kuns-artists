@@ -1,4 +1,10 @@
-export type R2UploadTarget = "profile" | "work-image" | "glb" | "usdz" | "cv";
+export type R2UploadTarget =
+  | "profile"
+  | "work-image"
+  | "glb"
+  | "ar-model"
+  | "usdz"
+  | "cv";
 
 export type R2PresignRequest = {
   filename: string;

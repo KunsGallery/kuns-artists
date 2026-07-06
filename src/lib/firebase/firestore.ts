@@ -17,6 +17,9 @@ import type {
   ArtistArchiveLinkType,
   ArtistCvItem,
   ArtistCvType,
+  ArtistFeaturedWork,
+  ArtistGalleryNote,
+  ArtistPortfolioPdf,
 } from "@/types/artist";
 
 export type ArtistRole = "admin" | "artist";
@@ -24,7 +27,9 @@ export type ArtistType = "represented" | "project";
 export type ArtistStatus = "active" | "inactive";
 export type WorkSideMode = "canvas" | "image";
 
-export type ArtistDoc = {
+export type ArtistDoc = ArtistFeaturedWork &
+  ArtistGalleryNote &
+  ArtistPortfolioPdf & {
   id: string;
   source?: "Firestore" | "Seed";
   slug?: string;
@@ -44,6 +49,8 @@ export type ArtistDoc = {
   cvUrl?: string;
   artsyUrl?: string;
   websiteUrl?: string;
+  portfolioPdfUrl?: string;
+  portfolioPdfLabel?: string;
   cvItems?: ArtistCvItem[];
   archiveLinks?: ArtistArchiveLink[];
   createdAt?: unknown;
@@ -63,6 +70,8 @@ export type ArtistProfileUpdatePayload = {
   cvUrl?: string;
   artsyUrl?: string;
   websiteUrl?: string;
+  portfolioPdfUrl?: string;
+  portfolioPdfLabel?: string;
 };
 
 export type ArtistAdminSavePayload = {
@@ -85,7 +94,9 @@ export type ArtistAdminSavePayload = {
   websiteUrl: string;
   cvItems?: ArtistCvItem[];
   archiveLinks?: ArtistArchiveLink[];
-};
+} & ArtistFeaturedWork &
+  ArtistGalleryNote &
+  ArtistPortfolioPdf;
 
 export type ArtistWorkDoc = {
   id: string;
@@ -110,6 +121,7 @@ export type ArtistWorkDoc = {
   modelUsdz?: string;
   generatedGlbUrl?: string;
   generatedUsdzUrl?: string;
+  displayOrder?: number;
   isPublished?: boolean;
   archived?: boolean;
   createdAt?: unknown;
@@ -155,6 +167,7 @@ export type ArtistWorkAdminUpdatePayload = {
   modelUsdz?: string;
   generatedGlbUrl?: string;
   generatedUsdzUrl?: string;
+  displayOrder?: number;
 };
 
 function toOptionalString(value: unknown) {
@@ -162,6 +175,19 @@ function toOptionalString(value: unknown) {
 }
 
 function toOptionalNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+function toOptionalFiniteNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
@@ -381,6 +407,14 @@ function toArtistDoc(id: string, rawData: Record<string, unknown>): ArtistDoc {
     cvUrl: toOptionalString(rawData.cvUrl),
     artsyUrl: toOptionalString(rawData.artsyUrl),
     websiteUrl: toOptionalString(rawData.websiteUrl),
+    portfolioPdfUrl: toOptionalString(rawData.portfolioPdfUrl),
+    portfolioPdfLabel: toOptionalString(rawData.portfolioPdfLabel),
+    featuredWorkId: toOptionalString(rawData.featuredWorkId),
+    featuredWorkSlug: toOptionalString(rawData.featuredWorkSlug),
+    featuredWorkTitle: toOptionalString(rawData.featuredWorkTitle),
+    featuredWorkImageUrl: toOptionalString(rawData.featuredWorkImageUrl),
+    galleryNote: toOptionalString(rawData.galleryNote),
+    galleryNoteEn: toOptionalString(rawData.galleryNoteEn),
     cvItems: toArtistCvItems(rawData.cvItems),
     archiveLinks: toArtistArchiveLinks(rawData.archiveLinks),
     createdAt: rawData.createdAt,
@@ -415,6 +449,7 @@ function toArtistWorkDoc(id: string, rawData: Record<string, unknown>): ArtistWo
     modelUsdz: toOptionalString(rawData.modelUsdz),
     generatedGlbUrl: toOptionalString(rawData.generatedGlbUrl),
     generatedUsdzUrl: toOptionalString(rawData.generatedUsdzUrl),
+    displayOrder: toOptionalFiniteNumber(rawData.displayOrder),
     isPublished: toOptionalBoolean(rawData.isPublished),
     archived: toOptionalBoolean(rawData.archived),
     createdAt: rawData.createdAt,
@@ -444,6 +479,14 @@ function toArtistAdminPayload(payload: ArtistAdminSavePayload) {
     cvUrl: payload.cvUrl.trim(),
     artsyUrl: payload.artsyUrl.trim(),
     websiteUrl: payload.websiteUrl.trim(),
+    portfolioPdfUrl: payload.portfolioPdfUrl?.trim() ?? "",
+    portfolioPdfLabel: payload.portfolioPdfLabel?.trim() ?? "",
+    featuredWorkId: payload.featuredWorkId?.trim() ?? "",
+    featuredWorkSlug: payload.featuredWorkSlug?.trim() ?? "",
+    featuredWorkTitle: payload.featuredWorkTitle?.trim() ?? "",
+    featuredWorkImageUrl: payload.featuredWorkImageUrl?.trim() ?? "",
+    galleryNote: payload.galleryNote?.trim() ?? "",
+    galleryNoteEn: payload.galleryNoteEn?.trim() ?? "",
   };
 
   const withOptionalCollections = {
@@ -908,6 +951,40 @@ export async function getPublicWorksForArtistSlug(
     });
 }
 
+export async function getPublicWorksForArtistId(
+  artistId: string
+): Promise<ArtistWorkDoc[]> {
+  const normalizedArtistId = artistId.trim();
+
+  if (!normalizedArtistId) {
+    return [];
+  }
+
+  const snapshot = await getDocs(
+    query(collection(db, "works"), where("artistId", "==", normalizedArtistId))
+  );
+
+  return snapshot.docs
+    .map((document) =>
+      toArtistWorkDoc(document.id, document.data() as Record<string, unknown>)
+    )
+    .filter(
+      (work) =>
+        work.artistId === normalizedArtistId &&
+        work.isPublished === true &&
+        work.archived !== true
+    )
+    .sort((left, right) => {
+      const timeCompare =
+        getTimestampMillis(right.updatedAt ?? right.createdAt) -
+        getTimestampMillis(left.updatedAt ?? left.createdAt);
+
+      if (timeCompare !== 0) return timeCompare;
+
+      return (left.title ?? "").localeCompare(right.title ?? "", "en");
+    });
+}
+
 export async function getWorkById(workId: string): Promise<ArtistWorkDoc | null> {
   const snapshot = await getDoc(doc(db, "works", workId));
 
@@ -998,6 +1075,14 @@ export async function updateWorkForAdmin(
 
   if (payload.generatedUsdzUrl !== undefined) {
     updatePayload.generatedUsdzUrl = payload.generatedUsdzUrl.trim();
+  }
+
+  if (payload.displayOrder !== undefined) {
+    const normalizedDisplayOrder = toOptionalFiniteNumber(payload.displayOrder);
+
+    if (normalizedDisplayOrder !== undefined) {
+      updatePayload.displayOrder = normalizedDisplayOrder;
+    }
   }
 
   await updateDoc(doc(db, "works", workId), updatePayload);

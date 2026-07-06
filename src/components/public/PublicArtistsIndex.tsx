@@ -17,6 +17,8 @@ type ArtistRosterCardProps = {
 function ArtistRosterCard({ artist, label, tone }: ArtistRosterCardProps) {
   const href = artist.slug ? `/artists/${artist.slug}` : "";
   const isProject = tone === "project";
+  const cardImageUrl =
+    artist.featuredWorkImageUrl?.trim() || artist.profileImage?.trim() || "";
 
   const card = (
     <article
@@ -27,9 +29,9 @@ function ArtistRosterCard({ artist, label, tone }: ArtistRosterCardProps) {
       } hover:-translate-y-0.5 hover:shadow-[0_26px_80px_rgba(0,0,0,0.28)]`}
     >
       <div className="relative aspect-[4/5] overflow-hidden bg-[#1a1a1a]">
-        {artist.profileImage ? (
+        {cardImageUrl ? (
           <img
-            src={artist.profileImage}
+            src={cardImageUrl}
             alt={artist.name}
             className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]"
           />
@@ -81,6 +83,17 @@ function ArtistRosterCard({ artist, label, tone }: ArtistRosterCardProps) {
             Official archive entry.
           </p>
         )}
+
+        {artist.featuredWorkTitle ? (
+          <div className="mt-5 rounded-[1.2rem] border border-white/10 bg-black/15 px-4 py-3">
+            <p className="text-[10px] uppercase tracking-[0.28em] text-white/42">
+              Featured Work
+            </p>
+            <p className="mt-2 text-sm leading-6 text-white/76">
+              {artist.featuredWorkTitle}
+            </p>
+          </div>
+        ) : null}
 
         <div className="mt-auto pt-6">
           <div className="inline-flex items-center gap-2 text-sm text-white/72 transition group-hover:text-[#F7F1E8]">

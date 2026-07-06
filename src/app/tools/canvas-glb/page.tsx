@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import {
   createCanvasGlbBlob,
   createSafeGlbFilename,
@@ -108,9 +109,11 @@ function getUploadMetaFromWork(work: WorkToolDoc | null, form: CanvasGlbFormStat
   };
 }
 
-// This route stays public for quick iteration during implementation.
-// Move it under an admin-only route once the asset pipeline is connected.
 export default function CanvasGlbToolPage() {
+  const { errorMessage: accessErrorMessage, isLoading } = useProtectedArtist({
+    requireAdmin: true,
+    fallbackErrorMessage: "관리자 전용 도구입니다.",
+  });
   const [toolMode, setToolMode] = useState<ToolMode>("manual");
   const [form, setForm] = useState<CanvasGlbFormState>(DEFAULT_FORM);
   const [availableWorks, setAvailableWorks] = useState<WorkToolDoc[]>([]);
@@ -123,7 +126,7 @@ export default function CanvasGlbToolPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [toolErrorMessage, setToolErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(
     null
@@ -132,6 +135,57 @@ export default function CanvasGlbToolPage() {
 
   const selectedWork =
     availableWorks.find((work) => work.id === selectedWorkId) ?? null;
+
+  if (isLoading) {
+    return (
+      <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950">
+        <div className="mx-auto flex min-h-screen max-w-7xl items-center px-5 py-10 md:px-8">
+          <div className="w-full rounded-[2rem] border border-black/10 bg-white p-6 md:p-8">
+            <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
+              Admin Only
+            </p>
+            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-neutral-950 md:text-5xl">
+              관리자 권한을 확인하는 중입니다.
+            </h1>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (accessErrorMessage) {
+    return (
+      <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950">
+        <div className="mx-auto flex min-h-screen max-w-7xl items-center px-5 py-10 md:px-8">
+          <div className="w-full rounded-[2rem] border border-black/10 bg-white p-6 md:p-8">
+            <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
+              Admin Only
+            </p>
+            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-neutral-950 md:text-5xl">
+              관리자 전용 도구입니다.
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-neutral-600">
+              {accessErrorMessage}
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/artist/login"
+                className="inline-flex h-11 items-center justify-center rounded-full bg-neutral-950 px-5 text-sm font-medium text-white transition hover:opacity-90"
+              >
+                로그인 페이지
+              </Link>
+              <Link
+                href="/artist/dashboard"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
+              >
+                대시보드
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   function updateField<K extends keyof CanvasGlbFormState>(
     key: K,
@@ -179,7 +233,7 @@ export default function CanvasGlbToolPage() {
   async function handleToolModeChange(nextMode: ToolMode) {
     setToolMode(nextMode);
     setSuccessMessage(null);
-    setErrorMessage(null);
+    setToolErrorMessage(null);
     setUploadErrorMessage(null);
     setUploadedGlbUrl("");
 
@@ -191,7 +245,7 @@ export default function CanvasGlbToolPage() {
   function handleWorkSelect(nextWorkId: string) {
     setSelectedWorkId(nextWorkId);
     setSuccessMessage(null);
-    setErrorMessage(null);
+    setToolErrorMessage(null);
     setUploadErrorMessage(null);
     setUploadedGlbUrl("");
 
@@ -278,7 +332,7 @@ export default function CanvasGlbToolPage() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setErrorMessage(null);
+    setToolErrorMessage(null);
     setSuccessMessage(null);
     setUploadErrorMessage(null);
 
@@ -293,7 +347,7 @@ export default function CanvasGlbToolPage() {
         `${filename} has been generated and downloaded in your browser.`
       );
     } catch (error) {
-      setErrorMessage(
+      setToolErrorMessage(
         error instanceof Error
           ? error.message
           : "Failed to generate the canvas GLB."
@@ -304,7 +358,7 @@ export default function CanvasGlbToolPage() {
   }
 
   async function handleGenerateAndUploadGlb() {
-    setErrorMessage(null);
+    setToolErrorMessage(null);
     setSuccessMessage(null);
     setUploadErrorMessage(null);
     setUploadedGlbUrl("");
@@ -930,9 +984,9 @@ export default function CanvasGlbToolPage() {
                 </div>
               ) : null}
 
-              {errorMessage ? (
+              {toolErrorMessage ? (
                 <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700">
-                  {errorMessage}
+                  {toolErrorMessage}
                 </div>
               ) : null}
 

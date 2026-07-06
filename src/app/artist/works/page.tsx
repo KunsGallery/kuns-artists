@@ -10,6 +10,7 @@ import {
   resolveArtistWorkSlug,
   type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
+import { hasArAsset } from "@/lib/workDisplay";
 
 type WorkStatusFilter = "all" | "pending" | "published" | "archived";
 
@@ -51,14 +52,18 @@ function getStatusTone(status: Exclude<WorkStatusFilter, "all">) {
 
 function getStatusMessage(status: Exclude<WorkStatusFilter, "all">) {
   if (status === "published") {
-    return "현재 공개 작가 페이지에 표시 중입니다.";
+    return "현재 공개 작품 상세 페이지에 표시 중입니다.";
   }
 
   if (status === "archived") {
     return "보관 처리된 작품입니다.";
   }
 
-  return "관리자 검수 후 공개 페이지에 표시됩니다.";
+  return "관리자 검수 후 공개 작품 상세 페이지에 표시됩니다.";
+}
+
+function getPublicWorkSlug(work: ArtistWorkDoc) {
+  return work.slug?.trim() || resolveArtistWorkSlug(work) || work.id?.trim() || "";
 }
 
 function getCardAccentClass(status: Exclude<WorkStatusFilter, "all">) {
@@ -308,7 +313,7 @@ export default function ArtistWorksPage() {
                 안내
               </p>
               <p className="mt-4 text-sm leading-7 text-neutral-600">
-                작품은 상태별로 정리해 볼 수 있고, 공개된 작품은 공개 페이지와 AR 페이지로 이어집니다.
+                작품은 상태별로 정리해 볼 수 있고, 공개된 작품은 작품 상세 페이지와 AR 페이지로 이어집니다.
               </p>
             </aside>
           </div>
@@ -402,10 +407,9 @@ export default function ArtistWorksPage() {
             const coverImageUrl = work.coverImageUrl || "";
             const shareTarget =
               work.id?.trim() || work.slug?.trim() || resolveArtistWorkSlug(work);
-            const publicArtistHref = work.artistSlug
-              ? `/artists/${work.artistSlug}`
-              : "/artists";
-            const arSlug = resolveArtistWorkSlug(work);
+            const publicWorkSlug = getPublicWorkSlug(work);
+            const publicWorkHref = publicWorkSlug ? `/works/${publicWorkSlug}` : "";
+            const arSlug = getPublicWorkSlug(work);
             const arHref = status === "published" ? `/ar/${arSlug}` : "";
 
             return (
@@ -491,10 +495,10 @@ export default function ArtistWorksPage() {
 
                         {status === "published" ? (
                           <Link
-                            href={publicArtistHref}
+                            href={publicWorkHref}
                             className="inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021] px-5 text-sm font-medium text-[#171717] transition hover:bg-[#ff7a2f] sm:w-auto"
                           >
-                            공개 페이지 보기
+                            작품 상세 보기
                           </Link>
                         ) : null}
 
@@ -503,17 +507,23 @@ export default function ArtistWorksPage() {
                             href={arHref}
                             className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-5 text-sm text-white/80 transition hover:border-white/20 hover:bg-white/[0.08] sm:w-auto"
                           >
-                            AR 페이지 보기
+                            {hasArAsset(work) ? "AR 사용 가능" : "AR 준비 중"}
                           </Link>
                         ) : null}
                       </div>
 
                       <p className="text-[11px] uppercase tracking-[0.24em] text-white/34">
+                        {hasArAsset(work)
+                          ? "AR 파일이 연결되어 있습니다."
+                          : "AR 파일 연결 후 공개 페이지에서 AR Preview가 활성화됩니다."}
+                      </p>
+
+                      <p className="text-[11px] uppercase tracking-[0.24em] text-white/34">
                         {status === "published"
-                          ? "현재 공개 작가 페이지에 표시 중입니다."
+                          ? "현재 공개 작품 상세 페이지에 표시 중입니다."
                           : status === "archived"
                             ? "보관 처리된 작품입니다."
-                            : "관리자 검수 후 공개 페이지에 표시됩니다."}
+                            : "관리자 검수 후 공개 작품 상세 페이지에 표시됩니다."}
                       </p>
                     </div>
                   </div>

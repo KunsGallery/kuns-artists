@@ -9,7 +9,22 @@ export type PublicArtistCard = {
   status?: ArtistDoc["status"];
   tagline?: string;
   profileImage?: string;
+  featuredWorkId?: string;
+  featuredWorkSlug?: string;
+  featuredWorkTitle?: string;
+  featuredWorkImageUrl?: string;
+  portfolioPdfUrl?: string;
+  portfolioPdfLabel?: string;
+  galleryNote?: string;
+  galleryNoteEn?: string;
   archives?: Artist["archives"];
+};
+
+type SeedArtistWithCollections = Artist & {
+  galleryNote?: string;
+  galleryNoteEn?: string;
+  portfolioPdfUrl?: string;
+  portfolioPdfLabel?: string;
 };
 
 function sortByEnglishName(left: { name: string }, right: { name: string }) {
@@ -20,6 +35,7 @@ export function mergePublicArtist(
   staticArtist?: Artist,
   firestoreArtist?: ArtistDoc | null
 ): PublicArtistCard | null {
+  const seedArtist = staticArtist as SeedArtistWithCollections | undefined;
   const slug = firestoreArtist?.slug ?? staticArtist?.slug ?? "";
   const name = firestoreArtist?.name ?? staticArtist?.name ?? "";
 
@@ -36,6 +52,16 @@ export function mergePublicArtist(
     tagline: firestoreArtist?.tagline ?? staticArtist?.tagline,
     profileImage:
       firestoreArtist?.profileImageUrl ?? staticArtist?.profileImage,
+    featuredWorkId: firestoreArtist?.featuredWorkId,
+    featuredWorkSlug: firestoreArtist?.featuredWorkSlug,
+    featuredWorkTitle: firestoreArtist?.featuredWorkTitle,
+    featuredWorkImageUrl: firestoreArtist?.featuredWorkImageUrl,
+    portfolioPdfUrl:
+      firestoreArtist?.portfolioPdfUrl ?? seedArtist?.portfolioPdfUrl,
+    portfolioPdfLabel:
+      firestoreArtist?.portfolioPdfLabel ?? seedArtist?.portfolioPdfLabel,
+    galleryNote: firestoreArtist?.galleryNote ?? seedArtist?.galleryNote,
+    galleryNoteEn: firestoreArtist?.galleryNoteEn ?? seedArtist?.galleryNoteEn,
     archives: staticArtist?.archives,
   };
 }

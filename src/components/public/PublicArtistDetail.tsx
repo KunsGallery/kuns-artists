@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getArtistBySlug, type Artist } from "@/data/artists";
 import { works as staticWorks } from "@/data/works";
 import {
@@ -12,6 +12,7 @@ import {
   type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
 import { normalizeExternalUrl } from "@/lib/url";
+import { sortWorksForDisplay } from "@/lib/workDisplay";
 import {
   ARTIST_CV_DISPLAY_ORDER,
   getArtistArchiveLinkTypeLabel,
@@ -25,6 +26,7 @@ import type { Work } from "@/types/work";
 
 type PublicWork = Work & {
   id?: string;
+  displayOrder?: number;
 };
 
 type PublicArtistDetail = {
@@ -42,6 +44,14 @@ type PublicArtistDetail = {
   cvUrl?: string;
   artsyUrl?: string;
   websiteUrl?: string;
+  portfolioPdfUrl?: string;
+  portfolioPdfLabel?: string;
+  galleryNote?: string;
+  galleryNoteEn?: string;
+  featuredWorkId?: string;
+  featuredWorkSlug?: string;
+  featuredWorkTitle?: string;
+  featuredWorkImageUrl?: string;
   cvItems?: ArtistCvItem[];
   archiveLinks?: ArtistArchiveLink[];
   archives?: Artist["archives"];
@@ -50,6 +60,10 @@ type PublicArtistDetail = {
 type SeedArtistWithCollections = Artist & {
   cvItems?: ArtistCvItem[];
   archiveLinks?: ArtistArchiveLink[];
+  galleryNote?: string;
+  galleryNoteEn?: string;
+  portfolioPdfUrl?: string;
+  portfolioPdfLabel?: string;
 };
 
 function pickArtistCollection<T>(
@@ -96,6 +110,17 @@ function mergePublicArtist(
     cvUrl: firestoreArtist?.cvUrl ?? staticArtist?.links?.cv,
     artsyUrl: firestoreArtist?.artsyUrl ?? staticArtist?.links?.artsy,
     websiteUrl: firestoreArtist?.websiteUrl,
+    portfolioPdfUrl:
+      firestoreArtist?.portfolioPdfUrl ?? seedArtist?.portfolioPdfUrl,
+    portfolioPdfLabel:
+      firestoreArtist?.portfolioPdfLabel ?? seedArtist?.portfolioPdfLabel,
+    galleryNote: firestoreArtist?.galleryNote ?? seedArtist?.galleryNote ?? "",
+    galleryNoteEn:
+      firestoreArtist?.galleryNoteEn ?? seedArtist?.galleryNoteEn ?? "",
+    featuredWorkId: firestoreArtist?.featuredWorkId,
+    featuredWorkSlug: firestoreArtist?.featuredWorkSlug,
+    featuredWorkTitle: firestoreArtist?.featuredWorkTitle,
+    featuredWorkImageUrl: firestoreArtist?.featuredWorkImageUrl,
     cvItems: pickArtistCollection(
       firestoreArtist?.cvItems,
       seedArtist?.cvItems
@@ -219,6 +244,7 @@ function mergePublicWork(
       firestoreWork?.generatedGlbUrl ?? fallbackWork?.generatedGlbUrl,
     generatedUsdzUrl:
       firestoreWork?.generatedUsdzUrl ?? fallbackWork?.generatedUsdzUrl,
+    displayOrder: firestoreWork?.displayOrder ?? fallbackWork?.displayOrder,
     widthCm: firestoreWork?.widthCm ?? fallbackWork?.widthCm,
     heightCm: firestoreWork?.heightCm ?? fallbackWork?.heightCm,
     depthCm: firestoreWork?.depthCm ?? fallbackWork?.depthCm,
@@ -234,8 +260,8 @@ function mergePublicWork(
   };
 }
 
-function getWorkHref(work: PublicWork) {
-  const routeSlug = work.slug
+function getWorkRouteSlug(work: PublicWork) {
+  return work.slug
     ? work.slug
     : work.id
       ? resolveArtistWorkSlug({
@@ -245,6 +271,16 @@ function getWorkHref(work: PublicWork) {
           artistSlug: work.artistSlug,
         })
       : "";
+}
+
+function getWorkHref(work: PublicWork) {
+  const routeSlug = getWorkRouteSlug(work);
+
+  return `/works/${routeSlug}`;
+}
+
+function getArHref(work: PublicWork) {
+  const routeSlug = getWorkRouteSlug(work);
 
   return `/ar/${routeSlug}`;
 }
@@ -265,6 +301,8 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     staticArtist ? "Seed" : "Seed"
   );
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
+  const [portfolioShareMessage, setPortfolioShareMessage] = useState("");
+  const shareMessageTimeoutRef = useRef<number | null>(null);
   const showDebugNote = process.env.NODE_ENV === "development";
 
   useEffect(() => {
@@ -338,6 +376,9 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
   const cvHref = normalizeExternalUrl(artist?.cvUrl);
   const artsyHref = normalizeExternalUrl(artist?.artsyUrl);
   const websiteHref = normalizeExternalUrl(artist?.websiteUrl);
+  const portfolioPdfHref = normalizeExternalUrl(artist?.portfolioPdfUrl);
+  const portfolioPdfLabel =
+    artist?.portfolioPdfLabel?.trim() || "Download Portfolio";
   const displayCvItems = useMemo(
     () => sortArtistCvItems(artist?.cvItems ?? []),
     [artist?.cvItems]
@@ -347,9 +388,60 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     [artist?.archiveLinks]
   );
   const visibleWorks = useMemo(
-    () => artistWorks.filter((work) => work.isPublished === true && work.archived !== true),
+    () =>
+      sortWorksForDisplay(
+        artistWorks.filter(
+          (work) => work.isPublished === true && work.archived !== true
+        )
+      ),
     [artistWorks]
   );
+  const hasGalleryNote = Boolean(
+    artist?.galleryNote?.trim() || artist?.galleryNoteEn?.trim()
+  );
+  const featuredWork = useMemo(() => {
+    const featuredWorkId = artist?.featuredWorkId?.trim() || "";
+    const featuredWorkSlug = artist?.featuredWorkSlug?.trim() || "";
+    const featuredWorkTitle = artist?.featuredWorkTitle?.trim() || "";
+
+    const matchingVisibleWork = visibleWorks.find((work) => {
+      const workSlug = getWorkRouteSlug(work);
+
+      return (
+        (featuredWorkId && work.id === featuredWorkId) ||
+        (featuredWorkSlug && workSlug === featuredWorkSlug) ||
+        (featuredWorkTitle && (work.title ?? "").trim() === featuredWorkTitle)
+      );
+    });
+
+    const imageUrl =
+      artist?.featuredWorkImageUrl?.trim() ||
+      matchingVisibleWork?.coverImageUrl?.trim() ||
+      "";
+    const title =
+      featuredWorkTitle ||
+      matchingVisibleWork?.title?.trim() ||
+      "";
+    const slug =
+      featuredWorkSlug ||
+      (matchingVisibleWork ? getWorkRouteSlug(matchingVisibleWork) : "");
+
+    if (!imageUrl && !title && !slug) {
+      return null;
+    }
+
+    return {
+      imageUrl,
+      title,
+      slug,
+    };
+  }, [
+    artist?.featuredWorkId,
+    artist?.featuredWorkImageUrl,
+    artist?.featuredWorkSlug,
+    artist?.featuredWorkTitle,
+    visibleWorks,
+  ]);
   const heroLinks = useMemo(
     () =>
       [
@@ -367,6 +459,34 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
   const heroTagline =
     artist?.tagline?.trim() || "Selected works from the artist’s current archive.";
   const heroLocation = artist?.location?.trim() || "";
+
+  useEffect(() => {
+    return () => {
+      if (shareMessageTimeoutRef.current !== null) {
+        window.clearTimeout(shareMessageTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  async function handleSharePortfolio() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setPortfolioShareMessage("Portfolio link copied.");
+    } catch {
+      setPortfolioShareMessage(
+        "링크 복사에 실패했습니다. URL을 직접 복사해주세요."
+      );
+    } finally {
+      if (shareMessageTimeoutRef.current !== null) {
+        window.clearTimeout(shareMessageTimeoutRef.current);
+      }
+
+      shareMessageTimeoutRef.current = window.setTimeout(() => {
+        setPortfolioShareMessage("");
+        shareMessageTimeoutRef.current = null;
+      }, 3000);
+    }
+  }
 
   if (!artist && isLoading) {
     return (
@@ -403,7 +523,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
               href="/artists"
               className="mt-8 inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.1]"
             >
-              작가 목록
+              Back to Artists
             </Link>
           </div>
         </div>
@@ -427,7 +547,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
               href="/artists"
               className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.1]"
             >
-              작가 목록
+              Back to Artists
             </Link>
           </div>
         </header>
@@ -473,13 +593,30 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                   href="#works"
                   className="inline-flex h-11 items-center rounded-full border border-[#F37021]/45 bg-[#F37021] px-5 text-sm font-medium text-[#171717] transition hover:bg-[#ff7a2f]"
                 >
-                  작품 보기
+                  View Works
                 </Link>
+                {portfolioPdfHref ? (
+                  <a
+                    href={portfolioPdfHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.045] px-5 text-sm text-white/76 transition hover:border-[#F37021]/40 hover:bg-[#F37021]/12 hover:text-[#F7F1E8]"
+                  >
+                    {portfolioPdfLabel}
+                  </a>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleSharePortfolio}
+                  className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.045] px-5 text-sm text-white/76 transition hover:border-[#F37021]/40 hover:bg-[#F37021]/12 hover:text-[#F7F1E8]"
+                >
+                  Share Portfolio
+                </button>
                 <Link
                   href="/artists"
                   className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.1]"
                 >
-                  작가 목록
+                  Back to Artists
                 </Link>
                 {websiteHref ? (
                   <a
@@ -509,6 +646,12 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                 </div>
               ) : null}
 
+              {portfolioShareMessage ? (
+                <p className="max-w-2xl text-xs leading-6 text-white/55">
+                  {portfolioShareMessage}
+                </p>
+              ) : null}
+
               {showDebugNote ? (
                 <details className="max-w-2xl rounded-[1.35rem] border border-white/10 bg-black/20 px-3 py-2 text-sm leading-6 text-white/60">
                   <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.28em] text-[#F37021]">
@@ -523,46 +666,140 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
             </div>
 
             <div className="lg:justify-self-end">
-              <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-white/[0.05] shadow-[0_28px_100px_rgba(0,0,0,0.45)]">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.18),transparent_28%),radial-gradient(circle_at_80%_8%,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%,rgba(0,0,0,0.16))]" />
-                <div className="relative aspect-[4/5] w-full min-w-0 max-w-none lg:w-[430px]">
-                  {artist.profileImage ? (
+              {featuredWork?.imageUrl ? (
+                <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-white/[0.05] shadow-[0_28px_100px_rgba(0,0,0,0.45)]">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.18),transparent_28%),radial-gradient(circle_at_80%_8%,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%,rgba(0,0,0,0.16))]" />
+                  <div className="relative aspect-[4/5] w-full min-w-0 max-w-none lg:w-[430px]">
                     <img
-                      src={artist.profileImage}
-                      alt={artist.name}
+                      src={featuredWork.imageUrl}
+                      alt={featuredWork.title || artist.name}
                       className="h-full w-full object-cover"
                     />
-                  ) : (
-                    <div className="flex h-full w-full flex-col justify-between bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.15),transparent_36%)] p-6">
-                      <div className="space-y-2">
-                        <p className="text-[10px] uppercase tracking-[0.34em] text-white/45">
-                          Portrait placeholder
-                        </p>
-                        <p className="text-sm leading-6 text-white/62">
-                          프로필 이미지를 등록하면 공식 페이지의 인상이 더 선명해집니다.
-                        </p>
-                      </div>
-                      <div className="flex items-end justify-between gap-4">
-                        <div className="h-16 w-16 rounded-full border border-white/10 bg-white/[0.06]" />
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/45">
-                          KÜN’S Gallery
-                        </p>
+                    <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.72))] p-5">
+                      <p className="text-[10px] uppercase tracking-[0.36em] text-white/50">
+                        Featured Work
+                      </p>
+                      <p className="mt-2 text-lg font-medium tracking-[-0.03em] text-[#F7F1E8]">
+                        {featuredWork.title || "Untitled"}
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+                        {artist.profileImage ? (
+                          <img
+                            src={artist.profileImage}
+                            alt={artist.name}
+                            className="h-14 w-14 rounded-full border border-white/12 object-cover shadow-[0_8px_20px_rgba(0,0,0,0.25)]"
+                          />
+                        ) : (
+                          <div className="h-14 w-14 rounded-full border border-white/10 bg-white/[0.06]" />
+                        )}
+
+                        {featuredWork.slug ? (
+                          <Link
+                            href={`/works/${featuredWork.slug}`}
+                            className="inline-flex h-10 items-center rounded-full border border-[#F37021]/45 bg-[#F37021] px-4 text-xs font-medium text-[#171717] transition hover:bg-[#ff7a2f]"
+                          >
+                            View Artwork
+                          </Link>
+                        ) : null}
                       </div>
                     </div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.55))] p-5">
-                    <p className="text-[10px] uppercase tracking-[0.36em] text-white/50">
-                      Official artist archive
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-white/72">
-                      프라이빗 아카이브와 공개 포트폴리오 사이의 균형을 맞춘 공식 작가 페이지입니다.
-                    </p>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-white/[0.05] shadow-[0_28px_100px_rgba(0,0,0,0.45)]">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.18),transparent_28%),radial-gradient(circle_at_80%_8%,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%,rgba(0,0,0,0.16))]" />
+                  <div className="relative aspect-[4/5] w-full min-w-0 max-w-none lg:w-[430px]">
+                    {artist.profileImage ? (
+                      <img
+                        src={artist.profileImage}
+                        alt={artist.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full flex-col justify-between bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.15),transparent_36%)] p-6">
+                        <div className="space-y-2">
+                          <p className="text-[10px] uppercase tracking-[0.34em] text-white/45">
+                            Portrait placeholder
+                          </p>
+                          <p className="text-sm leading-6 text-white/62">
+                            프로필 이미지를 등록하면 공식 페이지의 인상이 더 선명해집니다.
+                          </p>
+                        </div>
+                        <div className="flex items-end justify-between gap-4">
+                          <div className="h-16 w-16 rounded-full border border-white/10 bg-white/[0.06]" />
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/45">
+                            KÜN’S Gallery
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.55))] p-5">
+                      <p className="text-[10px] uppercase tracking-[0.36em] text-white/50">
+                        Official artist archive
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-white/72">
+                        프라이빗 아카이브와 공개 포트폴리오 사이의 균형을 맞춘 공식 작가 페이지입니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
+
+        {hasGalleryNote ? (
+          <section className="border-t border-white/10 py-16 md:py-24">
+            <div className="grid gap-10 rounded-[2rem] border border-white/10 px-6 py-8 md:px-8 md:py-10 lg:grid-cols-[0.72fr_1.28fr] lg:gap-12">
+              <div className="space-y-4">
+                <p className="text-[11px] uppercase tracking-[0.34em] text-white/45">
+                  GALLERY NOTE
+                </p>
+                <h2 className="text-3xl font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-5xl">
+                  Curatorial Note
+                </h2>
+                <div className="h-px w-16 bg-[#F37021]/55" />
+                <p className="max-w-md text-sm leading-7 text-white/62 md:text-[15px]">
+                  KÜN’S Gallery가 바라보는 작가의 작업 세계를 공식적으로 정리한 큐레이토리얼 코멘트입니다.
+                </p>
+              </div>
+
+              <div
+                className={`grid gap-8 ${
+                  artist?.galleryNote && artist?.galleryNoteEn
+                    ? "md:grid-cols-2"
+                    : "md:grid-cols-1"
+                }`}
+              >
+                {artist?.galleryNote ? (
+                  <article className="space-y-4 border-l border-[#F37021]/35 pl-5 md:pl-6">
+                    <p className="text-[10px] uppercase tracking-[0.32em] text-[#F37021]">
+                      Korean Text
+                    </p>
+                    <div className="space-y-5 text-[16px] leading-8 text-white/76 md:text-[17px]">
+                      {artist.galleryNote.split("\n").map((paragraph, index) => (
+                        <p key={`gallery-note-ko-${index}`}>{paragraph}</p>
+                      ))}
+                    </div>
+                  </article>
+                ) : null}
+
+                {artist?.galleryNoteEn ? (
+                  <article className="space-y-4 border-l border-white/10 pl-5 md:pl-6">
+                    <p className="text-[10px] uppercase tracking-[0.32em] text-white/45">
+                      English Text
+                    </p>
+                    <div className="space-y-5 text-[16px] leading-8 text-white/76 md:text-[17px]">
+                      {artist.galleryNoteEn.split("\n").map((paragraph, index) => (
+                        <p key={`gallery-note-en-${index}`}>{paragraph}</p>
+                      ))}
+                    </div>
+                  </article>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section id="works" className="border-t border-white/10 py-16 md:py-24">
           <SectionHeading
@@ -577,11 +814,13 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                 {visibleWorks.map((work) => {
                   const artworkImage = work.coverImageUrl ?? work.coverImage ?? "";
                   const workHref = getWorkHref(work);
+                  const arHref = getArHref(work);
 
                   return (
                     <WorkCard
                       key={workHref}
                       href={workHref}
+                      secondaryHref={arHref}
                       image={artworkImage}
                       title={work.title}
                       year={work.year}
@@ -661,7 +900,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                 href="/artists"
                 className="inline-flex h-11 items-center rounded-full border border-[#F37021]/45 bg-[#F37021] px-5 text-sm font-medium text-[#171717] transition hover:bg-[#ff7a2f]"
               >
-                작가 목록
+                Back to Artists
               </Link>
               {heroLinks.slice(0, 3).map((item) => (
                 <a
@@ -708,6 +947,7 @@ function SectionHeading({
 
 function WorkCard({
   href,
+  secondaryHref,
   image,
   title,
   year,
@@ -715,6 +955,7 @@ function WorkCard({
   dimensions,
 }: {
   href: string;
+  secondaryHref?: string;
   image?: string;
   title: string;
   year?: string;
@@ -722,10 +963,24 @@ function WorkCard({
   dimensions?: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="group overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] transition hover:-translate-y-0.5 hover:border-[#F37021]/40 hover:shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
-    >
+    <article className="group relative overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] transition hover:-translate-y-0.5 hover:border-[#F37021]/40 hover:shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+      <Link
+        href={href}
+        aria-label={`${title} View Artwork`}
+        className="absolute inset-0 z-10"
+      >
+        <span className="sr-only">{title}</span>
+      </Link>
+
+      {secondaryHref ? (
+        <Link
+          href={secondaryHref}
+          className="absolute right-4 top-4 z-20 rounded-full border border-white/12 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-white/85 transition hover:border-[#F37021]/40 hover:bg-[#F37021]/12 hover:text-[#F7F1E8]"
+        >
+          View AR
+        </Link>
+      ) : null}
+
       <div className="relative aspect-[4/5] overflow-hidden bg-[#1a1a1a]">
         {image ? (
           <img
@@ -762,7 +1017,7 @@ function WorkCard({
           {dimensions ? <span>{dimensions}</span> : null}
         </div>
       </div>
-    </Link>
+    </article>
   );
 }
 
