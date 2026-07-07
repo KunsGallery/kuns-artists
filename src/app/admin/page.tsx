@@ -134,6 +134,13 @@ export default function AdminPage() {
           />
 
           <AdminCard
+            href="/admin/exhibitions"
+            label="전시 관리"
+            title="전시 관리"
+            description="작가별 EXHIBITIONS 섹션과 공개 전시 데이터를 관리합니다."
+          />
+
+          <AdminCard
             href="/artist/dashboard"
             label="Kim Hwan Artist Mode"
             title="작가 모드"

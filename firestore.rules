@@ -317,6 +317,16 @@ service cloud.firestore {
         && validWorkFields();
     }
 
+    match /exhibitions/{exhibitionId} {
+      allow read: if isAdmin()
+        || (
+          resource.data.isPublished == true
+          && resource.data.archived != true
+        );
+
+      allow create, update, delete: if isAdmin();
+    }
+
     match /artists/{uid} {
       allow read: if true;
 

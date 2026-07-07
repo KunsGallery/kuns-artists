@@ -1038,6 +1038,13 @@ export default function AdminWorksPage() {
             </Link>
 
             <Link
+              href="/admin/works/new"
+              className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
+            >
+              새 작품 등록
+            </Link>
+
+            <Link
               href="/artists"
               className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
             >

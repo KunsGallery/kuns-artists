@@ -1,7 +1,14 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-type R2UploadTarget = "profile" | "work-image" | "glb" | "ar-model" | "usdz" | "cv";
+type R2UploadTarget =
+  | "profile"
+  | "work-image"
+  | "exhibition-image"
+  | "glb"
+  | "ar-model"
+  | "usdz"
+  | "cv";
 
 type PresignBody = {
   filename?: string;
@@ -14,6 +21,7 @@ type PresignBody = {
 const ALLOWED_TARGETS: R2UploadTarget[] = [
   "profile",
   "work-image",
+  "exhibition-image",
   "glb",
   "ar-model",
   "usdz",
@@ -23,6 +31,7 @@ const ALLOWED_TARGETS: R2UploadTarget[] = [
 const TARGET_PREFIX: Record<R2UploadTarget, string> = {
   profile: "profiles",
   "work-image": "work-images",
+  "exhibition-image": "exhibition-images",
   glb: "models/glb",
   "ar-model": "ar-models",
   usdz: "models/usdz",
@@ -32,6 +41,7 @@ const TARGET_PREFIX: Record<R2UploadTarget, string> = {
 const TARGET_CONTENT_TYPES: Record<R2UploadTarget, string[]> = {
   profile: ["image/jpeg", "image/png", "image/webp"],
   "work-image": ["image/jpeg", "image/png", "image/webp"],
+  "exhibition-image": ["image/jpeg", "image/png", "image/webp"],
   glb: ["model/gltf-binary", "application/octet-stream"],
   "ar-model": ["model/gltf-binary", "application/octet-stream"],
   usdz: ["model/vnd.usdz+zip", "application/octet-stream"],
@@ -109,6 +119,10 @@ function createObjectKey(payload: Required<Pick<PresignBody, "filename" | "targe
   }
 
   if (payload.target === "work-image") {
+    return `${prefix}/${artistSlug}/${workSlug}/${stamp}-${safeFilename}.${extension}`;
+  }
+
+  if (payload.target === "exhibition-image") {
     return `${prefix}/${artistSlug}/${workSlug}/${stamp}-${safeFilename}.${extension}`;
   }
 

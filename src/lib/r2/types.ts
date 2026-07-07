@@ -1,6 +1,7 @@
 export type R2UploadTarget =
   | "profile"
   | "work-image"
+  | "exhibition-image"
   | "glb"
   | "ar-model"
   | "usdz"

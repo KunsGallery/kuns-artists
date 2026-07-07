@@ -17,7 +17,7 @@ type R2ImageUploadFieldProps = {
   description?: string;
   value: string;
   onChange: (url: string) => void;
-  target: "profile" | "work-image";
+  target: "profile" | "work-image" | "exhibition-image";
   artistSlug?: string;
   workSlug?: string;
   disabled?: boolean;

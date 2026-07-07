@@ -156,7 +156,7 @@ export async function uploadImageFileToR2({
   workSlug,
 }: {
   file: File;
-  target: "profile" | "work-image";
+  target: R2PresignRequest["target"];
   artistSlug?: string;
   workSlug?: string;
 }): Promise<R2UploadResult> {

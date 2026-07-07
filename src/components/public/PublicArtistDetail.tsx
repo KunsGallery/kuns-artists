@@ -6,6 +6,7 @@ import { getArtistBySlug, type Artist } from "@/data/artists";
 import { works as staticWorks } from "@/data/works";
 import {
   getPublicArtistBySlug,
+  getPublicExhibitionsForArtistSlug,
   getPublicWorksForArtistSlug,
   resolveArtistWorkSlug,
   type ArtistDoc,
@@ -22,12 +23,15 @@ import {
   type ArtistArchiveLink,
   type ArtistCvItem,
 } from "@/types/artist";
+import type { ExhibitionDoc } from "@/types/exhibition";
 import type { Work } from "@/types/work";
 
 type PublicWork = Work & {
   id?: string;
   displayOrder?: number;
 };
+
+type PublicExhibition = ExhibitionDoc;
 
 type PublicArtistDetail = {
   slug: string;
@@ -296,6 +300,9 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     mergePublicArtist(staticArtist)
   );
   const [artistWorks, setArtistWorks] = useState<PublicWork[]>(staticArtistWorks);
+  const [artistExhibitions, setArtistExhibitions] = useState<PublicExhibition[]>(
+    []
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [debugSource, setDebugSource] = useState<"Seed" | "Firestore">(
     staticArtist ? "Seed" : "Seed"
@@ -318,10 +325,12 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
 
     void (async () => {
       try {
-        const [firestoreArtist, firestoreWorks] = await Promise.all([
-          getPublicArtistBySlug(slug),
-          getPublicWorksForArtistSlug(slug),
-        ]);
+        const [firestoreArtist, firestoreWorks, firestoreExhibitions] =
+          await Promise.all([
+            getPublicArtistBySlug(slug),
+            getPublicWorksForArtistSlug(slug),
+            getPublicExhibitionsForArtistSlug(slug),
+          ]);
 
         if (!isActive) {
           return;
@@ -344,6 +353,8 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
           setArtistWorks(staticArtistWorks);
         }
 
+        setArtistExhibitions(firestoreExhibitions);
+
         setDebugSource(
           firestoreArtist || firestoreWorks.length > 0 ? "Firestore" : "Seed"
         );
@@ -355,6 +366,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
 
         setArtist(mergePublicArtist(staticArtist));
         setArtistWorks(staticArtistWorks);
+        setArtistExhibitions([]);
         setDebugSource("Seed");
         setLoadErrorMessage("작가 정보를 불러오지 못해 기본 정보를 표시합니다.");
       } finally {
@@ -456,6 +468,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     [artsyHref, cvHref, instagramHref, websiteHref, youtubeHref]
   );
   const hasStatement = Boolean(artist?.bio || artist?.bioEn);
+  const hasExhibitions = artistExhibitions.length > 0;
   const heroTagline =
     artist?.tagline?.trim() || "Selected works from the artist’s current archive.";
   const heroLocation = artist?.location?.trim() || "";
@@ -838,6 +851,83 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
           </div>
         </section>
 
+        {hasExhibitions ? (
+          <section id="exhibitions" className="border-t border-white/10 py-16 md:py-24">
+            <SectionHeading
+              label="EXHIBITIONS"
+              title="Exhibitions"
+              description="Recent exhibitions listed in reverse chronological order."
+            />
+
+            <div className="mt-10 space-y-4">
+              {artistExhibitions.map((exhibition) => (
+                <article
+                  key={exhibition.id}
+                  className="grid gap-5 overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4 transition hover:border-[#F37021]/35 hover:bg-white/[0.055] md:grid-cols-[280px_minmax(0,1fr)] md:p-5"
+                >
+                  <div className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.04]">
+                    {exhibition.imageUrl ? (
+                      <img
+                        src={exhibition.imageUrl}
+                        alt={exhibition.title || artist.name}
+                        className="aspect-[4/5] h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex aspect-[4/5] items-center justify-center bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.15),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-6 text-center text-sm leading-7 text-white/55">
+                        전시 이미지를 준비 중입니다.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex min-w-0 flex-col justify-between gap-5 p-1 md:p-2">
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-3 py-1 text-[10px] uppercase tracking-[0.26em] text-[#FF9B5A]">
+                          {formatExhibitionDateRange(
+                            exhibition.startDate,
+                            exhibition.endDate
+                          )}
+                        </span>
+                        {exhibition.venue ? (
+                          <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/50">
+                            {exhibition.venue}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-2">
+                        <h3 className="text-[1.45rem] font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-[1.8rem]">
+                          {exhibition.title || "Untitled Exhibition"}
+                        </h3>
+                        <p className="text-sm uppercase tracking-[0.22em] text-white/48">
+                          {exhibition.location || "Location not specified"}
+                        </p>
+                      </div>
+
+                      {exhibition.description ? (
+                        <p className="max-w-3xl text-sm leading-7 text-white/68 md:text-[15px]">
+                          {exhibition.description}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className="inline-flex rounded-full border border-white/10 bg-white/[0.045] px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/45">
+                        {exhibition.isPublished === true ? "Published" : "Draft"}
+                      </span>
+                      {exhibition.archived === true ? (
+                        <span className="inline-flex rounded-full border border-white/10 bg-white/[0.045] px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/45">
+                          Archived
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {hasStatement ? (
           <section id="statement" className="border-t border-white/10 py-16 md:py-24">
             <SectionHeading
@@ -1019,6 +1109,38 @@ function WorkCard({
       </div>
     </article>
   );
+}
+
+function formatExhibitionDateRange(startDate?: string, endDate?: string) {
+  const start = formatExhibitionDate(startDate);
+  const end = endDate?.trim() ? formatExhibitionDate(endDate) : "";
+
+  if (!end) {
+    return start;
+  }
+
+  return `${start} - ${end}`;
+}
+
+function formatExhibitionDate(value?: string) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return "Date TBA";
+  }
+
+  const parsed = new Date(`${trimmed}T00:00:00Z`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return trimmed;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(parsed);
 }
 
 function CvHistorySection({ items }: { items: ArtistCvItem[] }) {

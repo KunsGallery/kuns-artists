@@ -22,6 +22,11 @@ import type {
   ArtistGalleryNote,
   ArtistPortfolioPdf,
 } from "@/types/artist";
+import type {
+  ExhibitionDoc,
+  ExhibitionSavePayload,
+} from "@/types/exhibition";
+import { sortExhibitionsByStartDateDesc } from "@/types/exhibition";
 
 export type ArtistRole = "admin" | "artist";
 export type ArtistType = "represented" | "project";
@@ -458,6 +463,45 @@ function toArtistWorkDoc(id: string, rawData: Record<string, unknown>): ArtistWo
   };
 }
 
+function buildExhibitionSlug(
+  title: string,
+  artistSlug: string,
+  documentId: string
+) {
+  const artistPrefix = toSafeArtistSlugPart(artistSlug) || "artist";
+  const titlePart = toSafeArtistSlugPart(title);
+
+  if (titlePart) {
+    return `${artistPrefix}-${titlePart}`;
+  }
+
+  return `${artistPrefix}-exhibition-${documentId.slice(0, 6).toLowerCase()}`;
+}
+
+function toExhibitionDoc(
+  id: string,
+  rawData: Record<string, unknown>
+): ExhibitionDoc {
+  return {
+    id,
+    artistId: toOptionalString(rawData.artistId),
+    artistSlug: toOptionalString(rawData.artistSlug),
+    artistName: toOptionalString(rawData.artistName),
+    slug: toOptionalString(rawData.slug),
+    title: toOptionalString(rawData.title),
+    venue: toOptionalString(rawData.venue),
+    location: toOptionalString(rawData.location),
+    description: toOptionalString(rawData.description),
+    imageUrl: toOptionalString(rawData.imageUrl),
+    startDate: toOptionalString(rawData.startDate),
+    endDate: toOptionalString(rawData.endDate),
+    isPublished: toOptionalBoolean(rawData.isPublished),
+    archived: toOptionalBoolean(rawData.archived),
+    createdAt: rawData.createdAt,
+    updatedAt: rawData.updatedAt,
+  };
+}
+
 function toArtistAdminPayload(payload: ArtistAdminSavePayload) {
   function toPersistedText(value: string | undefined) {
     return value?.trim() ?? "";
@@ -625,6 +669,33 @@ function buildArtistWorkCreatePayload(
   };
 }
 
+function buildArtistExhibitionEditablePayload(payload: ExhibitionSavePayload) {
+  return {
+    title: payload.title.trim(),
+    venue: payload.venue.trim(),
+    location: payload.location.trim(),
+    description: payload.description.trim(),
+    imageUrl: payload.imageUrl.trim(),
+    startDate: payload.startDate.trim(),
+    endDate: payload.endDate?.trim() ?? "",
+    isPublished: payload.isPublished ?? true,
+    archived: payload.archived ?? false,
+  };
+}
+
+function buildArtistExhibitionCreatePayload(
+  artistId: string,
+  artist: ArtistDoc,
+  payload: ExhibitionSavePayload
+) {
+  return {
+    artistId,
+    artistSlug: artist.slug ?? "",
+    artistName: artist.name ?? "",
+    ...buildArtistExhibitionEditablePayload(payload),
+  };
+}
+
 async function fetchAllArtistDocs() {
   const snapshot = await getDocs(collection(db, "artists"));
 
@@ -680,6 +751,48 @@ export async function getAllWorksForAdmin(): Promise<ArtistWorkDoc[]> {
 
     return (left.title ?? "").localeCompare(right.title ?? "", "en");
   });
+}
+
+async function fetchAllExhibitionDocs() {
+  const snapshot = await getDocs(collection(db, "exhibitions"));
+
+  return snapshot.docs.map((document) =>
+    toExhibitionDoc(document.id, document.data() as Record<string, unknown>)
+  );
+}
+
+export async function getAllExhibitionsForAdmin(): Promise<ExhibitionDoc[]> {
+  return sortExhibitionsByStartDateDesc(
+    await fetchAllExhibitionDocs()
+  );
+}
+
+export async function getPublicExhibitionsForArtistSlug(
+  artistSlug: string
+): Promise<ExhibitionDoc[]> {
+  const normalizedSlug = artistSlug.trim();
+
+  if (!normalizedSlug) {
+    return [];
+  }
+
+  const snapshot = await getDocs(
+    query(
+      collection(db, "exhibitions"),
+      where("artistSlug", "==", normalizedSlug)
+    )
+  );
+
+  return sortExhibitionsByStartDateDesc(
+    snapshot.docs
+      .map((document) =>
+        toExhibitionDoc(document.id, document.data() as Record<string, unknown>)
+      )
+      .filter(
+        (exhibition) =>
+          exhibition.isPublished === true && exhibition.archived !== true
+      )
+  );
 }
 
 export async function getWorksForArtist(
@@ -1156,6 +1269,34 @@ export async function createWorkForArtist(
   return documentRef.id;
 }
 
+export async function createWorkForAdmin(
+  artistId: string,
+  artist: ArtistDoc,
+  payload: ArtistWorkSavePayload
+) {
+  const documentRef = doc(collection(db, "works"));
+  const slug = buildWorkSlug(
+    payload.title,
+    artist.slug ?? artistId,
+    documentRef.id
+  );
+
+  await setDoc(documentRef, {
+    ...buildArtistWorkCreatePayload(artistId, artist, payload),
+    slug,
+    modelGlb: "",
+    modelUsdz: "",
+    generatedGlbUrl: "",
+    generatedUsdzUrl: "",
+    isPublished: false,
+    archived: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return documentRef.id;
+}
+
 export async function updateWorkForArtist(
   workId: string,
   _artistId: string,
@@ -1166,6 +1307,76 @@ export async function updateWorkForArtist(
     ...buildArtistWorkEditablePayload(payload),
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function getExhibitionById(
+  exhibitionId: string
+): Promise<ExhibitionDoc | null> {
+  const snapshot = await getDoc(doc(db, "exhibitions", exhibitionId));
+
+  if (!snapshot.exists()) return null;
+
+  return toExhibitionDoc(
+    snapshot.id,
+    snapshot.data() as Record<string, unknown>
+  );
+}
+
+export async function createExhibitionForAdmin(
+  artistId: string,
+  artist: ArtistDoc,
+  payload: ExhibitionSavePayload
+) {
+  const documentRef = doc(collection(db, "exhibitions"));
+  const slug = buildExhibitionSlug(
+    payload.title,
+    artist.slug ?? artistId,
+    documentRef.id
+  );
+
+  await setDoc(documentRef, {
+    ...buildArtistExhibitionCreatePayload(artistId, artist, payload),
+    slug,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return documentRef.id;
+}
+
+export async function updateExhibitionForAdmin(
+  exhibitionId: string,
+  artistId: string,
+  artist: ArtistDoc,
+  payload: ExhibitionSavePayload
+) {
+  await updateDoc(doc(db, "exhibitions", exhibitionId), {
+    ...buildArtistExhibitionCreatePayload(artistId, artist, payload),
+    slug: buildExhibitionSlug(
+      payload.title,
+      artist.slug ?? artistId,
+      exhibitionId
+    ),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteExhibitionForAdmin(exhibitionId: string) {
+  const exhibitionRef = doc(db, "exhibitions", exhibitionId);
+  const snapshot = await getDoc(exhibitionRef);
+
+  if (!snapshot.exists()) {
+    throw new Error("전시 정보를 불러오지 못했습니다.");
+  }
+
+  const exhibition = toExhibitionDoc(
+    snapshot.id,
+    snapshot.data() as Record<string, unknown>
+  );
+
+  await deleteDoc(exhibitionRef);
+
+  return exhibition;
 }
 
 export async function getArtistProfileByUid(
