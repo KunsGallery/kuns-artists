@@ -126,6 +126,18 @@ function hasArAssetInForm(form: WorkFormValues) {
   );
 }
 
+function hasTrimmedValue(value?: string | null) {
+  return Boolean(value?.trim());
+}
+
+function hasPositiveNumber(value?: number | null) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function hasFiniteNumber(value?: number | null) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function getPublicWorkSlug(work: ArtistWorkDoc) {
   return work.slug?.trim() || resolveArtistWorkSlug(work) || work.id?.trim() || "";
 }
@@ -498,6 +510,145 @@ function StatusNote({
   );
 }
 
+type ArBadgeTone = "ready" | "missing" | "preparing" | "neutral";
+
+function ArPill({
+  tone,
+  children,
+}: {
+  tone: ArBadgeTone;
+  children: React.ReactNode;
+}) {
+  const toneClass = {
+    ready: "border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
+    missing: "border-amber-400/25 bg-amber-400/10 text-amber-100",
+    preparing: "border-[#F37021]/25 bg-[#F37021]/10 text-[#FFBF8A]",
+    neutral: "border-white/10 bg-white/[0.04] text-white/72",
+  }[tone];
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.22em] ${toneClass}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ArChecklistItem({
+  label,
+  detail,
+  tone,
+}: {
+  label: string;
+  detail: string;
+  tone: Exclude<ArBadgeTone, "neutral">;
+}) {
+  const badgeLabel = tone === "ready" ? "Ready" : tone === "preparing" ? "Preparing" : "Missing";
+
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-[1.25rem] border border-white/10 bg-white/[0.03] px-4 py-4">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-white/90">{label}</p>
+        <p className="mt-1 text-[12px] leading-5 text-white/52">{detail}</p>
+      </div>
+      <ArPill tone={tone}>{badgeLabel}</ArPill>
+    </div>
+  );
+}
+
+function ArTextField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  helpText,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  helpText?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+        {label}
+      </span>
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 h-13 w-full rounded-[1.15rem] border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] outline-none transition placeholder:text-white/24 focus:border-white/20 focus:bg-white/[0.06]"
+      />
+      {helpText ? (
+        <p className="mt-2 break-words text-[11px] leading-5 text-white/48">
+          {helpText}
+        </p>
+      ) : null}
+    </label>
+  );
+}
+
+function PreviewLinkCard({
+  label,
+  href,
+  pathLabel,
+  buttonLabel,
+  disabledMessage,
+}: {
+  label: string;
+  href: string;
+  pathLabel: string;
+  buttonLabel: string;
+  disabledMessage: string;
+}) {
+  const isDisabled = !href;
+
+  return (
+    <div className="rounded-[1.35rem] border border-white/10 bg-white/[0.03] px-4 py-4">
+      <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+        {label}
+      </p>
+      <p className="mt-2 break-all text-sm leading-6 text-white/64">
+        {pathLabel}
+      </p>
+      <div className="mt-4">
+        {isDisabled ? (
+          <span className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-5 text-sm text-white/42">
+            {disabledMessage}
+          </span>
+        ) : (
+          <Link
+            href={href}
+            className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] px-5 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.08]"
+          >
+            {buttonLabel}
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ObjectSettingChip({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-[1.1rem] border border-white/10 bg-black/20 px-3 py-3">
+      <p className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+        {label}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-white/90">{value}</p>
+    </div>
+  );
+}
+
 function WorksEmptyState() {
   return (
     <div className="rounded-[1.75rem] border border-white/10 bg-[#171717] shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
@@ -640,6 +791,60 @@ export default function AdminWorksPage() {
   const publicWorkHref = selectedWorkSlug ? `/works/${selectedWorkSlug}` : "";
   const arHref = selectedWorkSlug ? `/ar/${selectedWorkSlug}` : "";
   const arReadyFromForm = hasArAssetInForm(selectedForm);
+  const selectedArtworkImageUrl =
+    selectedForm.coverImageUrl?.trim() ||
+    selectedWork?.coverImageUrl?.trim() ||
+    "";
+  const hasArtworkImage = hasTrimmedValue(selectedArtworkImageUrl);
+  const hasArtworkDimensions =
+    hasPositiveNumber(selectedWork?.widthCm) &&
+    hasPositiveNumber(selectedWork?.heightCm);
+  const hasArtistSlug = hasTrimmedValue(selectedWork?.artistSlug);
+  const hasWorkRouteSlug = hasTrimmedValue(selectedWorkSlug);
+  const arChecklistItems = [
+    {
+      label: "Artwork image",
+      detail: hasArtworkImage
+        ? "Cover image URL is ready for AR preview generation."
+        : "Missing cover image URL.",
+      tone: hasArtworkImage ? "ready" : "missing",
+    },
+    {
+      label: "Width / Height",
+      detail: hasArtworkDimensions
+        ? `${selectedWork?.widthCm} cm / ${selectedWork?.heightCm} cm`
+        : "Missing width or height.",
+      tone: hasArtworkDimensions ? "ready" : "missing",
+    },
+    {
+      label: "Artist slug",
+      detail: hasArtistSlug
+        ? `artistSlug: ${selectedWork?.artistSlug}`
+        : "Missing artist slug.",
+      tone: hasArtistSlug ? "ready" : "missing",
+    },
+    {
+      label: "Work slug",
+      detail: hasWorkRouteSlug
+        ? `Route slug: ${selectedWorkSlug}`
+        : "Missing work slug.",
+      tone: hasWorkRouteSlug ? "ready" : "missing",
+    },
+    {
+      label: "AR file",
+      detail: arReadyFromForm
+        ? "A GLB or USDZ file is already connected."
+        : "No AR file connected yet.",
+      tone: arReadyFromForm ? "ready" : "preparing",
+    },
+  ] as const;
+  const hasObjectSettings = [
+    selectedWork?.depthCm,
+    selectedWork?.sideMode,
+    selectedWork?.showBackLabel,
+    selectedWork?.frontRotationXDeg,
+    selectedWork?.frontRotationYDeg,
+  ].some((value) => value !== undefined);
 
   function updateSelectedField<K extends keyof WorkFormValues>(
     key: K,
@@ -767,7 +972,7 @@ export default function AdminWorksPage() {
         )
       );
       setArTestFileMessage(
-        "AR 테스트 파일이 생성되었습니다. 변경사항 저장을 눌러 반영해주세요."
+        "Test GLB generated. Click Save Changes to publish this AR file."
       );
     } catch (error) {
       if (
@@ -778,7 +983,7 @@ export default function AdminWorksPage() {
         setArTestFileErrorMessage(error.message);
       } else {
         setArTestFileErrorMessage(
-          "AR 테스트 파일 생성에 실패했습니다. 이미지 URL과 작품 크기를 확인해주세요."
+          "Failed to generate the test GLB. Check artwork image and dimensions."
         );
       }
       setArTestFileMessage("");
@@ -1128,131 +1333,285 @@ export default function AdminWorksPage() {
                 </SectionCard>
 
                 <SectionCard
-                  title="4. AR / File Links"
-                  description="기술 용어는 그대로 유지하고, 필요한 파일 URL을 직접 관리합니다."
+                  title="4. AR Preview Builder"
+                  description="Prepare and connect AR preview files for this artwork."
                 >
-                  <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#171717] shadow-sm">
-                    <div className="h-1 w-full bg-gradient-to-r from-[#F37021] via-[#ff9b5a] to-transparent" />
-                    <div className="px-4 py-4 md:px-5 md:py-5">
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                        AR File Connection Guide
-                      </p>
-                      <p className="mt-2 text-sm leading-7 text-white/70">
-                        GLB는 웹/Android AR Preview에 우선 사용됩니다. USDZ는 iOS Quick Look용으로 연결할 수 있습니다. 저장 후 GLB 또는 USDZ URL이 하나라도 있으면 /works와 /ar 페이지에서 AR Preview Available로 표시됩니다.
-                      </p>
-                      <p className="mt-3 text-[11px] uppercase tracking-[0.24em] text-white/38">
-                        현재는 URL을 직접 입력합니다.
-                      </p>
-
-                      <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-white/[0.03] px-4 py-4">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                          AR Test File
-                        </p>
-                        <p className="mt-2 text-sm leading-7 text-white/68">
-                          작품 이미지와 크기를 기준으로 간단한 GLB 테스트 파일을 생성해 R2에 업로드합니다.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => void handleGenerateArTestFile()}
-                          disabled={isGeneratingArTestFile}
-                          className="mt-4 inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isGeneratingArTestFile
-                            ? "AR 테스트 파일 생성 중..."
-                            : "AR 테스트 파일 자동 생성"}
-                        </button>
-
-                        {arTestFileMessage ? (
-                          <p className="mt-3 text-sm leading-6 text-emerald-200">
-                            {arTestFileMessage}
+                  <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(243,112,33,0.12),transparent_34%),linear-gradient(180deg,#1a1a1a_0%,#141414_100%)] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.24)] md:p-5">
+                    <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                      <div className="space-y-4">
+                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                            Artwork Image
                           </p>
-                        ) : null}
-
-                        {arTestFileErrorMessage ? (
-                          <p className="mt-3 text-sm leading-6 text-amber-200">
-                            {arTestFileErrorMessage}
+                          <p className="mt-2 text-sm leading-7 text-white/60">
+                            Use the same image that will power the public artwork and AR preview pages.
                           </p>
+                          <div className="mt-4">
+                            <R2ImageUploadField
+                              label="Artwork Image"
+                              description="Upload an image or paste a public URL. This value is used for the public artwork and AR preview."
+                              value={selectedForm.coverImageUrl || ""}
+                              onChange={(value) =>
+                                updateSelectedField("coverImageUrl", value)
+                              }
+                              target="work-image"
+                              artistSlug={selectedWork.artistSlug}
+                              workSlug={selectedWork.slug || selectedWork.id || undefined}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                            Status
+                          </p>
+                          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="max-w-2xl">
+                              <h4 className="text-2xl font-semibold tracking-[-0.04em] text-[#F7F1E8]">
+                                {arReadyFromForm
+                                  ? "AR Preview Ready"
+                                  : "AR Preview Preparing"}
+                              </h4>
+                              <p className="mt-2 text-sm leading-7 text-white/66">
+                                {arReadyFromForm
+                                  ? "An AR file is connected. The public artwork and AR pages will show AR Preview Available."
+                                  : "Connect a GLB or USDZ URL, or generate a test GLB, to enable AR Preview."}
+                              </p>
+                            </div>
+                            <ArPill
+                              tone={arReadyFromForm ? "ready" : "preparing"}
+                            >
+                              {arReadyFromForm ? "Ready" : "Preparing"}
+                            </ArPill>
+                          </div>
+                        </div>
+
+                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                Readiness checklist
+                              </p>
+                              <p className="mt-2 text-sm leading-7 text-white/60">
+                                Check the items below before generating or linking AR files.
+                              </p>
+                            </div>
+                            <ArPill tone="neutral">5 checks</ArPill>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            {arChecklistItems.map((item) => (
+                              <ArChecklistItem
+                                key={item.label}
+                                label={item.label}
+                                detail={item.detail}
+                                tone={item.tone}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        {hasObjectSettings ? (
+                          <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                              Object Settings
+                            </p>
+                            <p className="mt-2 text-sm leading-7 text-white/60">
+                              Read-only summary of object settings already stored on this work.
+                            </p>
+
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              <ObjectSettingChip
+                                label="Depth"
+                                value={
+                                  hasPositiveNumber(selectedWork?.depthCm)
+                                    ? `${selectedWork?.depthCm} cm`
+                                    : "Not set"
+                                }
+                              />
+                              <ObjectSettingChip
+                                label="Side Finish"
+                                value={
+                                  selectedWork?.sideMode === "canvas"
+                                    ? "Canvas"
+                                    : selectedWork?.sideMode === "image"
+                                      ? "Image"
+                                      : "Not set"
+                                }
+                              />
+                              <ObjectSettingChip
+                                label="Back Label"
+                                value={
+                                  selectedWork?.showBackLabel === true
+                                    ? "On"
+                                    : selectedWork?.showBackLabel === false
+                                      ? "Off"
+                                      : "Not set"
+                                }
+                              />
+                              <ObjectSettingChip
+                                label="Tilt X"
+                                value={
+                                  hasFiniteNumber(selectedWork?.frontRotationXDeg) ||
+                                  selectedWork?.frontRotationXDeg === 0
+                                    ? `${selectedWork?.frontRotationXDeg}°`
+                                    : "Not set"
+                                }
+                              />
+                              <ObjectSettingChip
+                                label="Tilt Y"
+                                value={
+                                  hasFiniteNumber(selectedWork?.frontRotationYDeg) ||
+                                  selectedWork?.frontRotationYDeg === 0
+                                    ? `${selectedWork?.frontRotationYDeg}°`
+                                    : "Not set"
+                                }
+                              />
+                            </div>
+                          </div>
                         ) : null}
                       </div>
+
+                      <div className="space-y-4">
+                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                            Generate Test GLB
+                          </p>
+                          <p className="mt-2 text-sm leading-7 text-white/66">
+                            작품 이미지와 크기를 기준으로 테스트용 GLB 파일을 생성합니다.
+                          </p>
+                          <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-black/20 px-4 py-4">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/40">
+                              Before generating
+                            </p>
+                            <ul className="mt-3 space-y-2 text-sm leading-6 text-white/58">
+                              <li>Artwork image is required.</li>
+                              <li>Width and height are required.</li>
+                              <li>`generatedGlbUrl` will be updated in the form only.</li>
+                              <li>Click Save Changes to publish it.</li>
+                            </ul>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => void handleGenerateArTestFile()}
+                            disabled={isGeneratingArTestFile}
+                            className="mt-4 inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isGeneratingArTestFile
+                              ? "Generating Test GLB..."
+                              : "Generate Test GLB"}
+                          </button>
+
+                          {arTestFileMessage ? (
+                            <p
+                              role="status"
+                              aria-live="polite"
+                              className="mt-3 rounded-[1.15rem] border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-100"
+                            >
+                              {arTestFileMessage}
+                            </p>
+                          ) : null}
+
+                          {arTestFileErrorMessage ? (
+                            <p
+                              role="alert"
+                              aria-live="assertive"
+                              className="mt-3 rounded-[1.15rem] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100"
+                            >
+                              {arTestFileErrorMessage}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                            Preview Links
+                          </p>
+                          <p className="mt-2 text-sm leading-7 text-white/60">
+                            After saving, check how this artwork appears on the public artwork and AR preview pages.
+                          </p>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <PreviewLinkCard
+                              label="Artwork Page"
+                              href={publicWorkHref}
+                              pathLabel={`/works/${selectedWorkSlug || "work-slug"}`}
+                              buttonLabel="View Artwork"
+                              disabledMessage="Save to unlock"
+                            />
+                            <PreviewLinkCard
+                              label="AR Preview Page"
+                              href={arHref}
+                              pathLabel={`/ar/${selectedWorkSlug || "work-slug"}`}
+                              buttonLabel="View AR Preview"
+                              disabledMessage="Save to unlock"
+                            />
+                          </div>
+                        </div>
+
+                        <details className="group rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                          <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                Manual AR File URLs
+                              </p>
+                              <p className="mt-2 text-sm leading-7 text-white/60">
+                                Use this area when you already have GLB or USDZ files prepared.
+                              </p>
+                            </div>
+                            <ArPill tone="neutral">Optional</ArPill>
+                          </summary>
+
+                          <div className="mt-4 border-t border-white/10 pt-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <ArTextField
+                                label="generatedGlbUrl"
+                                value={selectedForm.generatedGlbUrl || ""}
+                                onChange={(value) =>
+                                  updateSelectedField("generatedGlbUrl", value)
+                                }
+                                placeholder="https://..."
+                                helpText="자동 생성 또는 업로드된 GLB URL을 연결합니다."
+                              />
+                              <ArTextField
+                                label="generatedUsdzUrl"
+                                value={selectedForm.generatedUsdzUrl || ""}
+                                onChange={(value) =>
+                                  updateSelectedField("generatedUsdzUrl", value)
+                                }
+                                placeholder="https://..."
+                                helpText="자동 생성 또는 업로드된 USDZ URL을 연결합니다."
+                              />
+                              <ArTextField
+                                label="modelGlb"
+                                value={selectedForm.modelGlb || ""}
+                                onChange={(value) =>
+                                  updateSelectedField("modelGlb", value)
+                                }
+                                placeholder="https://..."
+                                helpText="수동으로 준비한 GLB URL을 연결합니다."
+                              />
+                              <ArTextField
+                                label="modelUsdz"
+                                value={selectedForm.modelUsdz || ""}
+                                onChange={(value) =>
+                                  updateSelectedField("modelUsdz", value)
+                                }
+                                placeholder="https://..."
+                                helpText="수동으로 준비한 USDZ URL을 연결합니다."
+                              />
+                            </div>
+                          </div>
+                        </details>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="rounded-[1.25rem] border border-white/10 bg-[#171717] px-4 py-4 text-sm leading-7 text-white/70">
-                    <div className="h-px w-12 bg-gradient-to-r from-[#F37021] to-transparent" />
-                    <p className="mt-3 text-[11px] uppercase tracking-[0.24em] text-white/42">
-                      Status: {arReadyFromForm ? "AR Ready" : "Missing AR Files"}
-                    </p>
-                    <p className="mt-2">
-                      {arReadyFromForm
-                        ? "GLB 또는 USDZ URL이 연결되어 공개 AR Preview가 활성화됩니다."
-                        : "GLB 또는 USDZ URL을 연결하면 공개 페이지에서 AR Preview가 활성화됩니다."}
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <TextField
-                      label="generatedGlbUrl"
-                      value={selectedForm.generatedGlbUrl || ""}
-                      onChange={(value) =>
-                        updateSelectedField("generatedGlbUrl", value)
-                      }
-                      placeholder="https://..."
-                      helpText="자동 생성 또는 업로드된 GLB URL을 연결합니다."
-                    />
-                    <TextField
-                      label="generatedUsdzUrl"
-                      value={selectedForm.generatedUsdzUrl || ""}
-                      onChange={(value) =>
-                        updateSelectedField("generatedUsdzUrl", value)
-                      }
-                      placeholder="https://..."
-                      helpText="자동 생성 또는 업로드된 USDZ URL을 연결합니다."
-                    />
-                    <TextField
-                      label="modelGlb"
-                      value={selectedForm.modelGlb || ""}
-                      onChange={(value) => updateSelectedField("modelGlb", value)}
-                      placeholder="https://..."
-                      helpText="수동으로 준비한 GLB URL을 연결합니다."
-                    />
-                    <TextField
-                      label="modelUsdz"
-                      value={selectedForm.modelUsdz || ""}
-                      onChange={(value) =>
-                        updateSelectedField("modelUsdz", value)
-                      }
-                      placeholder="https://..."
-                      helpText="수동으로 준비한 USDZ URL을 연결합니다."
-                    />
-                  </div>
-
-                  <div className="grid gap-5 md:grid-cols-2">
-                    <R2ImageUploadField
-                      label="작품 이미지"
-                      description="관리자는 작품 이미지를 업로드하거나 URL로 직접 입력할 수 있습니다. 공개 페이지와 AR 페이지에서 사용됩니다."
-                      value={selectedForm.coverImageUrl || ""}
-                      onChange={(value) =>
-                        updateSelectedField("coverImageUrl", value)
-                      }
-                      target="work-image"
-                      artistSlug={selectedWork.artistSlug}
-                      workSlug={selectedWork.slug || selectedWork.id || undefined}
-                    />
-                  </div>
-
-                  <div className="rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 py-4 text-sm leading-7 text-neutral-600">
-                    저장 후 공개 작품 상세 페이지와 AR Preview 페이지에서 상태가 반영됩니다.
-                  </div>
-
-                  <div className="rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 py-4 text-sm leading-7 text-neutral-600">
-                    <p>작품 상세: /works/{selectedWorkSlug || "work-slug"}</p>
-                    <p>AR Preview: /ar/{selectedWorkSlug || "work-slug"}</p>
                   </div>
                 </SectionCard>
 
                 <SectionCard
                   title="5. Actions"
-                  description="작품 상태를 저장하고, 공개 화면을 바로 확인합니다."
+                  description="Save the current publication and AR link changes."
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <button
@@ -1270,45 +1629,13 @@ export default function AdminWorksPage() {
                         className="inline-flex h-12 items-center justify-center rounded-full border border-black/10 bg-white px-6 text-sm text-neutral-900 transition hover:border-black/20 sm:w-auto"
                       >
                         작가 페이지 열기
-                        </Link>
-                      ) : null}
-
-                    {publicWorkHref ? (
-                      <Link
-                        href={publicWorkHref}
-                        className={`inline-flex h-12 items-center justify-center rounded-full px-6 text-sm transition sm:w-auto ${
-                          selectedStatus === "published"
-                            ? "border border-[#F37021]/30 bg-[#fff7f1] text-[#b85d18] hover:border-[#F37021]/40"
-                            : "border border-black/10 bg-white text-neutral-900 hover:border-black/20"
-                        }`}
-                      >
-                        작품 상세 열기
-                      </Link>
-                    ) : null}
-
-                    {arHref ? (
-                      <Link
-                        href={arHref}
-                        className="inline-flex h-12 items-center justify-center rounded-full border border-black/10 bg-[#f7f6f2] px-6 text-sm text-neutral-900 transition hover:border-black/20 sm:w-auto"
-                      >
-                        AR 페이지 열기
                       </Link>
                     ) : null}
                   </div>
 
                   <p className="text-sm leading-6 text-neutral-500">
-                    작품 상태가 저장된 뒤 공개 페이지와 AR 페이지에서 이어서 확인할 수 있습니다.
+                    작품 상태가 저장된 뒤 공개 페이지와 AR Preview 페이지에서 이어서 확인할 수 있습니다.
                   </p>
-
-                  {selectedWorkSlug ? (
-                    <div className="rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 py-4 text-sm leading-7 text-neutral-600">
-                      <p>작품 상세: /works/{selectedWorkSlug}</p>
-                      <p>AR Preview: /ar/{selectedWorkSlug}</p>
-                      <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                        저장 후 공개 작품 상세 페이지와 AR Preview 페이지에서 상태가 반영됩니다.
-                      </p>
-                    </div>
-                  ) : null}
                 </SectionCard>
               </>
             ) : (
