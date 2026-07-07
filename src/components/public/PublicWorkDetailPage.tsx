@@ -204,27 +204,6 @@ function MoreWorksSection({
   );
 }
 
-function StatLine({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string;
-}) {
-  if (!value) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-col gap-1 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3">
-      <span className="text-[10px] uppercase tracking-[0.28em] text-white/42">
-        {label}
-      </span>
-      <span className="text-sm leading-6 text-white/76">{value}</span>
-    </div>
-  );
-}
-
 function ActionButton({
   href,
   children,
@@ -463,7 +442,7 @@ function PublicWorkDetailShell({
                       type="button"
                       onClick={() => setIsImageViewerOpen(true)}
                       className="group relative block w-full overflow-hidden rounded-[1.2rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F37021]/50"
-                      aria-label="Click to enlarge"
+                      aria-label="View artwork image larger"
                     >
                       <img
                         src={imageUrl}
@@ -472,7 +451,7 @@ function PublicWorkDetailShell({
                       />
                       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_50%,rgba(0,0,0,0.36))] opacity-100" />
                       <div className="absolute bottom-4 left-4 rounded-full border border-white/12 bg-black/45 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/88 transition group-hover:border-[#F37021]/45 group-hover:bg-[#F37021]/12">
-                        Click to enlarge
+                        View Larger
                       </div>
                     </button>
                   ) : (
@@ -517,27 +496,29 @@ function PublicWorkDetailShell({
 
       {isImageViewerOpen && hasImage ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/88 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#111111]/82 p-4 backdrop-blur-md"
           onClick={() => setIsImageViewerOpen(false)}
         >
           <div
-            className="relative flex h-full w-full max-w-7xl items-center justify-center"
+            className="relative flex h-full w-full max-w-[min(96vw,90rem)] items-center justify-center"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="absolute right-2 top-2 z-10 md:right-4 md:top-4">
               <button
                 type="button"
                 onClick={() => setIsImageViewerOpen(false)}
-                className="inline-flex h-10 items-center justify-center rounded-full border border-white/12 bg-white/[0.06] px-4 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/40 hover:bg-[#F37021]/10"
+                className="inline-flex h-10 items-center justify-center rounded-full border border-white/15 bg-white/[0.05] px-4 text-sm text-[#F7F1E8] transition hover:border-white/25 hover:bg-white/[0.09]"
               >
                 Close
               </button>
             </div>
-            <img
-              src={imageUrl}
-              alt={work.title}
-              className="max-h-[calc(100vh-2rem)] w-full object-contain shadow-[0_30px_100px_rgba(0,0,0,0.45)]"
-            />
+            <div className="flex w-full items-center justify-center rounded-[2rem] border border-white/10 bg-[#151515]/95 p-3 shadow-[0_30px_80px_rgba(0,0,0,0.45)] md:p-5">
+              <img
+                src={imageUrl}
+                alt={work.title}
+                className="max-h-[calc(100vh-2.5rem)] w-full object-contain"
+              />
+            </div>
           </div>
         </div>
       ) : null}

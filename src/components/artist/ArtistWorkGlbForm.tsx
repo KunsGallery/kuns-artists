@@ -415,7 +415,7 @@ export default function ArtistWorkGlbForm({
               label="3. Optional Details / AR Preparation"
               description="AR 관련 항목은 선택 사항입니다. 필요한 경우 갤러리와 함께 조정할 수 있습니다."
             >
-              <p className="inline-flex rounded-full border border-black/8 bg-[#f7f6f2] px-3 py-1 text-[10px] tracking-[0.22em] text-neutral-500">
+              <p className="inline-flex rounded-full border border-[#cdbfa7] bg-[#eee5d7] px-3 py-1 text-[10px] font-medium tracking-[0.22em] text-[#5f5140]">
                 선택 사항
               </p>
 
@@ -651,13 +651,13 @@ function FieldBadge({
   const styles = {
     required: "border-[#F37021]/35 bg-[#F37021]/10 text-[#B85D18]",
     recommended: "border-[#d8c8a0] bg-[#f6f0e3] text-[#7a6640]",
-    optional: "border-black/8 bg-[#f4f1ea] text-neutral-500",
+    optional: "border-[#cfc5b4] bg-[#eee6d8] text-[#63574b]",
     auto: "border-slate-200 bg-slate-50 text-slate-600",
   }[tone];
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] tracking-[0.18em] ${styles}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium tracking-[0.18em] ${styles}`}
     >
       {children}
     </span>

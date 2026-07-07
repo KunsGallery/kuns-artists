@@ -99,70 +99,65 @@ export default function ArtistLoginPage() {
   }, [router]);
 
   return (
-    <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950">
+    <main className="theme-dark min-h-screen bg-[radial-gradient(circle_at_top,_rgba(243,112,33,0.12),transparent_26%),linear-gradient(180deg,#151515_0%,#111111_100%)] text-[#F7F1E8]">
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-5 py-6 md:px-8 md:py-8">
         <header className="flex items-center justify-between">
           <Link
             href="/"
-            className="text-[11px] uppercase tracking-[0.28em] text-neutral-500"
+            className="text-[11px] uppercase tracking-[0.34em] text-white/45"
           >
             KÜN’S GALLERY
           </Link>
 
           <Link
             href="/artists"
-            className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
+            className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.04] px-5 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.08]"
           >
-            작가 목록
+            Artists
           </Link>
         </header>
 
-        <section className="grid flex-1 gap-10 py-12 md:grid-cols-[1.02fr_0.98fr] md:items-center md:py-16">
-          <div className="max-w-4xl">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
-              작가 로그인
-            </p>
+        <section className="flex flex-1 items-center py-12 md:py-16">
+          <div className="w-full max-w-[540px]">
+            <div className="mb-6 flex items-center gap-3">
+              <span className="h-px flex-1 bg-white/10" />
+              <span className="text-[10px] uppercase tracking-[0.34em] text-white/40">
+                Artists Archive
+              </span>
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
 
-            <h1 className="mt-5 text-5xl font-semibold tracking-[-0.04em] text-neutral-950 md:text-7xl md:leading-[0.95]">
-              Sign in with
-              <br />
-              Google.
-            </h1>
-
-            <p className="mt-8 max-w-xl text-sm leading-7 text-neutral-600 md:text-[15px]">
-              등록된 작가와 관리자 계정만 접근할 수 있습니다. 로그인 후 계정
-              권한에 따라 작가 대시보드 또는 관리자 화면으로 이동합니다.
-            </p>
-          </div>
-
-          <aside className="flex justify-start md:justify-end">
-            <div className="w-full max-w-[460px] rounded-[2rem] border border-black/10 bg-white p-6 shadow-sm md:p-7">
-              <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
-                Access
+            <div className="rounded-[2.25rem] border border-white/10 bg-white/[0.035] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.24)] backdrop-blur-sm md:p-8">
+              <p className="text-[11px] uppercase tracking-[0.34em] text-white/42">
+                Artist Login
               </p>
 
-              <div className="mt-6 space-y-4">
-                <div className="rounded-[1.5rem] bg-[#f7f6f2] px-5 py-5">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">
-                    Google Account
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-neutral-600">
-                    계정 선택 창이 기본으로 열리며, 허용된 이메일만 계속 진행됩니다.
-                  </p>
-                </div>
+              <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-[#F7F1E8] md:text-6xl md:leading-[0.95]">
+                Continue with
+                <br />
+                Google.
+              </h1>
 
-                <div className="rounded-[1.5rem] bg-[#f7f6f2] px-5 py-5">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-neutral-400">
-                    Redirect
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-neutral-600">
-                    관리자 계정은 `/admin`, 작가 계정은 `/artist/dashboard`로 이동합니다.
-                  </p>
-                </div>
+              <p className="mt-6 max-w-xl text-sm leading-7 text-white/68 md:text-[15px]">
+                Sign in with your approved Google account to manage your artist
+                profile and works.
+              </p>
+
+              <div className="mt-6 rounded-[1.4rem] border border-white/10 bg-black/15 px-4 py-4">
+                <p className="text-[11px] uppercase tracking-[0.26em] text-white/42">
+                  Access
+                </p>
+                <p className="mt-2 text-sm leading-7 text-white/58">
+                  Access is limited to approved artists and gallery administrators.
+                </p>
               </div>
 
               {errorMessage ? (
-                <div className="mt-6 rounded-[1.5rem] bg-[#fff3f1] px-5 py-4 text-sm leading-7 text-red-600">
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  className="mt-6 rounded-[1.4rem] border border-red-500/20 bg-red-500/10 px-4 py-4 text-sm leading-7 text-red-200"
+                >
                   {errorMessage}
                 </div>
               ) : null}
@@ -174,20 +169,18 @@ export default function ArtistLoginPage() {
                   void handleManualGoogleLogin();
                 }}
                 disabled={isSigningIn}
-                className="mt-6 inline-flex h-14 w-full items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-6 inline-flex h-14 w-full items-center justify-center rounded-full bg-[#F37021] px-6 text-sm font-medium text-[#171717] transition hover:bg-[#ff7a2f] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSigningIn
-                  ? "Google 로그인 창을 여는 중..."
-                  : "Google로 로그인"}
+                {isSigningIn ? "Opening Google sign-in..." : "Continue with Google"}
               </button>
 
-              <p className="mt-4 text-sm leading-6 text-neutral-500">
+              <p className="mt-4 text-sm leading-6 text-white/46">
                 {isInitializing && !errorMessage
-                  ? "로그인 상태를 확인하는 중입니다."
-                  : "팝업이 차단되었거나 닫힌 경우 버튼으로 다시 시도해주세요."}
+                  ? "Checking your sign-in status..."
+                  : "If the popup was blocked or closed, use the button above to try again."}
               </p>
             </div>
-          </aside>
+          </div>
         </section>
       </div>
     </main>
