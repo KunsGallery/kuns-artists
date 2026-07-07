@@ -343,7 +343,12 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (signedIn() && validArtistWorkUpdate());
 
-      allow delete: if isAdmin();
+      allow delete: if isAdmin()
+        || (
+          signedIn()
+          && hasArtistProfile(authUid())
+          && resource.data.artistId == authUid()
+        );
     }
 
     match /{document=**} {

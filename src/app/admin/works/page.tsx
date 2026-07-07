@@ -7,12 +7,14 @@ import R2ImageUploadField from "@/components/shared/R2ImageUploadField";
 import { artists as seedArtists } from "@/data/artists";
 import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import {
+  deleteWorkForAdmin,
   getAllWorksForAdmin,
   resolveArtistWorkSlug,
   updateWorkForAdmin,
   type ArtistWorkAdminUpdatePayload,
   type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
+import { deleteR2ObjectsByPublicUrls } from "@/lib/r2/client";
 import { hasArAsset } from "@/lib/workDisplay";
 
 type WorkFormValues = ArtistWorkAdminUpdatePayload;
@@ -95,6 +97,17 @@ function getWorkStatusMessage(status: Exclude<StatusFilter, "all">) {
   }
 
   return "Review Pending: 아직 공개되지 않습니다.";
+}
+
+function getDeleteConfirmMessage(status: Exclude<StatusFilter, "all">) {
+  const base =
+    "이 작품을 영구 삭제할까요? Firestore 작품 문서가 삭제되며, 공개 페이지에서도 더 이상 보이지 않습니다.";
+
+  if (status === "published") {
+    return `${base}\n\n현재 공개 중인 작품입니다. 삭제하면 공개 페이지에서도 즉시 사라집니다.`;
+  }
+
+  return base;
 }
 
 function getWorkDisplayOrderLabel(work: ArtistWorkDoc) {
@@ -398,40 +411,6 @@ function InfoCard({
   );
 }
 
-function TextField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  helpText,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  helpText?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-        {label}
-      </span>
-      <input
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
-      />
-      {helpText ? (
-        <p className="mt-2 text-[11px] leading-5 text-neutral-500">
-          {helpText}
-        </p>
-      ) : null}
-    </label>
-  );
-}
-
 function ToggleField({
   label,
   checked,
@@ -685,6 +664,7 @@ export default function AdminWorksPage() {
   const [saveErrorMessage, setSaveErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingArTestFile, setIsGeneratingArTestFile] = useState(false);
+  const [isDeletingSelectedWork, setIsDeletingSelectedWork] = useState(false);
   const [arTestFileMessage, setArTestFileMessage] = useState("");
   const [arTestFileErrorMessage, setArTestFileErrorMessage] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -878,6 +858,49 @@ export default function AdminWorksPage() {
       );
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteSelectedWork() {
+    if (!selectedWork) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      getDeleteConfirmMessage(selectedStatus ?? "pending")
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingSelectedWork(true);
+    setSaveMessage("");
+    setSaveErrorMessage("");
+
+    try {
+      const deletedWork = await deleteWorkForAdmin(selectedWork.id);
+
+      void deleteR2ObjectsByPublicUrls(
+        [
+          deletedWork.coverImageUrl,
+          deletedWork.generatedGlbUrl,
+          deletedWork.generatedUsdzUrl,
+        ].filter((value): value is string => Boolean(value && value.trim()))
+      ).catch(() => undefined);
+
+      setWorks((current) =>
+        current.filter((work) => work.id !== selectedWork.id)
+      );
+      setSaveMessage("Artwork deleted.");
+    } catch (error) {
+      setSaveErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "작품 삭제에 실패했습니다. 잠시 후 다시 시도해주세요."
+      );
+    } finally {
+      setIsDeletingSelectedWork(false);
     }
   }
 
@@ -1617,7 +1640,7 @@ export default function AdminWorksPage() {
                     <button
                       type="button"
                       onClick={() => void handleSaveSelected()}
-                      disabled={!selectedWork || isSaving}
+                      disabled={!selectedWork || isSaving || isDeletingSelectedWork}
                       className="inline-flex h-12 items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     >
                       {isSaving ? "저장 중..." : "변경사항 저장"}
@@ -1631,6 +1654,15 @@ export default function AdminWorksPage() {
                         작가 페이지 열기
                       </Link>
                     ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteSelectedWork()}
+                      disabled={!selectedWork || isSaving || isDeletingSelectedWork}
+                      className="inline-flex h-12 items-center justify-center rounded-full border border-red-300 bg-white px-6 text-sm text-red-700 transition hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    >
+                      {isDeletingSelectedWork ? "삭제 중..." : "Delete Artwork"}
+                    </button>
                   </div>
 
                   <p className="text-sm leading-6 text-neutral-500">

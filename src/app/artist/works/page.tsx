@@ -6,10 +6,12 @@ import { useSearchParams } from "next/navigation";
 import LogoutButton from "@/components/auth/LogoutButton";
 import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import {
+  deleteArtistWork,
   getWorksForArtist,
   resolveArtistWorkSlug,
   type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
+import { deleteR2ObjectsByPublicUrls } from "@/lib/r2/client";
 import { hasArAsset } from "@/lib/workDisplay";
 
 type WorkStatusFilter = "all" | "pending" | "published" | "archived";
@@ -60,6 +62,17 @@ function getStatusMessage(status: Exclude<WorkStatusFilter, "all">) {
   }
 
   return "관리자 검수 후 공개 작품 상세 페이지에 표시됩니다.";
+}
+
+function getDeleteConfirmMessage(status: Exclude<WorkStatusFilter, "all">) {
+  const base =
+    "이 작품을 삭제할까요? 삭제 후에는 작품 목록과 공개 페이지에서 사라집니다.";
+
+  if (status === "published") {
+    return `${base}\n\n현재 공개 중인 작품입니다. 삭제하면 공개 페이지에서도 즉시 사라집니다.`;
+  }
+
+  return base;
 }
 
 function getPublicWorkSlug(work: ArtistWorkDoc) {
@@ -188,8 +201,11 @@ function WorkMeta({
 export default function ArtistWorksPage() {
   const [works, setWorks] = useState<ArtistWorkDoc[]>([]);
   const [worksErrorMessage, setWorksErrorMessage] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionErrorMessage, setActionErrorMessage] = useState("");
+  const [deletingWorkId, setDeletingWorkId] = useState("");
   const [statusFilter, setStatusFilter] = useState<WorkStatusFilter>("all");
-  const { artist, uid, isLoading, errorMessage } = useProtectedArtist({
+  const { uid, isLoading, errorMessage } = useProtectedArtist({
     fallbackErrorMessage: "작가 정보를 불러오는 중 오류가 발생했습니다.",
   });
 
@@ -201,6 +217,8 @@ export default function ArtistWorksPage() {
         if (isActive) {
           setWorks([]);
           setWorksErrorMessage("");
+          setActionMessage("");
+          setActionErrorMessage("");
         }
 
         return;
@@ -208,6 +226,8 @@ export default function ArtistWorksPage() {
 
       try {
         setWorksErrorMessage("");
+        setActionMessage("");
+        setActionErrorMessage("");
         const artistWorks = await getWorksForArtist(uid);
 
         if (isActive) {
@@ -259,6 +279,45 @@ export default function ArtistWorksPage() {
 
   const hasWorks = works.length > 0;
   const hasFilteredWorks = filteredWorks.length > 0;
+
+  async function handleDeleteWork(work: ArtistWorkDoc) {
+    if (!uid) {
+      setActionErrorMessage("로그인이 필요합니다.");
+      return;
+    }
+
+    const status = getWorkStatus(work);
+    const confirmed = window.confirm(getDeleteConfirmMessage(status));
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingWorkId(work.id);
+    setActionMessage("");
+    setActionErrorMessage("");
+
+    try {
+      const deletedWork = await deleteArtistWork(work.id, uid);
+
+      void deleteR2ObjectsByPublicUrls(
+        [deletedWork.coverImageUrl, deletedWork.generatedGlbUrl, deletedWork.generatedUsdzUrl].filter(
+          (value): value is string => Boolean(value && value.trim())
+        )
+      ).catch(() => undefined);
+
+      setWorks((current) => current.filter((entry) => entry.id !== work.id));
+      setActionMessage("작품이 삭제되었습니다.");
+    } catch (error) {
+      setActionErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "작품 삭제에 실패했습니다. 잠시 후 다시 시도해주세요."
+      );
+    } finally {
+      setDeletingWorkId("");
+    }
+  }
 
   return (
     <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950">
@@ -378,6 +437,18 @@ export default function ArtistWorksPage() {
         <Suspense fallback={null}>
           <SavedWorkNotice />
         </Suspense>
+
+        {actionMessage ? (
+          <div className="mt-6 rounded-[1.75rem] border border-emerald-200 bg-emerald-50 px-5 py-5 text-sm leading-7 text-emerald-800">
+            {actionMessage}
+          </div>
+        ) : null}
+
+        {actionErrorMessage ? (
+          <div className="mt-6 rounded-[1.75rem] border border-amber-200 bg-amber-50 px-5 py-5 text-sm leading-7 text-amber-900">
+            {actionErrorMessage}
+          </div>
+        ) : null}
 
         {errorMessage || worksErrorMessage ? (
           <div className="mt-6 rounded-[1.75rem] border border-red-200 bg-red-50 px-5 py-5 text-sm leading-7 text-red-700">
@@ -510,6 +581,15 @@ export default function ArtistWorksPage() {
                             {hasArAsset(work) ? "AR 사용 가능" : "AR 준비 중"}
                           </Link>
                         ) : null}
+
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteWork(work)}
+                          disabled={deletingWorkId === work.id}
+                          className="inline-flex h-11 items-center justify-center rounded-full border border-red-400/25 bg-red-500/10 px-5 text-sm text-red-100 transition hover:border-red-400/45 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                        >
+                          {deletingWorkId === work.id ? "삭제 중..." : "삭제"}
+                        </button>
                       </div>
 
                       <p className="text-[11px] uppercase tracking-[0.24em] text-white/34">

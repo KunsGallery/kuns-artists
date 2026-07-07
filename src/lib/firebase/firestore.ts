@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -1086,6 +1087,46 @@ export async function updateWorkForAdmin(
   }
 
   await updateDoc(doc(db, "works", workId), updatePayload);
+}
+
+export async function deleteArtistWork(workId: string, artistId: string) {
+  const workRef = doc(db, "works", workId);
+  const snapshot = await getDoc(workRef);
+
+  if (!snapshot.exists()) {
+    throw new Error("작품 정보를 불러오지 못했습니다.");
+  }
+
+  const work = toArtistWorkDoc(
+    snapshot.id,
+    snapshot.data() as Record<string, unknown>
+  );
+
+  if ((work.artistId ?? "") !== artistId) {
+    throw new Error("본인 작품만 삭제할 수 있습니다.");
+  }
+
+  await deleteDoc(workRef);
+
+  return work;
+}
+
+export async function deleteWorkForAdmin(workId: string) {
+  const workRef = doc(db, "works", workId);
+  const snapshot = await getDoc(workRef);
+
+  if (!snapshot.exists()) {
+    throw new Error("작품 정보를 불러오지 못했습니다.");
+  }
+
+  const work = toArtistWorkDoc(
+    snapshot.id,
+    snapshot.data() as Record<string, unknown>
+  );
+
+  await deleteDoc(workRef);
+
+  return work;
 }
 
 export async function createWorkForArtist(

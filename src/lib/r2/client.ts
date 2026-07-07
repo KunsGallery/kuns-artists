@@ -1,8 +1,11 @@
 import type {
+  R2DeleteRequest,
+  R2DeleteResponse,
   R2PresignRequest,
   R2PresignResponse,
   R2UploadResult,
 } from "./types";
+import { auth } from "@/lib/firebase/client";
 
 export const R2_IMAGE_UPLOAD_CONTENT_TYPES = [
   "image/jpeg",
@@ -30,6 +33,16 @@ function getFriendlyUploadErrorMessage(error: unknown) {
   }
 
   return "이미지 업로드에 실패했습니다. 파일 형식, 용량 또는 네트워크 상태를 확인해주세요.";
+}
+
+async function getCurrentIdToken() {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  return user.getIdToken();
 }
 
 export async function requestR2UploadUrl(
@@ -168,4 +181,49 @@ export async function uploadImageFileToR2({
   } catch (error) {
     throw new Error(getFriendlyUploadErrorMessage(error));
   }
+}
+
+export async function deleteR2ObjectsByPublicUrls(
+  urls: string[]
+): Promise<R2DeleteResponse> {
+  const normalizedUrls = urls.map((value) => value.trim()).filter(Boolean);
+
+  if (normalizedUrls.length === 0) {
+    return {
+      ok: true,
+      deletedKeys: [],
+      skippedKeys: [],
+      failedKeys: [],
+    };
+  }
+
+  const token = await getCurrentIdToken();
+  const payload: R2DeleteRequest = { urls: normalizedUrls };
+
+  let response: Response;
+
+  try {
+    response = await fetch("/.netlify/functions/r2-delete-object", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error("R2 파일 정리에 실패했습니다. 잠시 후 다시 시도해주세요.");
+  }
+
+  const data = (await response.json()) as R2DeleteResponse | { error?: string };
+
+  if (!response.ok) {
+    throw new Error(
+      "error" in data && data.error
+        ? data.error
+        : "R2 파일 정리에 실패했습니다. 잠시 후 다시 시도해주세요."
+    );
+  }
+
+  return data as R2DeleteResponse;
 }

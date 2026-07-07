@@ -24,3 +24,15 @@ export type R2UploadResult = {
   publicUrl: string;
   key: string;
 };
+
+export type R2DeleteRequest = {
+  keys?: string[];
+  urls?: string[];
+};
+
+export type R2DeleteResponse = {
+  ok: boolean;
+  deletedKeys: string[];
+  skippedKeys: string[];
+  failedKeys: string[];
+};
