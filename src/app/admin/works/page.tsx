@@ -23,7 +23,7 @@ import {
   uploadUsdzFileToR2,
 } from "@/lib/r2/client";
 import { hasArAsset } from "@/lib/workDisplay";
-import { createCanvasArAssetBlobs, createSafeGlbFilename } from "@/lib/ar/createCanvasGlb";
+import { createCanvasArFiles, createSafeGlbFilename } from "@/lib/ar/createCanvasGlb";
 
 type WorkFormValues = ArtistWorkAdminUpdatePayload;
 type StatusFilter = "all" | "pending" | "published" | "archived";
@@ -1015,7 +1015,7 @@ function AdminWorksPageContent() {
     setArTestFileErrorMessage("");
 
     try {
-      const { glbBlob, usdzBlob, usdzError } = await createCanvasArAssetBlobs(
+      const { glbBlob, usdzBlob, usdzError } = await createCanvasArFiles(
         {
           imageUrl: coverImageUrl,
           title: selectedWork.title || "Artwork",
@@ -1066,7 +1066,7 @@ function AdminWorksPageContent() {
               : "AR 준비용 USDZ 파일 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.";
         }
       } else if (usdzError) {
-        usdzUploadErrorMessage = usdzError.message;
+        usdzUploadErrorMessage = usdzError;
       }
 
       setSelectedForm((current) => ({
@@ -1080,7 +1080,7 @@ function AdminWorksPageContent() {
         current.map((work) =>
           work.id === selectedWork.id
             ? {
-                ...work,
+              ...work,
                 generatedGlbUrl: glbUploadResult.publicUrl,
                 ...(usdzUploadResult?.publicUrl
                   ? { generatedUsdzUrl: usdzUploadResult.publicUrl }
@@ -1089,11 +1089,15 @@ function AdminWorksPageContent() {
             : work
         )
       );
-      setArTestFileMessage(
-        usdzUploadResult
-          ? "Test GLB and USDZ generated. Click Save Changes to publish these AR files."
-          : `Test GLB generated. USDZ is still needed for iPhone AR placement.${usdzUploadErrorMessage ? ` ${usdzUploadErrorMessage}` : ""}`
-      );
+      if (usdzUploadResult) {
+        setArTestFileMessage(
+          "GLB generated for web/Android preview. USDZ generated for iPhone Quick Look."
+        );
+      } else {
+        setArTestFileMessage(
+          `GLB generated for web/Android preview, but USDZ generation failed. iPhone AR placement still requires a valid USDZ file.${usdzUploadErrorMessage ? ` ${usdzUploadErrorMessage}` : ""}`
+        );
+      }
     } catch (error) {
       if (
         error instanceof Error &&

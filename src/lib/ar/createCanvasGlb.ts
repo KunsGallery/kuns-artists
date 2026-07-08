@@ -624,19 +624,6 @@ async function exportCanvasGlbBlob(scene: Scene, maxTextureSize: number) {
   return new Blob([result], { type: "model/gltf-binary" });
 }
 
-async function exportCanvasUsdzBlob(scene: Scene, maxTextureSize: number) {
-  const exporter = new USDZExporter();
-
-  const result = await exporter.parseAsync(scene, {
-    includeAnchoringProperties: true,
-    quickLookCompatible: true,
-    onlyVisible: true,
-    maxTextureSize,
-  });
-
-  return new Blob([result], { type: "model/vnd.usdz+zip" });
-}
-
 export type CanvasArAssetBlobs = {
   glbBlob: Blob;
   usdzBlob: Blob | null;
@@ -659,36 +646,231 @@ export async function createCanvasGlbBlob(
   }
 }
 
-export async function createCanvasArAssetBlobs(
+type CanvasUsdzTextureMode = "image" | "solid";
+
+type CanvasUsdzOptions = CanvasGlbOptions & {
+  usdzTextureMode?: CanvasUsdzTextureMode;
+};
+
+function createSolidUsdzMaterial(color: string) {
+  return new MeshStandardMaterial({
+    color,
+    metalness: 0,
+    roughness: 0.92,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    depthTest: true,
+    alphaTest: 0,
+    side: 0,
+  });
+}
+
+function createUsdzFrontTextureFromImage(
+  image: HTMLImageElement,
+  maxTextureSize: number
+) {
+  const { width, height } = getImageDimensions(image);
+  const largestSide = Math.max(width, height);
+  const scale =
+    largestSide > maxTextureSize ? maxTextureSize / largestSide : 1;
+  const targetWidth = Math.max(1, Math.round(width * scale));
+  const targetHeight = Math.max(1, Math.round(height * scale));
+  const canvas = document.createElement("canvas");
+
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) {
+    throw new Error("Failed to create the USDZ front texture canvas.");
+  }
+
+  // Flatten the image onto an opaque background so Quick Look never sees
+  // the artwork as transparent when the source image contains alpha.
+  ctx.fillStyle = "#f7f4ee";
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+  const texture = createCanvasTexture(canvas);
+  texture.flipY = false;
+
+  return texture;
+}
+
+function createCanvasUsdzScene(
   input: CanvasGlbInput,
-  options: CanvasGlbOptions = {}
-): Promise<CanvasArAssetBlobs> {
+  image: HTMLImageElement,
+  options: CanvasUsdzOptions = {}
+) {
+  const widthCm = Number(input.widthCm);
+  const heightCm = Number(input.heightCm);
+  const depthCm = Math.max(Number(input.depthCm ?? DEFAULT_DEPTH_CM), 2.5);
   const maxTextureSize = options.maxTextureSize ?? DEFAULT_MAX_TEXTURE_SIZE;
-  const { scene, dispose } = await buildCanvasArtworkScene(input, options);
+  const usdzTextureMode = options.usdzTextureMode ?? "image";
+  const rotationXRad =
+    ((options.frontRotationXDeg ?? DEFAULT_FRONT_ROTATION_X_DEG) * Math.PI) /
+    180;
+  const rotationYRad =
+    ((options.frontRotationYDeg ?? DEFAULT_FRONT_ROTATION_Y_DEG) * Math.PI) /
+    180;
+
+  assertPositiveNumber(widthCm, "Width");
+  assertPositiveNumber(heightCm, "Height");
+  assertPositiveNumber(depthCm, "Depth");
+
+  const width = widthCm / 100;
+  const height = heightCm / 100;
+  const depth = depthCm / 100;
+
+  const geometry = new BoxGeometry(width, height, depth);
+  geometry.clearGroups();
+  for (let faceIndex = 0; faceIndex < 6; faceIndex += 1) {
+    geometry.addGroup(faceIndex * 6, 6, faceIndex);
+  }
+
+  let frontMaterial: MeshStandardMaterial;
+  const sideMaterial = createSolidUsdzMaterial(options.sideColor ?? DEFAULT_SIDE_COLOR);
+  const backMaterial = createSolidUsdzMaterial(options.backColor ?? DEFAULT_BACK_COLOR);
+
+  if (usdzTextureMode === "solid") {
+    frontMaterial = createSolidUsdzMaterial("#f7f4ee");
+  } else {
+    frontMaterial = new MeshStandardMaterial({
+      map: createUsdzFrontTextureFromImage(
+        image,
+        maxTextureSize
+      ),
+      color: 0xffffff,
+      metalness: 0,
+      roughness: 0.9,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      depthTest: true,
+      alphaTest: 0,
+      side: 0,
+    });
+  }
+
+  const mesh = new Mesh(geometry, [
+    sideMaterial,
+    sideMaterial,
+    sideMaterial,
+    sideMaterial,
+    frontMaterial,
+    backMaterial,
+  ]);
+  mesh.name = "ArtworkCanvasUSDZ";
+  mesh.position.set(0, 0, 0);
+  mesh.rotation.set(rotationXRad, rotationYRad, 0);
+  mesh.scale.set(1, 1, 1);
+  mesh.matrixAutoUpdate = true;
+
+  const scene = new Scene();
+  scene.name = input.title.trim() || "Artwork Canvas USDZ";
+  scene.add(mesh);
+  scene.position.set(0, 0, 0);
+  scene.rotation.set(0, 0, 0);
+  scene.scale.set(1, 1, 1);
+  scene.updateMatrixWorld(true);
+
+  return {
+    scene,
+    dispose: () => {
+      geometry.dispose();
+      frontMaterial.dispose();
+      sideMaterial.dispose();
+      backMaterial.dispose();
+      const texture = frontMaterial.map as CanvasTexture | null;
+      texture?.dispose();
+    },
+  };
+}
+
+async function exportCanvasUsdzBlob(scene: Scene, maxTextureSize: number) {
+  const exporter = new USDZExporter();
+  const result = await exporter.parseAsync(scene, {
+    includeAnchoringProperties: true,
+    quickLookCompatible: true,
+    onlyVisible: true,
+    maxTextureSize,
+  });
+
+  const blob = new Blob([result], { type: "model/vnd.usdz+zip" });
+
+  if (blob.size < 20 * 1024) {
+    throw new Error(
+      "USDZ was generated but looks too small to be valid for iPhone Quick Look."
+    );
+  }
+
+  return blob;
+}
+
+export async function createCanvasUsdzBlob(
+  input: CanvasGlbInput,
+  options: CanvasUsdzOptions = {}
+): Promise<Blob> {
+  const maxTextureSize = options.maxTextureSize ?? DEFAULT_MAX_TEXTURE_SIZE;
+  const image = await loadHtmlImage(input.imageUrl);
+  const { scene, dispose } = createCanvasUsdzScene(input, image, options);
 
   try {
-    const glbBlob = await exportCanvasGlbBlob(scene, maxTextureSize);
-
-    try {
-      const usdzBlob = await exportCanvasUsdzBlob(scene, maxTextureSize);
-
-      return {
-        glbBlob,
-        usdzBlob,
-        usdzError: null,
-      };
-    } catch (error) {
-      return {
-        glbBlob,
-        usdzBlob: null,
-        usdzError: toUserFacingExportError(error),
-      };
-    }
+    return await exportCanvasUsdzBlob(scene, maxTextureSize);
   } catch (error) {
     throw toUserFacingExportError(error);
   } finally {
     dispose();
   }
+}
+
+export type CanvasArFilesResult = {
+  glbBlob: Blob;
+  usdzBlob?: Blob;
+  usdzError?: string;
+};
+
+export async function createCanvasArFiles(
+  input: CanvasGlbInput,
+  options: CanvasUsdzOptions = {}
+): Promise<CanvasArFilesResult> {
+  const [glbResult, usdzResult] = await Promise.allSettled([
+    createCanvasGlbBlob(input, options),
+    createCanvasUsdzBlob(input, options),
+  ]);
+
+  if (glbResult.status === "rejected") {
+    throw glbResult.reason;
+  }
+
+  if (usdzResult.status === "fulfilled") {
+    return {
+      glbBlob: glbResult.value,
+      usdzBlob: usdzResult.value,
+    };
+  }
+
+  const usdzError =
+    usdzResult.reason instanceof Error
+      ? usdzResult.reason.message
+      : typeof usdzResult.reason === "string"
+        ? usdzResult.reason
+        : "USDZ generation failed.";
+
+  return {
+    glbBlob: glbResult.value,
+    usdzError,
+  };
+}
+
+export async function createCanvasArAssetBlobs(
+  input: CanvasGlbInput,
+  options: CanvasUsdzOptions = {}
+): Promise<CanvasArFilesResult> {
+  return createCanvasArFiles(input, options);
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
