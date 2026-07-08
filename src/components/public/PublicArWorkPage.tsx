@@ -393,6 +393,20 @@ function PublicWorkContent({
                 : "An AR preview for this artwork is being prepared."}
             </p>
 
+            <div className="mt-6 flex flex-wrap gap-2">
+              {arReady ? (
+                <ButtonLink href="#ar-access" accent>
+                  View in AR
+                </ButtonLink>
+              ) : null}
+              <ButtonLink href={workHref} accent={!arReady}>
+                View Artwork
+              </ButtonLink>
+              {work.artistSlug ? (
+                <ButtonLink href={artistHref}>View Artist Page</ButtonLink>
+              ) : null}
+            </div>
+
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/62">
                 Digital archive
@@ -427,7 +441,7 @@ function PublicWorkContent({
           </section>
         </div>
 
-        <section className="mx-auto max-w-7xl px-5 pt-6 md:px-8 md:pt-8">
+        <section id="ar-access" className="mx-auto max-w-7xl px-5 pt-6 md:px-8 md:pt-8">
           <DeviceRedirect work={work} />
         </section>
 

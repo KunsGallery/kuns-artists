@@ -9,28 +9,51 @@ function AdminCard({
   label,
   title,
   description,
+  ctaHref,
+  ctaLabel,
+  ctaDescription,
 }: {
   href: string;
   label: string;
   title: string;
   description: string;
+  ctaHref?: string;
+  ctaLabel?: string;
+  ctaDescription?: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="group rounded-[1.75rem] border border-black/8 bg-white p-6 transition hover:-translate-y-0.5 hover:border-black/15 hover:shadow-[0_24px_60px_rgba(0,0,0,0.05)]"
-    >
-      <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-400">
-        {label}
-      </p>
-      <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-neutral-950">
-        {title}
-      </h2>
-      <p className="mt-4 text-sm leading-7 text-neutral-600">{description}</p>
-      <p className="mt-8 text-[11px] uppercase tracking-[0.24em] text-neutral-400 transition group-hover:text-neutral-700">
-        열기
-      </p>
-    </Link>
+    <div className="group rounded-[1.75rem] border border-black/8 bg-white p-6 transition hover:-translate-y-0.5 hover:border-black/15 hover:shadow-[0_24px_60px_rgba(0,0,0,0.05)]">
+      <Link href={href} className="block">
+        <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-400">
+          {label}
+        </p>
+        <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-neutral-950">
+          {title}
+        </h2>
+        <p className="mt-4 text-sm leading-7 text-neutral-600">
+          {description}
+        </p>
+        <p className="mt-8 text-[11px] uppercase tracking-[0.24em] text-neutral-400 transition group-hover:text-neutral-700">
+          열기
+        </p>
+      </Link>
+
+      {ctaHref && ctaLabel ? (
+        <div className="mt-6">
+          <Link
+            href={ctaHref}
+            className="inline-flex h-11 items-center rounded-full border border-[#F37021]/25 bg-[#F37021]/10 px-5 text-sm text-[#b85d18] transition hover:border-[#F37021]/40 hover:bg-[#F37021]/14"
+          >
+            {ctaLabel}
+          </Link>
+          {ctaDescription ? (
+            <p className="mt-3 text-xs leading-6 text-neutral-500">
+              {ctaDescription}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -131,6 +154,9 @@ export default function AdminPage() {
             label="작품 관리"
             title="작품 관리"
             description="공개 승인, 보관 상태, 모델 URL을 관리합니다."
+            ctaHref="/admin/works/new"
+            ctaLabel="Add Artwork"
+            ctaDescription="Register a new artwork for an artist."
           />
 
           <AdminCard

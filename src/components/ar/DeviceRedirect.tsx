@@ -97,6 +97,69 @@ function ActionLink({
   );
 }
 
+function getPrimaryArAction({
+  deviceInfo,
+  iosLink,
+  androidIntent,
+  glbUrl,
+}: {
+  deviceInfo: DeviceInfo;
+  iosLink: string;
+  androidIntent: string | null;
+  glbUrl: string;
+}) {
+  if (!deviceInfo.isReady || !deviceInfo.isMobile) {
+    return null;
+  }
+
+  if (deviceInfo.isIos) {
+    if (iosLink) {
+      return {
+        href: iosLink,
+        label: "View in AR",
+        rel: "ar",
+        note: "Open the artwork in Quick Look and place it in your space.",
+      };
+    }
+
+    if (glbUrl) {
+      return {
+        href: glbUrl,
+        label: "View 3D Preview",
+        note: "Open the 3D preview on this device.",
+      };
+    }
+  }
+
+  if (deviceInfo.isAndroid) {
+    if (androidIntent) {
+      return {
+        href: androidIntent,
+        label: "View in AR",
+        note: "Open the artwork in Scene Viewer.",
+      };
+    }
+
+    if (glbUrl) {
+      return {
+        href: glbUrl,
+        label: "Open AR Preview",
+        note: "Open the 3D preview on this device.",
+      };
+    }
+  }
+
+  if (glbUrl) {
+    return {
+      href: glbUrl,
+      label: "View 3D Preview",
+      note: "Open the 3D preview on this device.",
+    };
+  }
+
+  return null;
+}
+
 export default function DeviceRedirect({ work }: DeviceRedirectProps) {
   const [deviceInfo] = useState<DeviceInfo>(() => {
     if (typeof window === "undefined") {
@@ -124,9 +187,16 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
     return getAndroidSceneViewerIntent(absoluteGlbUrl, work.title);
   }, [absoluteGlbUrl, work.title]);
 
-  const hasIosAr = deviceInfo.isIos && Boolean(iosLink);
-  const hasAndroidAr = deviceInfo.isAndroid && Boolean(androidIntent);
-  const hasMobileAr = hasIosAr || hasAndroidAr;
+  const primaryArAction = useMemo(
+    () =>
+      getPrimaryArAction({
+        deviceInfo,
+        iosLink,
+        androidIntent,
+        glbUrl: absoluteGlbUrl,
+      }),
+    [absoluteGlbUrl, androidIntent, deviceInfo, iosLink]
+  );
 
   const previewVisual = imageUrl ? (
     <div className="relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/20">
@@ -188,10 +258,10 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
               Mobile Viewing Room
             </p>
             <h3 className="mt-3 text-2xl font-medium tracking-[-0.04em] text-[#F7F1E8] md:text-3xl">
-              AR preview is being prepared.
+              AR preview is being prepared for this artwork.
             </h3>
             <p className="mt-4 max-w-xl text-sm leading-7 text-white/62">
-              This artwork page is available, but the AR preview file has not been connected yet.
+              This artwork page is available, but the AR preview is still being prepared.
             </p>
 
             <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
@@ -215,7 +285,7 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
             </div>
 
             <div className="mt-6 rounded-[1.5rem] border border-[#F37021]/15 bg-[#F37021]/8 px-4 py-4 text-sm leading-7 text-[#ffb37a]">
-              The AR preview will appear here once the gallery connects the required file.
+              The AR preview will appear here once it is ready.
             </div>
           </div>
         </div>
@@ -244,48 +314,43 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
 
         <div className="p-5 md:p-6 lg:p-8">
           <div className="mb-5 h-px w-24 bg-gradient-to-r from-[#F37021]/80 to-transparent" />
-            <p className="text-[11px] uppercase tracking-[0.28em] text-white/42">
+          <p className="text-[11px] uppercase tracking-[0.28em] text-white/42">
             AR Access
           </p>
           <h3 className="mt-3 text-2xl font-medium tracking-[-0.04em] text-[#F7F1E8] md:text-3xl">
-            {deviceInfo.isReady && deviceInfo.isMobile
-              ? "Use your device camera and supported browser for the best AR viewing room experience."
-              : "Open this page on a mobile device to continue into the AR viewing room."}
+            {deviceInfo.isMobile
+              ? primaryArAction?.label || "Open the AR preview on a supported mobile device."
+              : "Scan the QR code to continue on mobile."}
           </h3>
           <p className="mt-4 max-w-xl text-sm leading-7 text-white/62">
-            Desktop users can scan the QR code to continue on mobile. Mobile users can launch the AR view directly when supported.
+            {deviceInfo.isMobile
+              ? primaryArAction?.note ||
+                "Open the artwork in a supported mobile browser to continue the viewing room."
+              : "Desktop users can scan the QR code to continue on mobile. The preview stays focused on the artwork."}
           </p>
 
           <div className="mt-6">
-            {deviceInfo.isReady && deviceInfo.isMobile ? (
-              <div className="flex flex-col gap-3">
-                {hasIosAr && iosLink ? (
+            {deviceInfo.isMobile ? (
+              primaryArAction ? (
+                <div className="flex flex-col gap-3">
                   <a
-                    href={iosLink}
-                    rel="ar"
+                    href={primaryArAction.href}
+                    rel={primaryArAction.rel}
                     className="inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16"
                   >
-                    View in AR
+                    {primaryArAction.label}
                   </a>
-                ) : null}
-                {hasAndroidAr && androidIntent ? (
-                  <a
-                    href={androidIntent}
-                    className="inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16"
-                  >
-                    View in AR
-                  </a>
-                ) : null}
-                {!hasMobileAr ? (
-                  <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-7 text-white/60">
-                    AR preview is being prepared.
-                    <br />
-                    <span className="text-white/46">
-                      This artwork page is available, but the AR preview file has not been connected yet.
+                  {primaryArAction.rel === "ar" ? (
+                    <span className="inline-flex w-fit rounded-full border border-[#F37021]/25 bg-[#F37021]/10 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-[#ffad76]">
+                      AR LIVE
                     </span>
-                  </div>
-                ) : null}
-              </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-7 text-white/60">
+                  AR preview is being prepared for this artwork.
+                </div>
+              )
             ) : (
               <QRCodePanel url={deviceInfo.currentUrl} />
             )}

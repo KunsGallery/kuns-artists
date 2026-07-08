@@ -1100,7 +1100,7 @@ function AdminWorksPageContent() {
               href="/admin/works/new"
               className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"
             >
-              새 작품 등록
+              Add Artwork
             </Link>
 
             <Link
@@ -1118,15 +1118,26 @@ function AdminWorksPageContent() {
 
         <section className="grid gap-8 py-12 md:grid-cols-[1.05fr_0.95fr] md:items-end md:py-16">
           <div className="max-w-4xl">
-            <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
-              Works Review
-            </p>
+            <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-neutral-500">
+                  Works Review
+                </p>
 
-            <h1 className="mt-5 text-5xl font-semibold tracking-[-0.04em] text-neutral-950 md:text-7xl md:leading-[0.95]">
-              Works
-              <br />
-              Review.
-            </h1>
+                <h1 className="mt-5 text-5xl font-semibold tracking-[-0.04em] text-neutral-950 md:text-7xl md:leading-[0.95]">
+                  Works
+                  <br />
+                  Review.
+                </h1>
+              </div>
+
+              <Link
+                href="/admin/works/new"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/25 bg-[#F37021]/10 px-5 text-sm text-[#b85d18] transition hover:border-[#F37021]/40 hover:bg-[#F37021]/14"
+              >
+                Add Artwork
+              </Link>
+            </div>
 
             <p className="mt-8 max-w-2xl text-sm leading-7 text-neutral-600 md:text-[15px]">
               작가가 등록한 작품을 확인하고, 공개 여부와 아카이브 상태를 관리합니다.
