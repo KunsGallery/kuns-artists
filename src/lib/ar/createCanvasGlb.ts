@@ -8,6 +8,7 @@ import {
   SRGBColorSpace,
 } from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
+import { USDZExporter } from "three/examples/jsm/exporters/USDZExporter.js";
 
 export type CanvasGlbInput = {
   imageUrl: string;
@@ -406,11 +407,11 @@ function toUserFacingExportError(error: unknown) {
     /security|taint|cross-origin|cors|origin-clean|insecure/i.test(message)
   ) {
     return new Error(
-      "GLB export failed because the artwork image is blocked by CORS. Use a same-origin image or enable Access-Control-Allow-Origin on the source."
+      "The artwork export failed because the image is blocked by CORS. Use a same-origin image or enable Access-Control-Allow-Origin on the source."
     );
   }
 
-  return new Error(`GLB export failed. ${message}`);
+  return new Error(`Export failed. ${message}`);
 }
 
 async function loadHtmlImage(imageUrl: string): Promise<HTMLImageElement> {
@@ -430,10 +431,15 @@ async function loadHtmlImage(imageUrl: string): Promise<HTMLImageElement> {
   });
 }
 
-export async function createCanvasGlbBlob(
+type CanvasArtworkScene = {
+  scene: Scene;
+  dispose: () => void;
+};
+
+async function buildCanvasArtworkScene(
   input: CanvasGlbInput,
   options: CanvasGlbOptions = {}
-): Promise<Blob> {
+): Promise<CanvasArtworkScene> {
   const widthCm = Number(input.widthCm);
   const heightCm = Number(input.heightCm);
   const depthCm = Number(input.depthCm ?? DEFAULT_DEPTH_CM);
@@ -563,55 +569,125 @@ export async function createCanvasGlbBlob(
   scene.name = input.title.trim() || "Artwork Canvas";
   scene.add(root);
 
+  return {
+    scene,
+    dispose: () => {
+      geometry.dispose();
+      const disposableMaterials = new Set([
+        frontMaterial,
+        sideMaterial,
+        backMaterial,
+        rightEdgeMaterial,
+        leftEdgeMaterial,
+        topEdgeMaterial,
+        bottomEdgeMaterial,
+      ]);
+
+      for (const material of disposableMaterials) {
+        if (!material) continue;
+        material.dispose();
+      }
+      frontTexture.dispose();
+      backTexture?.dispose();
+      edgeTextures?.left.dispose();
+      edgeTextures?.right.dispose();
+      edgeTextures?.top.dispose();
+      edgeTextures?.bottom.dispose();
+    },
+  };
+}
+
+async function exportCanvasGlbBlob(scene: Scene, maxTextureSize: number) {
   const exporter = new GLTFExporter();
 
-  try {
-    const result = await new Promise<ArrayBuffer>((resolve, reject) => {
-      exporter.parse(
-        scene,
-        (gltf) => {
-          if (gltf instanceof ArrayBuffer) {
-            resolve(gltf);
-            return;
-          }
-
-          reject(new Error("GLB export failed: expected ArrayBuffer output."));
-        },
-        (error) => reject(error),
-        {
-          binary: true,
-          trs: true,
-          onlyVisible: true,
-          maxTextureSize,
+  const result = await new Promise<ArrayBuffer>((resolve, reject) => {
+    exporter.parse(
+      scene,
+      (gltf) => {
+        if (gltf instanceof ArrayBuffer) {
+          resolve(gltf);
+          return;
         }
-      );
-    });
 
-    return new Blob([result], { type: "model/gltf-binary" });
+        reject(new Error("GLB export failed: expected ArrayBuffer output."));
+      },
+      (error) => reject(error),
+      {
+        binary: true,
+        trs: true,
+        onlyVisible: true,
+        maxTextureSize,
+      }
+    );
+  });
+
+  return new Blob([result], { type: "model/gltf-binary" });
+}
+
+async function exportCanvasUsdzBlob(scene: Scene, maxTextureSize: number) {
+  const exporter = new USDZExporter();
+
+  const result = await exporter.parseAsync(scene, {
+    includeAnchoringProperties: true,
+    quickLookCompatible: true,
+    onlyVisible: true,
+    maxTextureSize,
+  });
+
+  return new Blob([result], { type: "model/vnd.usdz+zip" });
+}
+
+export type CanvasArAssetBlobs = {
+  glbBlob: Blob;
+  usdzBlob: Blob | null;
+  usdzError: Error | null;
+};
+
+export async function createCanvasGlbBlob(
+  input: CanvasGlbInput,
+  options: CanvasGlbOptions = {}
+): Promise<Blob> {
+  const maxTextureSize = options.maxTextureSize ?? DEFAULT_MAX_TEXTURE_SIZE;
+  const { scene, dispose } = await buildCanvasArtworkScene(input, options);
+
+  try {
+    return await exportCanvasGlbBlob(scene, maxTextureSize);
   } catch (error) {
     throw toUserFacingExportError(error);
   } finally {
-    geometry.dispose();
-    const disposableMaterials = new Set([
-      frontMaterial,
-      sideMaterial,
-      backMaterial,
-      rightEdgeMaterial,
-      leftEdgeMaterial,
-      topEdgeMaterial,
-      bottomEdgeMaterial,
-    ]);
+    dispose();
+  }
+}
 
-    for (const material of disposableMaterials) {
-      if (!material) continue;
-      material.dispose();
+export async function createCanvasArAssetBlobs(
+  input: CanvasGlbInput,
+  options: CanvasGlbOptions = {}
+): Promise<CanvasArAssetBlobs> {
+  const maxTextureSize = options.maxTextureSize ?? DEFAULT_MAX_TEXTURE_SIZE;
+  const { scene, dispose } = await buildCanvasArtworkScene(input, options);
+
+  try {
+    const glbBlob = await exportCanvasGlbBlob(scene, maxTextureSize);
+
+    try {
+      const usdzBlob = await exportCanvasUsdzBlob(scene, maxTextureSize);
+
+      return {
+        glbBlob,
+        usdzBlob,
+        usdzError: null,
+      };
+    } catch (error) {
+      return {
+        glbBlob,
+        usdzBlob: null,
+        usdzError: toUserFacingExportError(error),
+      };
     }
-    frontTexture.dispose();
-    backTexture?.dispose();
-    edgeTextures?.left.dispose();
-    edgeTextures?.right.dispose();
-    edgeTextures?.top.dispose();
-    edgeTextures?.bottom.dispose();
+  } catch (error) {
+    throw toUserFacingExportError(error);
+  } finally {
+    dispose();
   }
 }
 

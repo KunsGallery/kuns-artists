@@ -17,8 +17,13 @@ import {
   type ArtistWorkAdminUpdatePayload,
   type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
-import { deleteR2ObjectsByPublicUrls } from "@/lib/r2/client";
+import {
+  deleteR2ObjectsByPublicUrls,
+  uploadGlbFileToR2,
+  uploadUsdzFileToR2,
+} from "@/lib/r2/client";
 import { hasArAsset } from "@/lib/workDisplay";
+import { createCanvasArAssetBlobs, createSafeGlbFilename } from "@/lib/ar/createCanvasGlb";
 
 type WorkFormValues = ArtistWorkAdminUpdatePayload;
 type StatusFilter = "all" | "pending" | "published" | "archived";
@@ -139,14 +144,13 @@ function parseOptionalNumberInput(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function hasArAssetInForm(form: WorkFormValues) {
+function hasGlbAssetInForm(form: WorkFormValues) {
+  return Boolean([form.generatedGlbUrl, form.modelGlb].some((value) => value?.trim()));
+}
+
+function hasUsdzAssetInForm(form: WorkFormValues) {
   return Boolean(
-    [
-      form.generatedGlbUrl,
-      form.modelGlb,
-      form.generatedUsdzUrl,
-      form.modelUsdz,
-    ].some((value) => value?.trim())
+    [form.generatedUsdzUrl, form.modelUsdz].some((value) => value?.trim())
   );
 }
 
@@ -829,7 +833,10 @@ function AdminWorksPageContent() {
     : "";
   const publicWorkHref = selectedWorkSlug ? `/works/${selectedWorkSlug}` : "";
   const arHref = selectedWorkSlug ? `/ar/${selectedWorkSlug}` : "";
-  const arReadyFromForm = hasArAssetInForm(selectedForm);
+  const hasGlbInForm = hasGlbAssetInForm(selectedForm);
+  const hasUsdzInForm = hasUsdzAssetInForm(selectedForm);
+  const isWebPreviewReady = hasGlbInForm;
+  const isIphonePlacementReady = hasUsdzInForm;
   const selectedArtworkImageUrl =
     selectedForm.coverImageUrl?.trim() ||
     selectedWork?.coverImageUrl?.trim() ||
@@ -870,11 +877,18 @@ function AdminWorksPageContent() {
       tone: hasWorkRouteSlug ? "ready" : "missing",
     },
     {
-      label: "AR file",
-      detail: arReadyFromForm
-        ? "A GLB or USDZ file is already connected."
-        : "No AR file connected yet.",
-      tone: arReadyFromForm ? "ready" : "preparing",
+      label: "GLB preview",
+      detail: isWebPreviewReady
+        ? "Web / Android AR preview is ready."
+        : "No GLB connected yet.",
+      tone: isWebPreviewReady ? "ready" : "preparing",
+    },
+    {
+      label: "USDZ placement",
+      detail: isIphonePlacementReady
+        ? "iPhone Quick Look placement is ready."
+        : "USDZ is still needed for iPhone placement.",
+      tone: isIphonePlacementReady ? "ready" : "missing",
     },
   ] as const;
   const hasObjectSettings = [
@@ -1001,15 +1015,7 @@ function AdminWorksPageContent() {
     setArTestFileErrorMessage("");
 
     try {
-      const [
-        { createCanvasGlbBlob, createSafeGlbFilename },
-        { uploadGlbFileToR2 },
-      ] = await Promise.all([
-        import("@/lib/ar/createCanvasGlb"),
-        import("@/lib/r2/client"),
-      ]);
-
-      const glbBlob = await createCanvasGlbBlob(
+      const { glbBlob, usdzBlob, usdzError } = await createCanvasArAssetBlobs(
         {
           imageUrl: coverImageUrl,
           title: selectedWork.title || "Artwork",
@@ -1029,32 +1035,64 @@ function AdminWorksPageContent() {
         }
       );
 
-      const filename = createSafeGlbFilename(
+      const glbFilename = createSafeGlbFilename(
         selectedWork.title || selectedWork.slug || selectedWork.id || "artwork"
       );
-      const uploadResult = await uploadGlbFileToR2({
+      const usdzFilename = glbFilename.replace(/\.glb$/i, ".usdz");
+
+      const glbUploadResult = await uploadGlbFileToR2({
         blob: glbBlob,
-        filename,
+        filename: glbFilename,
         artistSlug: artistSlugForUpload,
         workSlug: workSlugForUpload,
       });
 
+      let usdzUploadResult: Awaited<ReturnType<typeof uploadUsdzFileToR2>> | null =
+        null;
+      let usdzUploadErrorMessage = "";
+
+      if (usdzBlob) {
+        try {
+          usdzUploadResult = await uploadUsdzFileToR2({
+            blob: usdzBlob,
+            filename: usdzFilename,
+            artistSlug: artistSlugForUpload,
+            workSlug: workSlugForUpload,
+          });
+        } catch (error) {
+          usdzUploadErrorMessage =
+            error instanceof Error
+              ? error.message
+              : "AR 준비용 USDZ 파일 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.";
+        }
+      } else if (usdzError) {
+        usdzUploadErrorMessage = usdzError.message;
+      }
+
       setSelectedForm((current) => ({
         ...current,
-        generatedGlbUrl: uploadResult.publicUrl,
+        generatedGlbUrl: glbUploadResult.publicUrl,
+        ...(usdzUploadResult?.publicUrl
+          ? { generatedUsdzUrl: usdzUploadResult.publicUrl }
+          : {}),
       }));
       setWorks((current) =>
         current.map((work) =>
           work.id === selectedWork.id
             ? {
                 ...work,
-                generatedGlbUrl: uploadResult.publicUrl,
+                generatedGlbUrl: glbUploadResult.publicUrl,
+                ...(usdzUploadResult?.publicUrl
+                  ? { generatedUsdzUrl: usdzUploadResult.publicUrl }
+                  : {}),
               }
             : work
         )
       );
       setArTestFileMessage(
-        "Test GLB generated. Click Save Changes to publish this AR file."
+        usdzUploadResult
+          ? "Test GLB and USDZ generated. Click Save Changes to publish these AR files."
+          : `Test GLB generated. USDZ is still needed for iPhone AR placement.${usdzUploadErrorMessage ? ` ${usdzUploadErrorMessage}` : ""}`
       );
     } catch (error) {
       if (
@@ -1563,21 +1601,40 @@ function AdminWorksPageContent() {
                           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="max-w-2xl">
                               <h4 className="text-2xl font-semibold tracking-[-0.04em] text-[#F7F1E8]">
-                                {arReadyFromForm
-                                  ? "AR Preview Ready"
-                                  : "AR Preview Preparing"}
+                                {isIphonePlacementReady
+                                  ? "iPhone AR Placement Ready"
+                                  : isWebPreviewReady
+                                    ? "Web / Android Preview Ready"
+                                    : "AR Preview Preparing"}
                               </h4>
                               <p className="mt-2 text-sm leading-7 text-white/66">
-                                {arReadyFromForm
-                                  ? "An AR file is connected. The public artwork and AR pages will show AR Preview Available."
-                                  : "Connect a GLB or USDZ URL, or generate a test GLB, to enable AR Preview."}
+                                {isIphonePlacementReady
+                                  ? "USDZ is connected, so iPhone Quick Look placement is ready. GLB still powers the web and Android preview."
+                                  : isWebPreviewReady
+                                    ? "GLB is connected, so web and Android previews are ready. Add a USDZ URL to restore iPhone placement."
+                                    : "Connect a GLB or USDZ URL, or generate a test AR file set, to enable the preview flow."}
                               </p>
                             </div>
-                            <ArPill
-                              tone={arReadyFromForm ? "ready" : "preparing"}
-                            >
-                              {arReadyFromForm ? "Ready" : "Preparing"}
-                            </ArPill>
+                            <div className="flex flex-col items-start gap-2">
+                              <ArPill
+                                tone={
+                                  isIphonePlacementReady
+                                    ? "ready"
+                                    : isWebPreviewReady
+                                      ? "preparing"
+                                      : "missing"
+                                }
+                              >
+                                {isIphonePlacementReady
+                                  ? "iPhone Ready"
+                                  : isWebPreviewReady
+                                    ? "Web Ready"
+                                    : "Waiting"}
+                              </ArPill>
+                              <span className="text-[11px] uppercase tracking-[0.22em] text-white/40">
+                                USDZ unlocks Quick Look placement
+                              </span>
+                            </div>
                           </div>
                         </div>
 
@@ -1591,7 +1648,7 @@ function AdminWorksPageContent() {
                                 Check the items below before generating or linking AR files.
                               </p>
                             </div>
-                            <ArPill tone="neutral">5 checks</ArPill>
+                            <ArPill tone="neutral">6 checks</ArPill>
                           </div>
 
                           <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -1670,10 +1727,10 @@ function AdminWorksPageContent() {
                       <div className="space-y-4">
                         <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
                           <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                            Generate Test GLB
+                            Generate AR Files
                           </p>
                           <p className="mt-2 text-sm leading-7 text-white/66">
-                            작품 이미지와 크기를 기준으로 테스트용 GLB 파일을 생성합니다.
+                            작품 이미지와 크기를 기준으로 테스트용 GLB와 USDZ 파일을 함께 생성합니다.
                           </p>
                           <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-black/20 px-4 py-4">
                             <p className="text-[11px] uppercase tracking-[0.24em] text-white/40">
@@ -1682,7 +1739,8 @@ function AdminWorksPageContent() {
                             <ul className="mt-3 space-y-2 text-sm leading-6 text-white/58">
                               <li>Artwork image is required.</li>
                               <li>Width and height are required.</li>
-                              <li>`generatedGlbUrl` will be updated in the form only.</li>
+                              <li>GLB powers web and Android preview.</li>
+                              <li>USDZ powers iPhone Quick Look placement.</li>
                               <li>Click Save Changes to publish it.</li>
                             </ul>
                           </div>
@@ -1694,8 +1752,8 @@ function AdminWorksPageContent() {
                             className="mt-4 inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {isGeneratingArTestFile
-                              ? "Generating Test GLB..."
-                              : "Generate Test GLB"}
+                              ? "Generating AR Files..."
+                              : "Generate AR Files"}
                           </button>
 
                           {arTestFileMessage ? (
@@ -1745,60 +1803,58 @@ function AdminWorksPageContent() {
                           </div>
                         </div>
 
-                        <details className="group rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
-                          <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
                                 Manual AR File URLs
                               </p>
                               <p className="mt-2 text-sm leading-7 text-white/60">
-                                Use this area when you already have GLB or USDZ files prepared.
+                                If the automatic generator is not enough, connect GLB and USDZ URLs directly here.
                               </p>
                             </div>
                             <ArPill tone="neutral">Optional</ArPill>
-                          </summary>
-
-                          <div className="mt-4 border-t border-white/10 pt-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <ArTextField
-                                label="generatedGlbUrl"
-                                value={selectedForm.generatedGlbUrl || ""}
-                                onChange={(value) =>
-                                  updateSelectedField("generatedGlbUrl", value)
-                                }
-                                placeholder="https://..."
-                                helpText="자동 생성 또는 업로드된 GLB URL을 연결합니다."
-                              />
-                              <ArTextField
-                                label="generatedUsdzUrl"
-                                value={selectedForm.generatedUsdzUrl || ""}
-                                onChange={(value) =>
-                                  updateSelectedField("generatedUsdzUrl", value)
-                                }
-                                placeholder="https://..."
-                                helpText="자동 생성 또는 업로드된 USDZ URL을 연결합니다."
-                              />
-                              <ArTextField
-                                label="modelGlb"
-                                value={selectedForm.modelGlb || ""}
-                                onChange={(value) =>
-                                  updateSelectedField("modelGlb", value)
-                                }
-                                placeholder="https://..."
-                                helpText="수동으로 준비한 GLB URL을 연결합니다."
-                              />
-                              <ArTextField
-                                label="modelUsdz"
-                                value={selectedForm.modelUsdz || ""}
-                                onChange={(value) =>
-                                  updateSelectedField("modelUsdz", value)
-                                }
-                                placeholder="https://..."
-                                helpText="수동으로 준비한 USDZ URL을 연결합니다."
-                              />
-                            </div>
                           </div>
-                        </details>
+
+                          <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            <ArTextField
+                              label="generatedGlbUrl"
+                              value={selectedForm.generatedGlbUrl || ""}
+                              onChange={(value) =>
+                                updateSelectedField("generatedGlbUrl", value)
+                              }
+                              placeholder="https://..."
+                              helpText="Generated GLB URL. This powers web and Android preview."
+                            />
+                            <ArTextField
+                              label="generatedUsdzUrl"
+                              value={selectedForm.generatedUsdzUrl || ""}
+                              onChange={(value) =>
+                                updateSelectedField("generatedUsdzUrl", value)
+                              }
+                              placeholder="https://..."
+                              helpText="Generated USDZ URL. This restores iPhone Quick Look placement."
+                            />
+                            <ArTextField
+                              label="modelGlb"
+                              value={selectedForm.modelGlb || ""}
+                              onChange={(value) =>
+                                updateSelectedField("modelGlb", value)
+                              }
+                              placeholder="https://..."
+                              helpText="Manual GLB URL if you already prepared one."
+                            />
+                            <ArTextField
+                              label="modelUsdz"
+                              value={selectedForm.modelUsdz || ""}
+                              onChange={(value) =>
+                                updateSelectedField("modelUsdz", value)
+                              }
+                              placeholder="https://..."
+                              helpText="Manual USDZ URL for iPhone AR placement."
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
