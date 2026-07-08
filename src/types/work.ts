@@ -15,6 +15,12 @@ export type Work = {
   widthCm?: number;
   heightCm?: number;
   depthCm?: number;
+  arTextureRotationDeg?: number;
+  arTextureFlipX?: boolean;
+  arTextureFlipY?: boolean;
+  arSideColor?: string;
+  arDepthCm?: number;
+  arBackLabelEnabled?: boolean;
   frontRotationXDeg?: number;
   frontRotationYDeg?: number;
   sideMode?: "canvas" | "image";

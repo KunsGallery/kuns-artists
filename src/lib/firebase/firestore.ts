@@ -119,6 +119,12 @@ export type ArtistWorkDoc = {
   widthCm?: number;
   heightCm?: number;
   depthCm?: number;
+  arTextureRotationDeg?: number;
+  arTextureFlipX?: boolean;
+  arTextureFlipY?: boolean;
+  arSideColor?: string;
+  arDepthCm?: number;
+  arBackLabelEnabled?: boolean;
   frontRotationXDeg?: number;
   frontRotationYDeg?: number;
   sideMode?: WorkSideMode;
@@ -182,6 +188,12 @@ export type ArtistWorkAdminUpdatePayload = {
   generatedGlbUrl?: string;
   generatedUsdzUrl?: string;
   displayOrder?: number;
+  arTextureRotationDeg?: number;
+  arTextureFlipX?: boolean;
+  arTextureFlipY?: boolean;
+  arSideColor?: string;
+  arDepthCm?: number;
+  arBackLabelEnabled?: boolean;
   docentAudioEnabled?: boolean;
   docentAudioUrl?: string;
   docentAudioTitle?: string;
@@ -459,6 +471,12 @@ function toArtistWorkDoc(id: string, rawData: Record<string, unknown>): ArtistWo
     widthCm: toOptionalNumber(rawData.widthCm),
     heightCm: toOptionalNumber(rawData.heightCm),
     depthCm: toOptionalNumber(rawData.depthCm),
+    arTextureRotationDeg: toOptionalNumber(rawData.arTextureRotationDeg),
+    arTextureFlipX: toOptionalBoolean(rawData.arTextureFlipX),
+    arTextureFlipY: toOptionalBoolean(rawData.arTextureFlipY),
+    arSideColor: toOptionalString(rawData.arSideColor),
+    arDepthCm: toOptionalNumber(rawData.arDepthCm),
+    arBackLabelEnabled: toOptionalBoolean(rawData.arBackLabelEnabled),
     frontRotationXDeg: toOptionalNumber(rawData.frontRotationXDeg),
     frontRotationYDeg: toOptionalNumber(rawData.frontRotationYDeg),
     sideMode: toOptionalSideMode(rawData.sideMode),
@@ -1323,6 +1341,30 @@ export async function updateWorkForAdmin(
     if (normalizedDisplayOrder !== undefined) {
       updatePayload.displayOrder = normalizedDisplayOrder;
     }
+  }
+
+  if (payload.arTextureRotationDeg !== undefined) {
+    updatePayload.arTextureRotationDeg = payload.arTextureRotationDeg;
+  }
+
+  if (payload.arTextureFlipX !== undefined) {
+    updatePayload.arTextureFlipX = payload.arTextureFlipX;
+  }
+
+  if (payload.arTextureFlipY !== undefined) {
+    updatePayload.arTextureFlipY = payload.arTextureFlipY;
+  }
+
+  if (payload.arSideColor !== undefined) {
+    updatePayload.arSideColor = payload.arSideColor.trim();
+  }
+
+  if (payload.arDepthCm !== undefined) {
+    updatePayload.arDepthCm = payload.arDepthCm;
+  }
+
+  if (payload.arBackLabelEnabled !== undefined) {
+    updatePayload.arBackLabelEnabled = payload.arBackLabelEnabled;
   }
 
   if (payload.docentAudioEnabled !== undefined) {

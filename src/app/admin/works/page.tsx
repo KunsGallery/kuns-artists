@@ -14,7 +14,6 @@ import {
   resolveArtistWorkSlug,
   updateWorkForAdmin,
   type ArtistDoc,
-  type ArtistWorkAdminUpdatePayload,
   type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
 import {
@@ -25,7 +24,35 @@ import {
 import { hasArAsset } from "@/lib/workDisplay";
 import { createCanvasArFiles, createSafeGlbFilename } from "@/lib/ar/createCanvasGlb";
 
-type WorkFormValues = ArtistWorkAdminUpdatePayload;
+const DEFAULT_AR_SIDE_COLOR = "#111111";
+const DEFAULT_AR_DEPTH_CM = 3.5;
+const MIN_AR_DEPTH_CM = 3;
+const AR_TEXTURE_ROTATION_CHOICES = [0, 90, 180, 270] as const;
+
+type WorkFormValues = {
+  isPublished: boolean;
+  archived: boolean;
+  coverImageUrl: string;
+  modelGlb: string;
+  modelUsdz: string;
+  generatedGlbUrl: string;
+  generatedUsdzUrl: string;
+  displayOrder?: number;
+  arTextureRotationDeg: number;
+  arTextureFlipX: boolean;
+  arTextureFlipY: boolean;
+  arSideColor: string;
+  arDepthCm: string;
+  arBackLabelEnabled: boolean;
+  frontRotationXDeg?: number;
+  frontRotationYDeg?: number;
+  sideMode?: "canvas" | "image";
+  showBackLabel?: boolean;
+  docentAudioEnabled?: boolean;
+  docentAudioUrl?: string;
+  docentAudioTitle?: string;
+  docentAudioDescription?: string;
+};
 type StatusFilter = "all" | "pending" | "published" | "archived";
 type ArtistFilter = "all" | "represented" | "project";
 
@@ -37,6 +64,12 @@ const EMPTY_FORM: WorkFormValues = {
   modelUsdz: "",
   generatedGlbUrl: "",
   generatedUsdzUrl: "",
+  arTextureRotationDeg: 0,
+  arTextureFlipX: false,
+  arTextureFlipY: false,
+  arSideColor: DEFAULT_AR_SIDE_COLOR,
+  arDepthCm: String(DEFAULT_AR_DEPTH_CM),
+  arBackLabelEnabled: true,
   docentAudioEnabled: false,
   docentAudioUrl: "",
   docentAudioTitle: "",
@@ -63,6 +96,9 @@ const REPRESENTED_ARTIST_SLUGS = new Set(
 );
 
 function toFormValues(work: ArtistWorkDoc): WorkFormValues {
+  const fallbackDepthCm = normalizeArDepthCm(
+    work.arDepthCm ?? work.depthCm ?? DEFAULT_AR_DEPTH_CM
+  );
   return {
     isPublished: work.isPublished === true,
     archived: work.archived === true,
@@ -72,6 +108,17 @@ function toFormValues(work: ArtistWorkDoc): WorkFormValues {
     generatedGlbUrl: work.generatedGlbUrl || "",
     generatedUsdzUrl: work.generatedUsdzUrl || "",
     displayOrder: work.displayOrder,
+    arTextureRotationDeg: normalizeArTextureRotationDeg(
+      work.arTextureRotationDeg ?? work.frontRotationYDeg ?? 0
+    ),
+    arTextureFlipX: work.arTextureFlipX === true,
+    arTextureFlipY: work.arTextureFlipY === true,
+    arSideColor: normalizeArSideColor(work.arSideColor ?? undefined),
+    arDepthCm: String(fallbackDepthCm),
+    arBackLabelEnabled:
+      work.arBackLabelEnabled ??
+      work.showBackLabel ??
+      true,
     docentAudioEnabled: work.docentAudioEnabled === true,
     docentAudioUrl: work.docentAudioUrl || "",
     docentAudioTitle: work.docentAudioTitle || "",
@@ -144,6 +191,38 @@ function parseOptionalNumberInput(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function normalizeArTextureRotationDeg(value?: number | null) {
+  if (!Number.isFinite(value ?? NaN)) {
+    return 0;
+  }
+
+  const normalized = ((Math.round(value ?? 0) % 360) + 360) % 360;
+
+  return AR_TEXTURE_ROTATION_CHOICES.includes(
+    normalized as (typeof AR_TEXTURE_ROTATION_CHOICES)[number]
+  )
+    ? (normalized as (typeof AR_TEXTURE_ROTATION_CHOICES)[number])
+    : 0;
+}
+
+function normalizeArDepthCm(value?: number | null) {
+  if (!Number.isFinite(value ?? NaN)) {
+    return DEFAULT_AR_DEPTH_CM;
+  }
+
+  return Math.max(MIN_AR_DEPTH_CM, Number(value));
+}
+
+function normalizeArSideColor(value?: string | null) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return DEFAULT_AR_SIDE_COLOR;
+  }
+
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : DEFAULT_AR_SIDE_COLOR;
+}
+
 function hasGlbAssetInForm(form: WorkFormValues) {
   return Boolean([form.generatedGlbUrl, form.modelGlb].some((value) => value?.trim()));
 }
@@ -168,6 +247,65 @@ function hasPositiveNumber(value?: number | null) {
 
 function hasFiniteNumber(value?: number | null) {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function formatArDepthCm(value?: string | number | null) {
+  if (typeof value === "string") {
+    const parsed = parseOptionalNumberInput(value);
+    return parsed !== undefined ? parsed : DEFAULT_AR_DEPTH_CM;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  return DEFAULT_AR_DEPTH_CM;
+}
+
+function getArDepthCmNumber(form: WorkFormValues, work?: ArtistWorkDoc | null) {
+  const parsed = parseOptionalNumberInput(form.arDepthCm);
+  const fallback = normalizeArDepthCm(
+    work?.arDepthCm ?? work?.depthCm ?? DEFAULT_AR_DEPTH_CM
+  );
+
+  return normalizeArDepthCm(parsed ?? fallback);
+}
+
+function getArBackLabelEnabled(form: WorkFormValues, work?: ArtistWorkDoc | null) {
+  return form.arBackLabelEnabled ?? work?.arBackLabelEnabled ?? work?.showBackLabel ?? true;
+}
+
+function getArSideColor(form: WorkFormValues, work?: ArtistWorkDoc | null) {
+  return normalizeArSideColor(form.arSideColor || work?.arSideColor || DEFAULT_AR_SIDE_COLOR);
+}
+
+function getArTextureRotationDeg(
+  form: WorkFormValues,
+  work?: ArtistWorkDoc | null
+) {
+  const value = form.arTextureRotationDeg ?? work?.arTextureRotationDeg ?? work?.frontRotationYDeg ?? 0;
+  return normalizeArTextureRotationDeg(value);
+}
+
+function hasArSettingsChanged(form: WorkFormValues, work?: ArtistWorkDoc | null) {
+  if (!work) {
+    return false;
+  }
+
+  return (
+    getArTextureRotationDeg(form, work) !==
+      normalizeArTextureRotationDeg(
+        work.arTextureRotationDeg ?? work.frontRotationYDeg ?? 0
+      ) ||
+    Boolean(form.arTextureFlipX) !== Boolean(work.arTextureFlipX) ||
+    Boolean(form.arTextureFlipY) !== Boolean(work.arTextureFlipY) ||
+    getArSideColor(form, work).toLowerCase() !==
+      normalizeArSideColor(work.arSideColor || DEFAULT_AR_SIDE_COLOR).toLowerCase() ||
+    getArDepthCmNumber(form, work) !==
+      normalizeArDepthCm(work.arDepthCm ?? work.depthCm ?? DEFAULT_AR_DEPTH_CM) ||
+    getArBackLabelEnabled(form, work) !==
+      (work.arBackLabelEnabled ?? work.showBackLabel ?? true)
+  );
 }
 
 function getPublicWorkSlug(work: ArtistWorkDoc) {
@@ -847,6 +985,37 @@ function AdminWorksPageContent() {
     hasPositiveNumber(selectedWork?.heightCm);
   const hasArtistSlug = hasTrimmedValue(selectedWork?.artistSlug);
   const hasWorkRouteSlug = hasTrimmedValue(selectedWorkSlug);
+  const hasArSettingsModified = hasArSettingsChanged(selectedForm, selectedWork);
+  const currentArTextureRotationDeg = getArTextureRotationDeg(
+    selectedForm,
+    selectedWork
+  );
+  const currentArTextureFlipX = Boolean(selectedForm.arTextureFlipX);
+  const currentArTextureFlipY = Boolean(selectedForm.arTextureFlipY);
+  const currentArSideColor = getArSideColor(selectedForm, selectedWork);
+  const currentArDepthCm = getArDepthCmNumber(selectedForm, selectedWork);
+  const currentArBackLabelEnabled = getArBackLabelEnabled(
+    selectedForm,
+    selectedWork
+  );
+  const arFrontPreviewTransform = `rotate(${currentArTextureRotationDeg}deg) scaleX(${
+    currentArTextureFlipX ? -1 : 1
+  }) scaleY(${currentArTextureFlipY ? -1 : 1})`;
+  const arBackLabelPreviewRows = [
+    { label: "TITLE", value: selectedWork?.title?.trim() || "Untitled" },
+    { label: "ARTIST", value: selectedWork?.artistName?.trim() || "Unknown artist" },
+    { label: "YEAR", value: selectedWork?.year?.trim() || "" },
+    { label: "MEDIUM", value: selectedWork?.medium?.trim() || "" },
+    {
+      label: "SIZE",
+      value:
+        selectedWork?.dimensions?.trim() ||
+        (hasPositiveNumber(selectedWork?.widthCm) &&
+        hasPositiveNumber(selectedWork?.heightCm)
+          ? `${selectedWork?.widthCm} x ${selectedWork?.heightCm} cm`
+          : ""),
+    },
+  ].filter((row) => Boolean(row.value));
   const arChecklistItems = [
     {
       label: "Artwork image",
@@ -893,10 +1062,14 @@ function AdminWorksPageContent() {
   ] as const;
   const hasObjectSettings = [
     selectedWork?.depthCm,
-    selectedWork?.sideMode,
-    selectedWork?.showBackLabel,
+    selectedWork?.arDepthCm,
+    selectedWork?.arSideColor,
+    selectedWork?.arBackLabelEnabled,
+    selectedWork?.arTextureRotationDeg,
     selectedWork?.frontRotationXDeg,
     selectedWork?.frontRotationYDeg,
+    selectedWork?.sideMode,
+    selectedWork?.showBackLabel,
   ].some((value) => value !== undefined);
 
   function updateSelectedField<K extends keyof WorkFormValues>(
@@ -919,7 +1092,29 @@ function AdminWorksPageContent() {
     setSaveErrorMessage("");
 
     try {
-      await updateWorkForAdmin(selectedWork.id, selectedForm);
+      await updateWorkForAdmin(selectedWork.id, {
+        isPublished: selectedForm.isPublished,
+        archived: selectedForm.archived,
+        coverImageUrl: selectedForm.coverImageUrl,
+        modelGlb: selectedForm.modelGlb,
+        modelUsdz: selectedForm.modelUsdz,
+        generatedGlbUrl: selectedForm.generatedGlbUrl,
+        generatedUsdzUrl: selectedForm.generatedUsdzUrl,
+        displayOrder: selectedForm.displayOrder,
+        arTextureRotationDeg: getArTextureRotationDeg(
+          selectedForm,
+          selectedWork
+        ),
+        arTextureFlipX: selectedForm.arTextureFlipX,
+        arTextureFlipY: selectedForm.arTextureFlipY,
+        arSideColor: getArSideColor(selectedForm, selectedWork),
+        arDepthCm: getArDepthCmNumber(selectedForm, selectedWork),
+        arBackLabelEnabled: getArBackLabelEnabled(selectedForm, selectedWork),
+        docentAudioEnabled: selectedForm.docentAudioEnabled,
+        docentAudioUrl: selectedForm.docentAudioUrl,
+        docentAudioTitle: selectedForm.docentAudioTitle,
+        docentAudioDescription: selectedForm.docentAudioDescription,
+      });
       setSaveMessage("작품 상태가 저장되었습니다.");
       const refreshed = await getAllWorksForAdmin();
       setWorks(refreshed);
@@ -1028,10 +1223,13 @@ function AdminWorksPageContent() {
           dimensions: selectedWork.dimensions,
         },
         {
-          sideMode: "canvas",
-          showBackLabel: false,
-          frontRotationXDeg: selectedWork.frontRotationXDeg,
-          frontRotationYDeg: selectedWork.frontRotationYDeg,
+          useArModelSettings: true,
+          textureRotationDeg: currentArTextureRotationDeg,
+          textureFlipX: currentArTextureFlipX,
+          textureFlipY: currentArTextureFlipY,
+          sideColor: currentArSideColor,
+          depthCm: currentArDepthCm,
+          showBackLabel: currentArBackLabelEnabled,
         }
       );
 
@@ -1524,6 +1722,323 @@ function AdminWorksPageContent() {
                           </div>
                         </div>
 
+                        <div className="rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,#171717_0%,#111111_100%)] p-4 md:p-5">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                AR Model Preview &amp; Settings
+                              </p>
+                              <p className="mt-2 text-sm leading-7 text-white/62">
+                                AR 파일을 생성하기 전에 정면 방향, 측면 마감, 뒷면 라벨을 확인하고 조정합니다.
+                              </p>
+                            </div>
+                            <ArPill tone={hasArSettingsModified ? "preparing" : "neutral"}>
+                              {hasArSettingsModified ? "Settings changed" : "In sync"}
+                            </ArPill>
+                          </div>
+
+                          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                            <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
+                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                Original
+                              </p>
+                              <div className="mt-3 overflow-hidden rounded-[1.1rem] border border-white/10 bg-black/20">
+                                {selectedArtworkImageUrl ? (
+                                  <img
+                                    src={selectedArtworkImageUrl}
+                                    alt={selectedWork.title || "Original artwork"}
+                                    className="aspect-[4/5] w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-white/38">
+                                    이미지 없음
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
+                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                AR Front Preview
+                              </p>
+                              <div className="mt-3 overflow-hidden rounded-[1.1rem] border border-white/10 bg-black/20">
+                                {selectedArtworkImageUrl ? (
+                                  <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#151515]">
+                                    <img
+                                      src={selectedArtworkImageUrl}
+                                      alt="AR front preview"
+                                      className="absolute inset-0 h-full w-full object-cover"
+                                      style={{
+                                        transform: arFrontPreviewTransform,
+                                        transformOrigin: "center",
+                                      }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-white/38">
+                                    AR preview unavailable
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                            <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                    Front Direction Controls
+                                  </p>
+                                  <p className="mt-2 text-sm leading-7 text-white/58">
+                                    Rotate and flip the front image until the preview matches the original.
+                                  </p>
+                                </div>
+                                <ArPill tone="neutral">
+                                  {currentArTextureRotationDeg}° / X{currentArTextureFlipX ? " on" : " off"} / Y{currentArTextureFlipY ? " on" : " off"}
+                                </ArPill>
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {[90, 180, 270].map((step) => (
+                                  <button
+                                    key={step}
+                                    type="button"
+                                    onClick={() =>
+                                      updateSelectedField(
+                                        "arTextureRotationDeg",
+                                        step as 90 | 180 | 270
+                                      )
+                                    }
+                                    className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.07]"
+                                  >
+                                    Rotate {step}°
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateSelectedField(
+                                      "arTextureFlipX",
+                                      !currentArTextureFlipX
+                                    )
+                                  }
+                                  className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.07]"
+                                >
+                                  Flip Horizontal
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateSelectedField(
+                                      "arTextureFlipY",
+                                      !currentArTextureFlipY
+                                    )
+                                  }
+                                  className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.07]"
+                                >
+                                  Flip Vertical
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateSelectedField("arTextureRotationDeg", 0);
+                                    updateSelectedField("arTextureFlipX", false);
+                                    updateSelectedField("arTextureFlipY", false);
+                                  }}
+                                  className="inline-flex h-10 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-4 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16"
+                                >
+                                  Reset Direction
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                    Edge / Depth Settings
+                                  </p>
+                                  <p className="mt-2 text-sm leading-7 text-white/58">
+                                    Adjust the edge finish and depth before generating AR files.
+                                  </p>
+                                </div>
+                                <ArPill tone="neutral">
+                                  {currentArDepthCm.toFixed(1)} cm
+                                </ArPill>
+                              </div>
+
+                              <div className="mt-4 space-y-4">
+                                <div className="grid gap-2 sm:grid-cols-3">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateSelectedField(
+                                        "arSideColor",
+                                        "#111111"
+                                      )
+                                    }
+                                    className={`rounded-[1rem] border px-4 py-3 text-left transition ${
+                                      currentArSideColor.toLowerCase() === "#111111"
+                                        ? "border-white/25 bg-white/[0.08]"
+                                        : "border-white/10 bg-white/[0.03] hover:border-white/20"
+                                    }`}
+                                  >
+                                    <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+                                      Preset
+                                    </span>
+                                    <span className="mt-2 block text-sm text-[#F7F1E8]">
+                                      Matte Black
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateSelectedField(
+                                        "arSideColor",
+                                        "#d6cec0"
+                                      )
+                                    }
+                                    className={`rounded-[1rem] border px-4 py-3 text-left transition ${
+                                      currentArSideColor.toLowerCase() === "#d6cec0"
+                                        ? "border-white/25 bg-white/[0.08]"
+                                        : "border-white/10 bg-white/[0.03] hover:border-white/20"
+                                    }`}
+                                  >
+                                    <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+                                      Preset
+                                    </span>
+                                    <span className="mt-2 block text-sm text-[#F7F1E8]">
+                                      Warm Ivory
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateSelectedField(
+                                        "arSideColor",
+                                        "#444444"
+                                      )
+                                    }
+                                    className={`rounded-[1rem] border px-4 py-3 text-left transition ${
+                                      currentArSideColor.toLowerCase() === "#444444"
+                                        ? "border-white/25 bg-white/[0.08]"
+                                        : "border-white/10 bg-white/[0.03] hover:border-white/20"
+                                    }`}
+                                  >
+                                    <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+                                      Preset
+                                    </span>
+                                    <span className="mt-2 block text-sm text-[#F7F1E8]">
+                                      Neutral Gray
+                                    </span>
+                                  </button>
+                                </div>
+
+                                <label className="block">
+                                  <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                    Side Color
+                                  </span>
+                                  <input
+                                    type="color"
+                                    value={normalizeArSideColor(
+                                      selectedForm.arSideColor
+                                    )}
+                                    onChange={(event) =>
+                                      updateSelectedField(
+                                        "arSideColor",
+                                        event.target.value
+                                      )
+                                    }
+                                    className="mt-2 h-12 w-full rounded-[1.1rem] border border-white/10 bg-white/[0.04] p-1"
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                    AR Depth (cm)
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="3"
+                                    step="0.5"
+                                    value={selectedForm.arDepthCm}
+                                    onChange={(event) =>
+                                      updateSelectedField(
+                                        "arDepthCm",
+                                        event.target.value
+                                      )
+                                    }
+                                    className="mt-2 h-13 w-full rounded-[1.15rem] border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] outline-none transition placeholder:text-white/24 focus:border-white/20 focus:bg-white/[0.06]"
+                                  />
+                                  <p className="mt-2 text-[11px] leading-5 text-white/48">
+                                    Current depth: {currentArDepthCm.toFixed(1)} cm. 3 cm 이상을 권장합니다.
+                                  </p>
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                  Back Label Preview
+                                </p>
+                                <p className="mt-2 text-sm leading-7 text-white/58">
+                                  The back face uses the artwork information label when enabled.
+                                </p>
+                              </div>
+                              <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70">
+                                <input
+                                  type="checkbox"
+                                  checked={currentArBackLabelEnabled}
+                                  onChange={(event) =>
+                                    updateSelectedField(
+                                      "arBackLabelEnabled",
+                                      event.target.checked
+                                    )
+                                  }
+                                  className="h-4 w-4 rounded border-white/20 bg-transparent"
+                                />
+                                Show Back Label
+                              </label>
+                            </div>
+
+                            <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-[#f6f1e8] p-4 text-[#1f1d1a]">
+                              {currentArBackLabelEnabled ? (
+                                <div className="space-y-3">
+                                  <p className="text-[10px] uppercase tracking-[0.24em] text-[#67615a]">
+                                    Artwork back label
+                                  </p>
+                                  <div className="space-y-1">
+                                    {arBackLabelPreviewRows.map((row) => (
+                                      <div key={row.label}>
+                                        <p className="text-[10px] uppercase tracking-[0.22em] text-[#67615a]">
+                                          {row.label}
+                                        </p>
+                                        <p className="text-sm leading-6 text-[#1f1d1a]">
+                                          {row.value}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex min-h-[180px] items-center justify-center rounded-[1rem] border border-dashed border-[#d4c9b8] bg-[#fffdf8] text-center text-sm leading-6 text-[#67615a]">
+                                  Back label disabled. The back face will render as a solid ivory surface.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {hasArSettingsModified ? (
+                            <p className="mt-4 rounded-[1.1rem] border border-[#F37021]/25 bg-[#F37021]/10 px-4 py-3 text-sm leading-6 text-[#FFBF8A]">
+                              Settings changed. Regenerate AR Files to apply them.
+                            </p>
+                          ) : null}
+                        </div>
+
                         <div className="rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,#161616_0%,#121212_100%)] p-4 md:p-5">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
@@ -1670,58 +2185,36 @@ function AdminWorksPageContent() {
                         {hasObjectSettings ? (
                           <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
                             <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              Object Settings
+                              Stored AR Settings
                             </p>
                             <p className="mt-2 text-sm leading-7 text-white/60">
-                              Read-only summary of object settings already stored on this work.
+                              Read-only summary of the AR model settings currently in the work document.
                             </p>
 
                             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                               <ObjectSettingChip
-                                label="Depth"
-                                value={
-                                  hasPositiveNumber(selectedWork?.depthCm)
-                                    ? `${selectedWork?.depthCm} cm`
-                                    : "Not set"
-                                }
+                                label="Rotation"
+                                value={`${currentArTextureRotationDeg}°`}
                               />
                               <ObjectSettingChip
-                                label="Side Finish"
-                                value={
-                                  selectedWork?.sideMode === "canvas"
-                                    ? "Canvas"
-                                    : selectedWork?.sideMode === "image"
-                                      ? "Image"
-                                      : "Not set"
-                                }
+                                label="Flip X"
+                                value={currentArTextureFlipX ? "On" : "Off"}
+                              />
+                              <ObjectSettingChip
+                                label="Flip Y"
+                                value={currentArTextureFlipY ? "On" : "Off"}
+                              />
+                              <ObjectSettingChip
+                                label="Edge Color"
+                                value={currentArSideColor.toUpperCase()}
+                              />
+                              <ObjectSettingChip
+                                label="Depth"
+                                value={`${currentArDepthCm.toFixed(1)} cm`}
                               />
                               <ObjectSettingChip
                                 label="Back Label"
-                                value={
-                                  selectedWork?.showBackLabel === true
-                                    ? "On"
-                                    : selectedWork?.showBackLabel === false
-                                      ? "Off"
-                                      : "Not set"
-                                }
-                              />
-                              <ObjectSettingChip
-                                label="Tilt X"
-                                value={
-                                  hasFiniteNumber(selectedWork?.frontRotationXDeg) ||
-                                  selectedWork?.frontRotationXDeg === 0
-                                    ? `${selectedWork?.frontRotationXDeg}°`
-                                    : "Not set"
-                                }
-                              />
-                              <ObjectSettingChip
-                                label="Tilt Y"
-                                value={
-                                  hasFiniteNumber(selectedWork?.frontRotationYDeg) ||
-                                  selectedWork?.frontRotationYDeg === 0
-                                    ? `${selectedWork?.frontRotationYDeg}°`
-                                    : "Not set"
-                                }
+                                value={currentArBackLabelEnabled ? "On" : "Off"}
                               />
                             </div>
                           </div>
@@ -1734,7 +2227,10 @@ function AdminWorksPageContent() {
                             Generate AR Files
                           </p>
                           <p className="mt-2 text-sm leading-7 text-white/66">
-                            작품 이미지와 크기를 기준으로 테스트용 GLB와 USDZ 파일을 함께 생성합니다.
+                            Preview settings affect the next generated GLB/USDZ files.
+                          </p>
+                          <p className="mt-2 text-sm leading-7 text-white/58">
+                            Check the front direction and back label before generating AR files.
                           </p>
                           <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-black/20 px-4 py-4">
                             <p className="text-[11px] uppercase tracking-[0.24em] text-white/40">
@@ -1743,9 +2239,9 @@ function AdminWorksPageContent() {
                             <ul className="mt-3 space-y-2 text-sm leading-6 text-white/58">
                               <li>Artwork image is required.</li>
                               <li>Width and height are required.</li>
-                              <li>GLB powers web and Android preview.</li>
-                              <li>USDZ powers iPhone Quick Look placement.</li>
-                              <li>Click Save Changes to publish it.</li>
+                              <li>Web / Android Preview uses GLB.</li>
+                              <li>iPhone Quick Look uses USDZ.</li>
+                              <li>Save Changes after generating to persist the URLs.</li>
                             </ul>
                           </div>
 
