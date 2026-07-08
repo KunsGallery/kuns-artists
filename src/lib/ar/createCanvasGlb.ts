@@ -653,7 +653,7 @@ type CanvasUsdzOptions = CanvasGlbOptions & {
 };
 
 function createSolidUsdzMaterial(color: string) {
-  return new MeshStandardMaterial({
+  const material = new MeshStandardMaterial({
     color,
     metalness: 0,
     roughness: 0.92,
@@ -664,6 +664,9 @@ function createSolidUsdzMaterial(color: string) {
     alphaTest: 0,
     side: 0,
   });
+
+  material.needsUpdate = true;
+  return material;
 }
 
 function createUsdzFrontTextureFromImage(
@@ -726,14 +729,8 @@ function createCanvasUsdzScene(
   const depth = depthCm / 100;
 
   const geometry = new BoxGeometry(width, height, depth);
-  geometry.clearGroups();
-  for (let faceIndex = 0; faceIndex < 6; faceIndex += 1) {
-    geometry.addGroup(faceIndex * 6, 6, faceIndex);
-  }
 
   let frontMaterial: MeshStandardMaterial;
-  const sideMaterial = createSolidUsdzMaterial(options.sideColor ?? DEFAULT_SIDE_COLOR);
-  const backMaterial = createSolidUsdzMaterial(options.backColor ?? DEFAULT_BACK_COLOR);
 
   if (usdzTextureMode === "solid") {
     frontMaterial = createSolidUsdzMaterial("#f7f4ee");
@@ -753,16 +750,10 @@ function createCanvasUsdzScene(
       alphaTest: 0,
       side: 0,
     });
+    frontMaterial.needsUpdate = true;
   }
 
-  const mesh = new Mesh(geometry, [
-    sideMaterial,
-    sideMaterial,
-    sideMaterial,
-    sideMaterial,
-    frontMaterial,
-    backMaterial,
-  ]);
+  const mesh = new Mesh(geometry, frontMaterial);
   mesh.name = "ArtworkCanvasUSDZ";
   mesh.position.set(0, 0, 0);
   mesh.rotation.set(rotationXRad, rotationYRad, 0);
@@ -782,15 +773,66 @@ function createCanvasUsdzScene(
     dispose: () => {
       geometry.dispose();
       frontMaterial.dispose();
-      sideMaterial.dispose();
-      backMaterial.dispose();
       const texture = frontMaterial.map as CanvasTexture | null;
       texture?.dispose();
     },
   };
 }
 
+function isUsdzStandardMaterial(material: unknown) {
+  return (
+    material instanceof MeshStandardMaterial ||
+    (typeof material === "object" &&
+      material !== null &&
+      "type" in material &&
+      (material as { type?: unknown }).type === "MeshStandardMaterial") ||
+    (typeof material === "object" &&
+      material !== null &&
+      "isMeshStandardMaterial" in material &&
+      (material as { isMeshStandardMaterial?: unknown }).isMeshStandardMaterial ===
+        true)
+  );
+}
+
+function assertUsdzCompatibleScene(scene: Scene) {
+  const invalidMaterials: string[] = [];
+  const invalidObjects: string[] = [];
+
+  scene.traverse((object) => {
+    if (!(object instanceof Mesh)) {
+      return;
+    }
+
+    if (Array.isArray(object.material)) {
+      invalidObjects.push(
+        `${object.name || "UnnamedMesh"}: material array is not supported for USDZ`
+      );
+      return;
+    }
+
+    if (!isUsdzStandardMaterial(object.material)) {
+      const material = object.material as { type?: string } | undefined;
+
+      invalidMaterials.push(
+        `${object.name || "UnnamedMesh"}: ${material?.type || "unknown"}`
+      );
+    }
+  });
+
+  if (invalidObjects.length > 0 || invalidMaterials.length > 0) {
+    throw new Error(
+      `USDZ export requires MeshStandardMaterial only. Invalid materials: ${[
+        ...invalidObjects,
+        ...invalidMaterials,
+      ].join(", ")}`
+    );
+  }
+}
+
 async function exportCanvasUsdzBlob(scene: Scene, maxTextureSize: number) {
+  scene.updateMatrixWorld(true);
+  assertUsdzCompatibleScene(scene);
+
   const exporter = new USDZExporter();
   const result = await exporter.parseAsync(scene, {
     includeAnchoringProperties: true,
