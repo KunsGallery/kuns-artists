@@ -175,7 +175,7 @@ function getImageDimensions(image: HTMLImageElement) {
 function createFrontTextureFromImage(
   image: HTMLImageElement,
   maxTextureSize = DEFAULT_MAX_TEXTURE_SIZE,
-  options: { rotationDeg?: number; flipY?: boolean } = {}
+  options: { rotationDeg?: number; flipX?: boolean; flipY?: boolean } = {}
 ) {
   const { width, height } = getImageDimensions(image);
   const largestSide = Math.max(width, height);
@@ -184,6 +184,7 @@ function createFrontTextureFromImage(
   const targetWidth = Math.max(1, Math.round(width * scale));
   const targetHeight = Math.max(1, Math.round(height * scale));
   const rotationDeg = options.rotationDeg ?? 0;
+  const flipX = options.flipX ?? false;
   const canvas = document.createElement("canvas");
 
   canvas.width = targetWidth;
@@ -196,21 +197,20 @@ function createFrontTextureFromImage(
   }
 
   ctx.imageSmoothingEnabled = true;
-  if (rotationDeg === 0) {
-    ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
-  } else {
-    ctx.save();
-    ctx.translate(targetWidth / 2, targetHeight / 2);
+  ctx.save();
+  ctx.translate(targetWidth / 2, targetHeight / 2);
+  if (rotationDeg !== 0) {
     ctx.rotate((rotationDeg * Math.PI) / 180);
-    ctx.drawImage(
-      image,
-      -targetWidth / 2,
-      -targetHeight / 2,
-      targetWidth,
-      targetHeight
-    );
-    ctx.restore();
   }
+  ctx.scale(flipX ? -1 : 1, 1);
+  ctx.drawImage(
+    image,
+    -targetWidth / 2,
+    -targetHeight / 2,
+    targetWidth,
+    targetHeight
+  );
+  ctx.restore();
 
   return createCanvasTexture(canvas, { flipY: options.flipY });
 }
@@ -303,7 +303,11 @@ function createEdgeTexturesFromImage(
 
 function createBackLabelTexture(
   input: CanvasGlbInput,
-  options: CanvasGlbOptions & { rotationDeg?: number; flipY?: boolean } = {}
+  options: CanvasGlbOptions & {
+    rotationDeg?: number;
+    flipX?: boolean;
+    flipY?: boolean;
+  } = {}
 ) {
   const widthCm = Math.max(input.widthCm, 1);
   const heightCm = Math.max(input.heightCm, 1);
@@ -330,14 +334,14 @@ function createBackLabelTexture(
   const panelSide = Math.min(canvas.width, canvas.height);
   const panelX = (canvas.width - panelSide) / 2;
   const panelY = (canvas.height - panelSide) / 2;
-  const cardInset = panelSide * 0.07;
+  const cardInset = panelSide * 0.055;
   const cardX = panelX + cardInset;
   const cardY = panelY + cardInset;
   const cardSide = panelSide - cardInset * 2;
-  const contentX = cardX + cardSide * 0.1;
-  const contentWidth = cardSide * 0.8;
-  const titleLineHeight = cardSide * 0.078;
-  const labelFontSize = Math.max(13, Math.round(cardSide * 0.03));
+  const contentX = cardX + cardSide * 0.085;
+  const contentWidth = cardSide * 0.83;
+  const titleLineHeight = cardSide * 0.085;
+  const labelFontSize = Math.max(14, Math.round(cardSide * 0.034));
   const infoRows = [
     { label: "Artist", value: normalizeOptionalText(input.artistName) },
     { label: "Year", value: normalizeOptionalText(input.year) },
@@ -348,19 +352,19 @@ function createBackLabelTexture(
   ctx.fillStyle = backgroundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = "rgba(248, 244, 236, 0.96)";
+  ctx.fillStyle = "rgba(251, 247, 239, 0.98)";
   ctx.fillRect(cardX, cardY, cardSide, cardSide);
 
-  ctx.strokeStyle = DEFAULT_LABEL_BORDER_COLOR;
+  ctx.strokeStyle = "rgba(55, 51, 46, 0.16)";
   ctx.lineWidth = Math.max(1, Math.round(cardSide * 0.004));
   ctx.strokeRect(cardX, cardY, cardSide, cardSide);
 
   ctx.textBaseline = "top";
 
-  let y = cardY + cardSide * 0.1;
+  let y = cardY + cardSide * 0.09;
 
   ctx.fillStyle = primaryTextColor;
-  ctx.font = `600 ${Math.max(22, Math.round(cardSide * 0.072))}px Arial, sans-serif`;
+  ctx.font = `600 ${Math.max(24, Math.round(cardSide * 0.078))}px Arial, sans-serif`;
   y = drawWrappedText(
     ctx,
     normalizeOptionalText(input.title) ?? "Untitled",
@@ -381,42 +385,45 @@ function createBackLabelTexture(
     ctx.fillStyle = primaryTextColor;
     ctx.font =
       row.label === "Medium"
-        ? `500 ${Math.max(18, Math.round(cardSide * 0.04))}px Arial, sans-serif`
-        : `500 ${Math.max(19, Math.round(cardSide * 0.045))}px Arial, sans-serif`;
+        ? `500 ${Math.max(19, Math.round(cardSide * 0.042))}px Arial, sans-serif`
+        : `500 ${Math.max(20, Math.round(cardSide * 0.047))}px Arial, sans-serif`;
     y = drawWrappedText(
       ctx,
       row.value as string,
       contentX,
       y,
       contentWidth,
-      row.label === "Medium" ? cardSide * 0.05 : cardSide * 0.055,
+      row.label === "Medium" ? cardSide * 0.052 : cardSide * 0.058,
       row.label === "Medium" ? 3 : 2
     );
     y += cardSide * 0.028;
   }
 
-  if ((options.rotationDeg ?? 0) !== 0) {
-    const rotated = document.createElement("canvas");
-    rotated.width = canvas.width;
-    rotated.height = canvas.height;
-    const rotatedCtx = rotated.getContext("2d");
+  if ((options.rotationDeg ?? 0) !== 0 || options.flipX) {
+    const transformed = document.createElement("canvas");
+    transformed.width = canvas.width;
+    transformed.height = canvas.height;
+    const transformedCtx = transformed.getContext("2d");
 
-    if (!rotatedCtx) {
-      throw new Error("Failed to create the rotated back label canvas.");
+    if (!transformedCtx) {
+      throw new Error("Failed to create the transformed back label canvas.");
     }
 
-    rotatedCtx.imageSmoothingEnabled = true;
-    rotatedCtx.translate(rotated.width / 2, rotated.height / 2);
-    rotatedCtx.rotate(((options.rotationDeg ?? 0) * Math.PI) / 180);
-    rotatedCtx.drawImage(
+    transformedCtx.imageSmoothingEnabled = true;
+    transformedCtx.translate(transformed.width / 2, transformed.height / 2);
+    if ((options.rotationDeg ?? 0) !== 0) {
+      transformedCtx.rotate(((options.rotationDeg ?? 0) * Math.PI) / 180);
+    }
+    transformedCtx.scale(options.flipX ? -1 : 1, 1);
+    transformedCtx.drawImage(
       canvas,
-      -rotated.width / 2,
-      -rotated.height / 2,
-      rotated.width,
-      rotated.height
+      -transformed.width / 2,
+      -transformed.height / 2,
+      transformed.width,
+      transformed.height
     );
 
-    return createCanvasTexture(rotated, { flipY: options.flipY });
+    return createCanvasTexture(transformed, { flipY: options.flipY });
   }
 
   return createCanvasTexture(canvas, { flipY: options.flipY });
@@ -473,6 +480,7 @@ async function buildCanvasArtworkScene(
   input: CanvasGlbInput,
   options: CanvasGlbOptions & {
     frontTextureRotationDeg?: number;
+    frontTextureFlipX?: boolean;
     textureFlipY?: boolean;
   } = {}
 ): Promise<CanvasArtworkScene> {
@@ -489,6 +497,7 @@ async function buildCanvasArtworkScene(
   const showBackLabel = options.showBackLabel ?? DEFAULT_SHOW_BACK_LABEL;
   const maxTextureSize = options.maxTextureSize ?? DEFAULT_MAX_TEXTURE_SIZE;
   const frontTextureRotationDeg = options.frontTextureRotationDeg ?? 0;
+  const frontTextureFlipX = options.frontTextureFlipX ?? false;
   const textureFlipY = options.textureFlipY ?? true;
 
   assertPositiveNumber(widthCm, "Width");
@@ -503,13 +512,15 @@ async function buildCanvasArtworkScene(
   const image = await loadHtmlImage(input.imageUrl);
   const frontTexture = createFrontTextureFromImage(image, maxTextureSize, {
     rotationDeg: frontTextureRotationDeg,
+    flipX: frontTextureFlipX,
     flipY: textureFlipY,
   });
   const backTexture = showBackLabel
     ? createBackLabelTexture(input, {
-        backColor: options.backColor,
-        flipY: textureFlipY,
-      })
+      backColor: options.backColor,
+      flipX: false,
+      flipY: textureFlipY,
+    })
     : null;
 
   const frontMaterial = new MeshStandardMaterial({
@@ -560,22 +571,15 @@ async function buildCanvasArtworkScene(
       side: 0,
     });
 
-  const minEdgeLimit = Math.max(0.001, Math.min(width, height) / 2 - 0.0005);
-  const edgeThickness = Math.min(
-    Math.max(Math.min(width, height) * PANEL_EDGE_RATIO, 0.003),
-    minEdgeLimit
-  );
   const frontZ = depth / 2 + PANEL_EPSILON;
   const backZ = -depth / 2 - PANEL_EPSILON;
-  const sideHeight = Math.max(height - edgeThickness * 2, 0.001);
-  const sideWidth = Math.max(width - edgeThickness * 2, 0.001);
 
   const frontGeometry = new PlaneGeometry(width, height);
   const backGeometry = new PlaneGeometry(width, height);
-  const rightGeometry = new BoxGeometry(edgeThickness, sideHeight, depth);
-  const leftGeometry = new BoxGeometry(edgeThickness, sideHeight, depth);
-  const topGeometry = new BoxGeometry(sideWidth, edgeThickness, depth);
-  const bottomGeometry = new BoxGeometry(sideWidth, edgeThickness, depth);
+  const rightGeometry = new PlaneGeometry(depth, height);
+  const leftGeometry = new PlaneGeometry(depth, height);
+  const topGeometry = new PlaneGeometry(width, depth);
+  const bottomGeometry = new PlaneGeometry(width, depth);
 
   const frontMesh = new Mesh(frontGeometry, frontMaterial);
   frontMesh.name = "ArtworkCanvasFront";
@@ -588,19 +592,23 @@ async function buildCanvasArtworkScene(
 
   const rightMesh = new Mesh(rightGeometry, sideMaterial);
   rightMesh.name = "ArtworkCanvasRight";
-  rightMesh.position.x = width / 2 - edgeThickness / 2;
+  rightMesh.position.x = width / 2;
+  rightMesh.rotation.y = -Math.PI / 2;
 
   const leftMesh = new Mesh(leftGeometry, sideMaterial);
   leftMesh.name = "ArtworkCanvasLeft";
-  leftMesh.position.x = -(width / 2 - edgeThickness / 2);
+  leftMesh.position.x = -width / 2;
+  leftMesh.rotation.y = Math.PI / 2;
 
   const topMesh = new Mesh(topGeometry, sideMaterial);
   topMesh.name = "ArtworkCanvasTop";
-  topMesh.position.y = height / 2 - edgeThickness / 2;
+  topMesh.position.y = height / 2;
+  topMesh.rotation.x = Math.PI / 2;
 
   const bottomMesh = new Mesh(bottomGeometry, sideMaterial);
   bottomMesh.name = "ArtworkCanvasBottom";
-  bottomMesh.position.y = -(height / 2 - edgeThickness / 2);
+  bottomMesh.position.y = -height / 2;
+  bottomMesh.rotation.x = -Math.PI / 2;
 
   const panelGroup = new Group();
   panelGroup.name = "ArtworkCanvas";
@@ -911,7 +919,7 @@ export async function createCanvasUsdzBlob(
   const { usdzTextureMode: _usdzTextureMode, ...sceneOptions } = options;
   const { scene, dispose } = await buildCanvasArtworkScene(input, {
     ...sceneOptions,
-    frontTextureRotationDeg: 180,
+    frontTextureFlipX: true,
     textureFlipY: false,
   });
 
