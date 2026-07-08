@@ -4,6 +4,7 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
+  PlaneGeometry,
   Scene,
   SRGBColorSpace,
 } from "three";
@@ -46,15 +47,21 @@ type EdgeTextureOptions = {
   textureSize?: number;
 };
 
-export const DEFAULT_DEPTH_CM = 2.8;
-export const DEFAULT_SIDE_COLOR = "#d6cec0";
-export const DEFAULT_BACK_COLOR = "#bfb5a5";
+export const DEFAULT_DEPTH_CM = 3.5;
+export const DEFAULT_SIDE_COLOR = "#111111";
+export const DEFAULT_BACK_COLOR = "#f5f0e6";
 export const DEFAULT_FRONT_ROTATION_X_DEG = 0;
 export const DEFAULT_FRONT_ROTATION_Y_DEG = 45;
 export const DEFAULT_SIDE_MODE: CanvasSideMode = "canvas";
 export const DEFAULT_SHOW_BACK_LABEL = true;
 const DEFAULT_MAX_TEXTURE_SIZE = 2048;
 const DEFAULT_BACK_LABEL_TEXTURE_SIZE = 1024;
+const MIN_DEPTH_CM = 3;
+const PANEL_EPSILON = 0.0005;
+const PANEL_EDGE_RATIO = 0.02;
+const DEFAULT_LABEL_TEXT_COLOR = "#37332e";
+const DEFAULT_LABEL_MUTED_TEXT_COLOR = "#67615a";
+const DEFAULT_LABEL_BORDER_COLOR = "rgba(55, 51, 46, 0.12)";
 const EDGE_TEXTURE_SIZE = 512;
 
 function assertPositiveNumber(value: number, label: string) {
@@ -145,9 +152,15 @@ function drawWrappedText(
   return y + lines.length * lineHeight;
 }
 
-function createCanvasTexture(canvas: HTMLCanvasElement) {
+function createCanvasTexture(
+  canvas: HTMLCanvasElement,
+  options: { flipY?: boolean } = {}
+) {
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
+  if (options.flipY !== undefined) {
+    texture.flipY = options.flipY;
+  }
   texture.needsUpdate = true;
   return texture;
 }
@@ -161,7 +174,8 @@ function getImageDimensions(image: HTMLImageElement) {
 
 function createFrontTextureFromImage(
   image: HTMLImageElement,
-  maxTextureSize = DEFAULT_MAX_TEXTURE_SIZE
+  maxTextureSize = DEFAULT_MAX_TEXTURE_SIZE,
+  options: { rotationDeg?: number; flipY?: boolean } = {}
 ) {
   const { width, height } = getImageDimensions(image);
   const largestSide = Math.max(width, height);
@@ -169,6 +183,7 @@ function createFrontTextureFromImage(
     largestSide > maxTextureSize ? maxTextureSize / largestSide : 1;
   const targetWidth = Math.max(1, Math.round(width * scale));
   const targetHeight = Math.max(1, Math.round(height * scale));
+  const rotationDeg = options.rotationDeg ?? 0;
   const canvas = document.createElement("canvas");
 
   canvas.width = targetWidth;
@@ -181,9 +196,23 @@ function createFrontTextureFromImage(
   }
 
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+  if (rotationDeg === 0) {
+    ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+  } else {
+    ctx.save();
+    ctx.translate(targetWidth / 2, targetHeight / 2);
+    ctx.rotate((rotationDeg * Math.PI) / 180);
+    ctx.drawImage(
+      image,
+      -targetWidth / 2,
+      -targetHeight / 2,
+      targetWidth,
+      targetHeight
+    );
+    ctx.restore();
+  }
 
-  return createCanvasTexture(canvas);
+  return createCanvasTexture(canvas, { flipY: options.flipY });
 }
 
 function createEdgeTextureCanvas(
@@ -274,7 +303,7 @@ function createEdgeTexturesFromImage(
 
 function createBackLabelTexture(
   input: CanvasGlbInput,
-  options: CanvasGlbOptions = {}
+  options: CanvasGlbOptions & { rotationDeg?: number; flipY?: boolean } = {}
 ) {
   const widthCm = Math.max(input.widthCm, 1);
   const heightCm = Math.max(input.heightCm, 1);
@@ -296,21 +325,19 @@ function createBackLabelTexture(
   }
 
   const backgroundColor = options.backColor ?? DEFAULT_BACK_COLOR;
-  const primaryTextColor = "#2b2925";
-  const secondaryTextColor = "rgba(43, 41, 37, 0.65)";
+  const primaryTextColor = DEFAULT_LABEL_TEXT_COLOR;
+  const secondaryTextColor = DEFAULT_LABEL_MUTED_TEXT_COLOR;
   const panelSide = Math.min(canvas.width, canvas.height);
   const panelX = (canvas.width - panelSide) / 2;
   const panelY = (canvas.height - panelSide) / 2;
-  const cardInset = panelSide * 0.08;
+  const cardInset = panelSide * 0.07;
   const cardX = panelX + cardInset;
   const cardY = panelY + cardInset;
   const cardSide = panelSide - cardInset * 2;
-  const contentX = cardX + cardSide * 0.11;
-  const contentWidth = cardSide * 0.78;
-  const titleLineHeight = cardSide * 0.085;
-  const contentBottom = cardY + cardSide;
-  const labelFontSize = Math.max(14, Math.round(cardSide * 0.033));
-  const footerFontSize = Math.max(14, Math.round(cardSide * 0.03));
+  const contentX = cardX + cardSide * 0.1;
+  const contentWidth = cardSide * 0.8;
+  const titleLineHeight = cardSide * 0.078;
+  const labelFontSize = Math.max(13, Math.round(cardSide * 0.03));
   const infoRows = [
     { label: "Artist", value: normalizeOptionalText(input.artistName) },
     { label: "Year", value: normalizeOptionalText(input.year) },
@@ -321,27 +348,19 @@ function createBackLabelTexture(
   ctx.fillStyle = backgroundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
-  ctx.fillRect(panelX, panelY, panelSide, panelSide);
-
-  ctx.fillStyle = "rgba(248, 244, 238, 0.96)";
+  ctx.fillStyle = "rgba(248, 244, 236, 0.96)";
   ctx.fillRect(cardX, cardY, cardSide, cardSide);
 
-  ctx.strokeStyle = "rgba(43, 41, 37, 0.12)";
+  ctx.strokeStyle = DEFAULT_LABEL_BORDER_COLOR;
   ctx.lineWidth = Math.max(1, Math.round(cardSide * 0.004));
   ctx.strokeRect(cardX, cardY, cardSide, cardSide);
 
   ctx.textBaseline = "top";
 
-  let y = cardY + cardSide * 0.11;
-
-  ctx.fillStyle = secondaryTextColor;
-  ctx.font = `500 ${labelFontSize}px Arial, sans-serif`;
-  ctx.fillText("KÜN’S GALLERY", contentX, y);
-  y += cardSide * 0.08;
+  let y = cardY + cardSide * 0.1;
 
   ctx.fillStyle = primaryTextColor;
-  ctx.font = `600 ${Math.max(24, Math.round(cardSide * 0.078))}px Arial, sans-serif`;
+  ctx.font = `600 ${Math.max(22, Math.round(cardSide * 0.072))}px Arial, sans-serif`;
   y = drawWrappedText(
     ctx,
     normalizeOptionalText(input.title) ?? "Untitled",
@@ -376,17 +395,31 @@ function createBackLabelTexture(
     y += cardSide * 0.028;
   }
 
-  ctx.fillStyle = secondaryTextColor;
-  ctx.font = `500 ${footerFontSize}px Arial, sans-serif`;
-  ctx.fillText(
-    "Generated canvas back label",
-    contentX,
-    contentBottom - cardSide * 0.12
-  );
+  if ((options.rotationDeg ?? 0) !== 0) {
+    const rotated = document.createElement("canvas");
+    rotated.width = canvas.width;
+    rotated.height = canvas.height;
+    const rotatedCtx = rotated.getContext("2d");
 
-  // If the back label appears mirrored in a GLB viewer,
-  // adjust canvas drawing orientation or texture transform here.
-  return createCanvasTexture(canvas);
+    if (!rotatedCtx) {
+      throw new Error("Failed to create the rotated back label canvas.");
+    }
+
+    rotatedCtx.imageSmoothingEnabled = true;
+    rotatedCtx.translate(rotated.width / 2, rotated.height / 2);
+    rotatedCtx.rotate(((options.rotationDeg ?? 0) * Math.PI) / 180);
+    rotatedCtx.drawImage(
+      canvas,
+      -rotated.width / 2,
+      -rotated.height / 2,
+      rotated.width,
+      rotated.height
+    );
+
+    return createCanvasTexture(rotated, { flipY: options.flipY });
+  }
+
+  return createCanvasTexture(canvas, { flipY: options.flipY });
 }
 
 function toUserFacingImageError(imageUrl: string) {
@@ -438,18 +471,25 @@ type CanvasArtworkScene = {
 
 async function buildCanvasArtworkScene(
   input: CanvasGlbInput,
-  options: CanvasGlbOptions = {}
+  options: CanvasGlbOptions & {
+    frontTextureRotationDeg?: number;
+    textureFlipY?: boolean;
+  } = {}
 ): Promise<CanvasArtworkScene> {
   const widthCm = Number(input.widthCm);
   const heightCm = Number(input.heightCm);
-  const depthCm = Number(input.depthCm ?? DEFAULT_DEPTH_CM);
+  const depthCm = Math.max(
+    Number(input.depthCm ?? DEFAULT_DEPTH_CM),
+    MIN_DEPTH_CM
+  );
   const rotationXDeg =
     options.frontRotationXDeg ?? DEFAULT_FRONT_ROTATION_X_DEG;
   const rotationYDeg =
     options.frontRotationYDeg ?? DEFAULT_FRONT_ROTATION_Y_DEG;
-  const sideMode = options.sideMode ?? DEFAULT_SIDE_MODE;
   const showBackLabel = options.showBackLabel ?? DEFAULT_SHOW_BACK_LABEL;
   const maxTextureSize = options.maxTextureSize ?? DEFAULT_MAX_TEXTURE_SIZE;
+  const frontTextureRotationDeg = options.frontTextureRotationDeg ?? 0;
+  const textureFlipY = options.textureFlipY ?? true;
 
   assertPositiveNumber(widthCm, "Width");
   assertPositiveNumber(heightCm, "Height");
@@ -461,109 +501,123 @@ async function buildCanvasArtworkScene(
   const rotationXRad = (rotationXDeg * Math.PI) / 180;
   const rotationYRad = (rotationYDeg * Math.PI) / 180;
   const image = await loadHtmlImage(input.imageUrl);
-  const frontTexture = createFrontTextureFromImage(image, maxTextureSize);
-  const edgeTextures =
-    sideMode === "image"
-      ? createEdgeTexturesFromImage(image, {
-          textureSize: Math.min(EDGE_TEXTURE_SIZE, maxTextureSize),
-        })
-      : null;
-  const backTexture = showBackLabel ? createBackLabelTexture(input, options) : null;
-
-  const geometry = new BoxGeometry(width, height, depth);
-  // Re-assert material groups explicitly so the exported mesh keeps the same
-  // face-to-material mapping: right, left, top, bottom, front, back.
-  // If iOS Quick Look shows the back or side first,
-  // adjust frontRotationYDeg in /tools/canvas-glb and regenerate the GLB.
-  geometry.clearGroups();
-  for (let faceIndex = 0; faceIndex < 6; faceIndex += 1) {
-    geometry.addGroup(faceIndex * 6, 6, faceIndex);
-  }
+  const frontTexture = createFrontTextureFromImage(image, maxTextureSize, {
+    rotationDeg: frontTextureRotationDeg,
+    flipY: textureFlipY,
+  });
+  const backTexture = showBackLabel
+    ? createBackLabelTexture(input, {
+        backColor: options.backColor,
+        flipY: textureFlipY,
+      })
+    : null;
 
   const frontMaterial = new MeshStandardMaterial({
     map: frontTexture,
+    color: 0xffffff,
     metalness: 0,
     roughness: 0.98,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    depthTest: true,
+    alphaTest: 0,
+    side: 0,
   });
   const sideMaterial = new MeshStandardMaterial({
     color: options.sideColor ?? DEFAULT_SIDE_COLOR,
     metalness: 0,
-    roughness: 0.85,
+    roughness: 0.98,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+    depthTest: true,
+    alphaTest: 0,
+    side: 0,
   });
   const backMaterial = backTexture
     ? new MeshStandardMaterial({
         map: backTexture,
+        color: 0xffffff,
         metalness: 0,
-        roughness: 0.9,
+        roughness: 0.94,
+        transparent: false,
+        opacity: 1,
+        depthWrite: true,
+        depthTest: true,
+        alphaTest: 0,
+        side: 0,
       })
     : new MeshStandardMaterial({
-        color: options.backColor ?? DEFAULT_BACK_COLOR,
-        metalness: 0,
-        roughness: 0.9,
-      });
-  const rightEdgeMaterial =
-    sideMode === "image" && edgeTextures
-      ? new MeshStandardMaterial({
-          map: edgeTextures.right,
-          metalness: 0,
-          roughness: 0.82,
-        })
-      : null;
-  const leftEdgeMaterial =
-    sideMode === "image" && edgeTextures
-      ? new MeshStandardMaterial({
-          map: edgeTextures.left,
-          metalness: 0,
-          roughness: 0.82,
-        })
-      : null;
-  const topEdgeMaterial =
-    sideMode === "image" && edgeTextures
-      ? new MeshStandardMaterial({
-          map: edgeTextures.top,
-          metalness: 0,
-          roughness: 0.82,
-        })
-      : null;
-  const bottomEdgeMaterial =
-    sideMode === "image" && edgeTextures
-      ? new MeshStandardMaterial({
-          map: edgeTextures.bottom,
-          metalness: 0,
-          roughness: 0.82,
-        })
-      : null;
+      color: options.backColor ?? DEFAULT_BACK_COLOR,
+      metalness: 0,
+      roughness: 0.94,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      depthTest: true,
+      alphaTest: 0,
+      side: 0,
+    });
 
-  const materials =
-    rightEdgeMaterial &&
-    leftEdgeMaterial &&
-    topEdgeMaterial &&
-    bottomEdgeMaterial
-      ? [
-          rightEdgeMaterial,
-          leftEdgeMaterial,
-          topEdgeMaterial,
-          bottomEdgeMaterial,
-          frontMaterial,
-          backMaterial,
-        ]
-      : [
-          sideMaterial, // right
-          sideMaterial, // left
-          sideMaterial, // top
-          sideMaterial, // bottom
-          frontMaterial, // front
-          backMaterial, // back
-        ];
+  const minEdgeLimit = Math.max(0.001, Math.min(width, height) / 2 - 0.0005);
+  const edgeThickness = Math.min(
+    Math.max(Math.min(width, height) * PANEL_EDGE_RATIO, 0.003),
+    minEdgeLimit
+  );
+  const frontZ = depth / 2 + PANEL_EPSILON;
+  const backZ = -depth / 2 - PANEL_EPSILON;
+  const sideHeight = Math.max(height - edgeThickness * 2, 0.001);
+  const sideWidth = Math.max(width - edgeThickness * 2, 0.001);
 
-  const mesh = new Mesh(geometry, materials);
-  mesh.name = "ArtworkCanvas";
+  const frontGeometry = new PlaneGeometry(width, height);
+  const backGeometry = new PlaneGeometry(width, height);
+  const rightGeometry = new BoxGeometry(edgeThickness, sideHeight, depth);
+  const leftGeometry = new BoxGeometry(edgeThickness, sideHeight, depth);
+  const topGeometry = new BoxGeometry(sideWidth, edgeThickness, depth);
+  const bottomGeometry = new BoxGeometry(sideWidth, edgeThickness, depth);
+
+  const frontMesh = new Mesh(frontGeometry, frontMaterial);
+  frontMesh.name = "ArtworkCanvasFront";
+  frontMesh.position.z = frontZ;
+
+  const backMesh = new Mesh(backGeometry, backMaterial);
+  backMesh.name = "ArtworkCanvasBack";
+  backMesh.position.z = backZ;
+  backMesh.rotation.y = Math.PI;
+
+  const rightMesh = new Mesh(rightGeometry, sideMaterial);
+  rightMesh.name = "ArtworkCanvasRight";
+  rightMesh.position.x = width / 2 - edgeThickness / 2;
+
+  const leftMesh = new Mesh(leftGeometry, sideMaterial);
+  leftMesh.name = "ArtworkCanvasLeft";
+  leftMesh.position.x = -(width / 2 - edgeThickness / 2);
+
+  const topMesh = new Mesh(topGeometry, sideMaterial);
+  topMesh.name = "ArtworkCanvasTop";
+  topMesh.position.y = height / 2 - edgeThickness / 2;
+
+  const bottomMesh = new Mesh(bottomGeometry, sideMaterial);
+  bottomMesh.name = "ArtworkCanvasBottom";
+  bottomMesh.position.y = -(height / 2 - edgeThickness / 2);
+
+  const panelGroup = new Group();
+  panelGroup.name = "ArtworkCanvas";
+  panelGroup.add(
+    frontMesh,
+    backMesh,
+    rightMesh,
+    leftMesh,
+    topMesh,
+    bottomMesh
+  );
 
   const root = new Group();
   root.name = "ArtworkCanvasRoot";
   root.rotation.x = rotationXRad;
   root.rotation.y = rotationYRad;
-  root.add(mesh);
+  root.add(panelGroup);
 
   const scene = new Scene();
   scene.name = input.title.trim() || "Artwork Canvas";
@@ -572,15 +626,16 @@ async function buildCanvasArtworkScene(
   return {
     scene,
     dispose: () => {
-      geometry.dispose();
+      frontGeometry.dispose();
+      backGeometry.dispose();
+      rightGeometry.dispose();
+      leftGeometry.dispose();
+      topGeometry.dispose();
+      bottomGeometry.dispose();
       const disposableMaterials = new Set([
         frontMaterial,
         sideMaterial,
         backMaterial,
-        rightEdgeMaterial,
-        leftEdgeMaterial,
-        topEdgeMaterial,
-        bottomEdgeMaterial,
       ]);
 
       for (const material of disposableMaterials) {
@@ -589,10 +644,6 @@ async function buildCanvasArtworkScene(
       }
       frontTexture.dispose();
       backTexture?.dispose();
-      edgeTextures?.left.dispose();
-      edgeTextures?.right.dispose();
-      edgeTextures?.top.dispose();
-      edgeTextures?.bottom.dispose();
     },
   };
 }
@@ -857,8 +908,12 @@ export async function createCanvasUsdzBlob(
   options: CanvasUsdzOptions = {}
 ): Promise<Blob> {
   const maxTextureSize = options.maxTextureSize ?? DEFAULT_MAX_TEXTURE_SIZE;
-  const image = await loadHtmlImage(input.imageUrl);
-  const { scene, dispose } = createCanvasUsdzScene(input, image, options);
+  const { usdzTextureMode: _usdzTextureMode, ...sceneOptions } = options;
+  const { scene, dispose } = await buildCanvasArtworkScene(input, {
+    ...sceneOptions,
+    frontTextureRotationDeg: 180,
+    textureFlipY: false,
+  });
 
   try {
     return await exportCanvasUsdzBlob(scene, maxTextureSize);
