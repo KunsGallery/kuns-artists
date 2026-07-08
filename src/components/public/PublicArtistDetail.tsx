@@ -853,77 +853,65 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
 
         {hasExhibitions ? (
           <section id="exhibitions" className="border-t border-white/10 py-16 md:py-24">
-            <SectionHeading
-              label="EXHIBITIONS"
-              title="Exhibitions"
-              description="Recent exhibitions listed in reverse chronological order."
-            />
+            <div className="max-w-3xl space-y-4">
+              <p className="text-[11px] uppercase tracking-[0.34em] text-white/45">
+                EXHIBITIONS
+              </p>
+              <h2 className="text-3xl font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-5xl">
+                Exhibition Archive
+              </h2>
+              <p className="text-sm leading-7 text-white/58 md:text-[15px]">
+                Recent exhibitions listed in reverse chronological order.
+              </p>
+            </div>
 
-            <div className="mt-10 space-y-4">
-              {artistExhibitions.map((exhibition) => (
-                <article
-                  key={exhibition.id}
-                  className="grid gap-5 overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] p-4 transition hover:border-[#F37021]/35 hover:bg-white/[0.055] md:grid-cols-[280px_minmax(0,1fr)] md:p-5"
-                >
-                  <div className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.04]">
-                    {exhibition.imageUrl ? (
-                      <img
-                        src={exhibition.imageUrl}
-                        alt={exhibition.title || artist.name}
-                        className="aspect-[4/5] h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex aspect-[4/5] items-center justify-center bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.15),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-6 text-center text-sm leading-7 text-white/55">
-                        전시 이미지를 준비 중입니다.
-                      </div>
-                    )}
-                  </div>
+            <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {artistExhibitions.map((exhibition) => {
+                const dateRange = formatExhibitionDateRange(
+                  exhibition.startDate,
+                  exhibition.endDate
+                );
+                const venueLabel = [exhibition.venue, exhibition.location]
+                  .filter(Boolean)
+                  .join(" · ");
 
-                  <div className="flex min-w-0 flex-col justify-between gap-5 p-1 md:p-2">
-                    <div className="space-y-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-3 py-1 text-[10px] uppercase tracking-[0.26em] text-[#FF9B5A]">
-                          {formatExhibitionDateRange(
-                            exhibition.startDate,
-                            exhibition.endDate
-                          )}
-                        </span>
-                        {exhibition.venue ? (
-                          <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/50">
-                            {exhibition.venue}
-                          </span>
-                        ) : null}
-                      </div>
+                return (
+                  <article
+                    key={exhibition.id}
+                    className="group overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.04] transition hover:-translate-y-0.5 hover:border-[#F37021]/35 hover:bg-white/[0.055] hover:shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
+                  >
+                    <div className="relative overflow-hidden bg-[#161616]">
+                      {exhibition.imageUrl ? (
+                        <img
+                          src={exhibition.imageUrl}
+                          alt={exhibition.title || artist.name}
+                          className="aspect-[4/3] h-full w-full object-cover transition duration-700 group-hover:scale-[1.02]"
+                        />
+                      ) : (
+                        <div className="flex aspect-[4/3] items-center justify-center bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-6 text-center text-sm leading-7 text-white/55">
+                          전시 이미지를 준비 중입니다.
+                        </div>
+                      )}
+                    </div>
 
-                      <div className="space-y-2">
-                        <h3 className="text-[1.45rem] font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-[1.8rem]">
-                          {exhibition.title || "Untitled Exhibition"}
-                        </h3>
-                        <p className="text-sm uppercase tracking-[0.22em] text-white/48">
-                          {exhibition.location || "Location not specified"}
+                    <div className="space-y-2 bg-[#0f0f0f] px-5 py-5">
+                      <h3 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-[1.32rem]">
+                        {exhibition.title || "Untitled Exhibition"}
+                      </h3>
+                      {dateRange ? (
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/58">
+                          {dateRange}
                         </p>
-                      </div>
-
-                      {exhibition.description ? (
-                        <p className="max-w-3xl text-sm leading-7 text-white/68 md:text-[15px]">
-                          {exhibition.description}
+                      ) : null}
+                      {venueLabel ? (
+                        <p className="text-sm leading-6 text-white/62">
+                          {venueLabel}
                         </p>
                       ) : null}
                     </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/[0.045] px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/45">
-                        {exhibition.isPublished === true ? "Published" : "Draft"}
-                      </span>
-                      {exhibition.archived === true ? (
-                        <span className="inline-flex rounded-full border border-white/10 bg-white/[0.045] px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/45">
-                          Archived
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           </section>
         ) : null}
@@ -1112,27 +1100,51 @@ function WorkCard({
 }
 
 function formatExhibitionDateRange(startDate?: string, endDate?: string) {
-  const start = formatExhibitionDate(startDate);
-  const end = endDate?.trim() ? formatExhibitionDate(endDate) : "";
+  const start = parseExhibitionDate(startDate);
+  const end = endDate?.trim() ? parseExhibitionDate(endDate) : null;
 
-  if (!end) {
-    return start;
+  if (!start) {
+    return end ? formatExhibitionDate(end) : "";
   }
 
-  return `${start} - ${end}`;
+  if (!end) {
+    return formatExhibitionDate(start);
+  }
+
+  const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
+  const startLabel = sameYear
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      }).format(start)
+    : formatExhibitionDate(start);
+  const endLabel = formatExhibitionDate(end);
+
+  return sameYear
+    ? `${startLabel} - ${endLabel}`
+    : `${startLabel} - ${endLabel}`;
 }
 
-function formatExhibitionDate(value?: string) {
+function parseExhibitionDate(value?: string) {
   const trimmed = value?.trim();
 
   if (!trimmed) {
-    return "Date TBA";
+    return null;
   }
 
   const parsed = new Date(`${trimmed}T00:00:00Z`);
 
   if (Number.isNaN(parsed.getTime())) {
-    return trimmed;
+    return null;
+  }
+
+  return parsed;
+}
+
+function formatExhibitionDate(value?: Date | null) {
+  if (!value) {
+    return "";
   }
 
   return new Intl.DateTimeFormat("en-US", {
@@ -1140,7 +1152,7 @@ function formatExhibitionDate(value?: string) {
     day: "numeric",
     year: "numeric",
     timeZone: "UTC",
-  }).format(parsed);
+  }).format(value);
 }
 
 function CvHistorySection({ items }: { items: ArtistCvItem[] }) {

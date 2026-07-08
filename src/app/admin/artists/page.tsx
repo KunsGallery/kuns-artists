@@ -8,6 +8,7 @@ import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import {
   createProjectArtistForAdmin,
   getAllArtistsForAdmin,
+  getExhibitionsForArtist,
   getWorksForArtist,
   resolveArtistWorkSlug,
   updateArtistForAdmin,
@@ -26,6 +27,7 @@ import {
   type ArtistCvItem,
   type ArtistCvType,
 } from "@/types/artist";
+import type { ExhibitionDoc } from "@/types/exhibition";
 
 type ArtistFormValues = ArtistAdminSavePayload;
 
@@ -418,6 +420,247 @@ function getArtistWorkSelectionValue(work: ArtistWorkDoc) {
   };
 }
 
+function formatAdminDate(value?: string) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  const parsed = new Date(`${trimmed}T00:00:00Z`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return trimmed;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(parsed);
+}
+
+function formatAdminDateRange(startDate?: string, endDate?: string) {
+  const start = formatAdminDate(startDate);
+  const end = formatAdminDate(endDate);
+
+  if (!start) {
+    return end;
+  }
+
+  if (!end) {
+    return start;
+  }
+
+  return `${start} - ${end}`;
+}
+
+function ArtistOverviewCard({
+  artist,
+  works,
+  exhibitions,
+  featuredWorkPresent,
+}: {
+  artist: ArtistDoc;
+  works: ArtistWorkDoc[];
+  exhibitions: ExhibitionDoc[];
+  featuredWorkPresent: boolean;
+}) {
+  const artistTarget = artist.slug || artist.id;
+  const recentWorks = works.slice(0, 3);
+  const recentExhibitions = exhibitions.slice(0, 3);
+  const worksSummary = {
+    total: works.length,
+    published: works.filter(
+      (work) => work.isPublished === true && work.archived !== true
+    ).length,
+    pending: works.filter(
+      (work) => work.isPublished !== true && work.archived !== true
+    ).length,
+    archived: works.filter((work) => work.archived === true).length,
+  };
+  const exhibitionsSummary = {
+    total: exhibitions.length,
+    published: exhibitions.filter(
+      (exhibition) => exhibition.isPublished === true && exhibition.archived !== true
+    ).length,
+    archived: exhibitions.filter((exhibition) => exhibition.archived === true).length,
+  };
+
+  return (
+    <section className="rounded-[1.75rem] border border-black/8 bg-[#141414] p-5 text-white shadow-[0_24px_70px_rgba(0,0,0,0.18)] md:p-6">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.28em] text-white/40">
+            Artist Overview
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white md:text-3xl">
+            {artist.name || artist.slug || "Unnamed Artist"}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-white/56">
+            작품과 전시 상태를 한 화면에서 빠르게 점검합니다.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/admin/works/new?artist=${encodeURIComponent(artistTarget)}`}
+            className="inline-flex h-10 items-center rounded-full border border-[#F37021]/35 bg-[#F37021] px-4 text-sm font-medium text-[#171717] transition hover:bg-[#ff7a2f]"
+          >
+            Add Artwork
+          </Link>
+          <Link
+            href={`/admin/works?artist=${encodeURIComponent(artistTarget)}`}
+            className="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/[0.05] px-4 text-sm text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]"
+          >
+            Manage Works
+          </Link>
+          <Link
+            href={`/admin/exhibitions?artist=${encodeURIComponent(artistTarget)}`}
+            className="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/[0.05] px-4 text-sm text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]"
+          >
+            Add Exhibition
+          </Link>
+          <Link
+            href={artist.slug ? `/artists/${artist.slug}` : "/artists"}
+            className="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/[0.05] px-4 text-sm text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]"
+          >
+            View Public Artist Page
+          </Link>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+              Works Summary
+            </p>
+            <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] uppercase tracking-[0.22em] text-white/55">
+              {featuredWorkPresent ? "Featured set" : "No featured work"}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <SummaryMetric label="Total works" value={worksSummary.total} />
+            <SummaryMetric label="Published works" value={worksSummary.published} />
+            <SummaryMetric label="Pending works" value={worksSummary.pending} />
+            <SummaryMetric label="Archived works" value={worksSummary.archived} />
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+              Recent works
+            </p>
+            {recentWorks.length > 0 ? (
+              <div className="space-y-2">
+                {recentWorks.map((work) => (
+                  <div
+                    key={work.id}
+                    className="flex items-center justify-between gap-3 rounded-[1.1rem] border border-white/8 bg-black/15 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">
+                        {work.title || "Untitled"}
+                      </p>
+                      <p className="mt-1 text-xs text-white/52">
+                        {work.year || "Year not set"}
+                      </p>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-[0.22em] text-white/38">
+                      {work.isPublished === true
+                        ? "Published"
+                        : work.archived === true
+                          ? "Archived"
+                          : "Pending"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm leading-6 text-white/50">
+                아직 등록된 작품이 없습니다.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4">
+          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+            Exhibitions Summary
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <SummaryMetric label="Total exhibitions" value={exhibitionsSummary.total} />
+            <SummaryMetric
+              label="Published exhibitions"
+              value={exhibitionsSummary.published}
+            />
+            <SummaryMetric
+              label="Archived exhibitions"
+              value={exhibitionsSummary.archived}
+            />
+            <SummaryMetric label="Public page" value={artist.slug ? "Live" : "Hidden"} />
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+              Recent exhibitions
+            </p>
+            {recentExhibitions.length > 0 ? (
+              <div className="space-y-2">
+                {recentExhibitions.map((exhibition) => (
+                  <div
+                    key={exhibition.id}
+                    className="flex items-center justify-between gap-3 rounded-[1.1rem] border border-white/8 bg-black/15 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-white">
+                        {exhibition.title || "Untitled Exhibition"}
+                      </p>
+                      <p className="mt-1 text-xs text-white/52">
+                        {formatAdminDateRange(
+                          exhibition.startDate,
+                          exhibition.endDate
+                        ) || "Date not set"}
+                      </p>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-[0.22em] text-white/38">
+                      {exhibition.venue || exhibition.location || "No venue"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm leading-6 text-white/50">
+                아직 등록된 전시가 없습니다.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SummaryMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="rounded-[1.1rem] border border-white/10 bg-black/15 px-4 py-4">
+      <p className="text-[10px] uppercase tracking-[0.24em] text-white/40">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function serializeArtistFormValues(form: ArtistFormValues) {
   return JSON.stringify({
     ...form,
@@ -494,6 +737,13 @@ export default function AdminArtistsPage() {
   const [isLoadingSelectedArtistWorks, setIsLoadingSelectedArtistWorks] =
     useState(false);
   const [selectedArtistWorksError, setSelectedArtistWorksError] = useState("");
+  const [selectedArtistExhibitions, setSelectedArtistExhibitions] = useState<
+    ExhibitionDoc[]
+  >([]);
+  const [isLoadingSelectedArtistExhibitions, setIsLoadingSelectedArtistExhibitions] =
+    useState(false);
+  const [selectedArtistExhibitionsError, setSelectedArtistExhibitionsError] =
+    useState("");
 
   async function loadArtists(nextSelectedArtistId?: string) {
     const result = await getAllArtistsForAdmin();
@@ -625,6 +875,53 @@ export default function AdminArtistsPage() {
     };
   }, [artists, selectedArtistId]);
 
+  useEffect(() => {
+    let isActive = true;
+    const nextArtist = artists.find((entry) => entry.id === selectedArtistId);
+
+    if (!nextArtist) {
+      setSelectedArtistExhibitions([]);
+      setSelectedArtistExhibitionsError("");
+      setIsLoadingSelectedArtistExhibitions(false);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    setIsLoadingSelectedArtistExhibitions(true);
+    setSelectedArtistExhibitionsError("");
+
+    void getExhibitionsForArtist(nextArtist.id, nextArtist.slug)
+      .then((exhibitions) => {
+        if (!isActive) {
+          return;
+        }
+
+        setSelectedArtistExhibitions(exhibitions);
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return;
+        }
+
+        setSelectedArtistExhibitions([]);
+        setSelectedArtistExhibitionsError(
+          error instanceof Error
+            ? error.message
+            : "전시 현황을 불러오는 중 오류가 발생했습니다."
+        );
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsLoadingSelectedArtistExhibitions(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [artists, selectedArtistId]);
+
   const filteredArtists = useMemo(() => {
     const query = artistSearch.trim().toLowerCase();
 
@@ -676,6 +973,13 @@ export default function AdminArtistsPage() {
         (work) => work.isPublished === true && work.archived !== true
       ),
     [selectedArtistWorks]
+  );
+  const publishedSelectedArtistExhibitions = useMemo(
+    () =>
+      selectedArtistExhibitions.filter(
+        (exhibition) => exhibition.isPublished === true && exhibition.archived !== true
+      ),
+    [selectedArtistExhibitions]
   );
   const selectedFeaturedWork = useMemo(() => {
     const featuredWorkId = selectedForm.featuredWorkId?.trim() || "";
@@ -1450,6 +1754,27 @@ export default function AdminArtistsPage() {
                       {isSaving ? "저장 중..." : "작가 정보 저장"}
                     </button>
                   </div>
+
+                  {selectedArtistExhibitionsError ? (
+                    <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-900">
+                      {selectedArtistExhibitionsError}
+                    </div>
+                  ) : null}
+
+                  {isLoadingSelectedArtistExhibitions ? (
+                    <p className="text-sm leading-6 text-neutral-500">
+                      선택한 작가의 전시 현황을 불러오는 중입니다.
+                    </p>
+                  ) : null}
+
+                  {selectedArtist ? (
+                    <ArtistOverviewCard
+                      artist={selectedArtist}
+                      works={selectedArtistWorks}
+                      exhibitions={selectedArtistExhibitions}
+                      featuredWorkPresent={hasFeaturedWorkSelection}
+                    />
+                  ) : null}
 
                   {selectedArtistIsRepresented ? (
                     <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-7 text-amber-900">

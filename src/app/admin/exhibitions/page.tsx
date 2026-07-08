@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import LogoutButton from "@/components/auth/LogoutButton";
 import R2ImageUploadField from "@/components/shared/R2ImageUploadField";
 import { useProtectedArtist } from "@/hooks/useProtectedArtist";
@@ -318,7 +319,9 @@ function ExhibitionCard({
   );
 }
 
-export default function AdminExhibitionsPage() {
+function AdminExhibitionsPageContent() {
+  const searchParams = useSearchParams();
+  const requestedArtist = searchParams.get("artist")?.trim() || "";
   const { errorMessage } = useProtectedArtist({
     requireAdmin: true,
     fallbackErrorMessage: "관리자 정보를 불러오는 중 오류가 발생했습니다.",
@@ -327,6 +330,7 @@ export default function AdminExhibitionsPage() {
   const [artists, setArtists] = useState<ArtistDoc[]>([]);
   const [exhibitions, setExhibitions] = useState<ExhibitionDoc[]>([]);
   const [selectedArtistId, setSelectedArtistId] = useState("");
+  const [artistFilterId, setArtistFilterId] = useState("all");
   const [selectedExhibitionId, setSelectedExhibitionId] = useState("new");
   const [selectedForm, setSelectedForm] =
     useState<ExhibitionFormValues>(EMPTY_FORM);
@@ -353,7 +357,25 @@ export default function AdminExhibitionsPage() {
 
         setArtists(artistResult);
         setExhibitions(exhibitionResult);
-        setSelectedArtistId((current) => current || artistResult[0]?.id || "");
+        setSelectedArtistId((current) => {
+          const matchedArtist = requestedArtist
+            ? artistResult.find(
+                (artist) =>
+                  artist.id === requestedArtist || artist.slug === requestedArtist
+              )
+            : null;
+
+          if (matchedArtist) {
+            setArtistFilterId(matchedArtist.id);
+            return matchedArtist.id;
+          }
+
+          const nextSelectedArtistId = current || artistResult[0]?.id || "";
+
+          setArtistFilterId(requestedArtist ? "all" : nextSelectedArtistId || "all");
+
+          return nextSelectedArtistId;
+        });
         setSaveErrorMessage("");
       } catch (error) {
         if (!isActive) {
@@ -377,7 +399,7 @@ export default function AdminExhibitionsPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [requestedArtist]);
 
   const selectedArtist = useMemo(
     () => artists.find((artist) => artist.id === selectedArtistId) ?? null,
@@ -396,14 +418,34 @@ export default function AdminExhibitionsPage() {
     [exhibitions, selectedArtist, selectedArtistId]
   );
 
+  const visibleExhibitions = useMemo(() => {
+    if (artistFilterId === "all") {
+      return exhibitions;
+    }
+
+    const filteredArtist = artists.find((artist) => artist.id === artistFilterId);
+
+    if (!filteredArtist) {
+      return exhibitions;
+    }
+
+    return sortExhibitionsByStartDateDesc(
+      exhibitions.filter(
+        (exhibition) =>
+          exhibition.artistId === filteredArtist.id ||
+          exhibition.artistSlug === filteredArtist.slug
+      )
+    );
+  }, [artistFilterId, artists, exhibitions]);
+
   const selectedExhibition = useMemo(
     () =>
       selectedExhibitionId === "new"
         ? null
-        : selectedArtistExhibitions.find(
+        : visibleExhibitions.find(
             (exhibition) => exhibition.id === selectedExhibitionId
           ) ?? null,
-    [selectedArtistExhibitions, selectedExhibitionId]
+    [selectedExhibitionId, visibleExhibitions]
   );
 
   useEffect(() => {
@@ -431,13 +473,13 @@ export default function AdminExhibitionsPage() {
 
     if (
       selectedExhibitionId !== "new" &&
-      !selectedArtistExhibitions.some(
+      !visibleExhibitions.some(
         (exhibition) => exhibition.id === selectedExhibitionId
       )
     ) {
-      setSelectedExhibitionId(selectedArtistExhibitions[0]?.id || "new");
+      setSelectedExhibitionId(visibleExhibitions[0]?.id || "new");
     }
-  }, [selectedArtist, selectedArtistExhibitions, selectedExhibitionId]);
+  }, [selectedArtist, selectedExhibitionId, visibleExhibitions]);
 
   function updateSelectedField<K extends keyof ExhibitionFormValues>(
     key: K,
@@ -474,6 +516,20 @@ export default function AdminExhibitionsPage() {
       );
       setSelectedExhibitionId(firstMatch?.id || "new");
     }
+  }
+
+  function handleSelectExhibition(exhibition: ExhibitionDoc) {
+    const matchedArtist = artists.find(
+      (artist) =>
+        artist.id === exhibition.artistId || artist.slug === exhibition.artistSlug
+    );
+
+    if (matchedArtist) {
+      setSelectedArtistId(matchedArtist.id);
+      setArtistFilterId(matchedArtist.id);
+    }
+
+    setSelectedExhibitionId(exhibition.id);
   }
 
   async function handleSave() {
@@ -664,10 +720,33 @@ export default function AdminExhibitionsPage() {
               </span>
               <select
                 value={selectedArtistId}
-                onChange={(event) => setSelectedArtistId(event.target.value)}
+                onChange={(event) => {
+                  const nextArtistId = event.target.value;
+                  setSelectedArtistId(nextArtistId);
+                  setArtistFilterId(nextArtistId);
+                }}
                 className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-white px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
                 disabled={isLoading}
               >
+                {artists.map((artist) => (
+                  <option key={artist.id} value={artist.id}>
+                    {artist.name || artist.slug || artist.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="mt-4 block">
+              <span className="text-[13px] font-medium tracking-[-0.01em] text-neutral-700">
+                목록 범위
+              </span>
+              <select
+                value={artistFilterId}
+                onChange={(event) => setArtistFilterId(event.target.value)}
+                className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-white px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
+                disabled={isLoading}
+              >
+                <option value="all">All Artists</option>
                 {artists.map((artist) => (
                   <option key={artist.id} value={artist.id}>
                     {artist.name || artist.slug || artist.id}
@@ -777,12 +856,12 @@ export default function AdminExhibitionsPage() {
                   }}
                 />
 
-                {selectedArtistExhibitions.map((exhibition) => (
+                {visibleExhibitions.map((exhibition) => (
                   <ExhibitionCard
                     key={exhibition.id}
                     exhibition={exhibition}
                     active={selectedExhibitionId === exhibition.id}
-                    onSelect={() => setSelectedExhibitionId(exhibition.id)}
+                    onSelect={() => handleSelectExhibition(exhibition)}
                   />
                 ))}
               </div>
@@ -1062,5 +1141,17 @@ export default function AdminExhibitionsPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function AdminExhibitionsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950" />
+      }
+    >
+      <AdminExhibitionsPageContent />
+    </Suspense>
   );
 }

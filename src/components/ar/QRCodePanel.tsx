@@ -37,7 +37,7 @@ export default function QRCodePanel({ url }: QRCodePanelProps) {
             QR Access
           </p>
           <h3 className="mt-3 text-[1.5rem] font-medium tracking-[-0.03em] text-[#F7F1E8]">
-            Open this page on a mobile device to view the AR preview.
+            Scan to continue in the mobile viewing room.
           </h3>
         </div>
 
@@ -45,7 +45,7 @@ export default function QRCodePanel({ url }: QRCodePanelProps) {
       </div>
 
       <p className="mt-5 text-sm leading-7 text-white/62">
-        Desktop users can scan the QR code to continue on mobile. The preview stays subtle so the artwork remains the focus.
+        Desktop users can scan the QR code to continue on mobile. The layout stays restrained so the artwork remains the focus.
       </p>
 
       <div className="mt-6 flex justify-center rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5">

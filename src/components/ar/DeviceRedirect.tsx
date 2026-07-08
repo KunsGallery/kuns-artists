@@ -185,7 +185,7 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
           <div className="p-5 md:p-6 lg:p-8">
             <div className="mb-5 h-px w-24 bg-gradient-to-r from-[#F37021]/80 to-transparent" />
             <p className="text-[11px] uppercase tracking-[0.28em] text-white/42">
-              Device Guidance
+              Mobile Viewing Room
             </p>
             <h3 className="mt-3 text-2xl font-medium tracking-[-0.04em] text-[#F7F1E8] md:text-3xl">
               AR preview is being prepared.
@@ -244,16 +244,16 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
 
         <div className="p-5 md:p-6 lg:p-8">
           <div className="mb-5 h-px w-24 bg-gradient-to-r from-[#F37021]/80 to-transparent" />
-          <p className="text-[11px] uppercase tracking-[0.28em] text-white/42">
-            Device Guidance
+            <p className="text-[11px] uppercase tracking-[0.28em] text-white/42">
+            AR Access
           </p>
           <h3 className="mt-3 text-2xl font-medium tracking-[-0.04em] text-[#F7F1E8] md:text-3xl">
             {deviceInfo.isReady && deviceInfo.isMobile
-              ? "Use your device camera and supported browser for the best AR preview experience."
-              : "Open this page on a mobile device to view the AR preview."}
+              ? "Use your device camera and supported browser for the best AR viewing room experience."
+              : "Open this page on a mobile device to continue into the AR viewing room."}
           </h3>
           <p className="mt-4 max-w-xl text-sm leading-7 text-white/62">
-            Desktop users can scan the QR code to continue on mobile. Mobile users can launch the AR preview directly when supported.
+            Desktop users can scan the QR code to continue on mobile. Mobile users can launch the AR view directly when supported.
           </p>
 
           <div className="mt-6">
@@ -265,7 +265,7 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
                     rel="ar"
                     className="inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16"
                   >
-                    View AR
+                    View in AR
                   </a>
                 ) : null}
                 {hasAndroidAr && androidIntent ? (
@@ -273,7 +273,7 @@ export default function DeviceRedirect({ work }: DeviceRedirectProps) {
                     href={androidIntent}
                     className="inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16"
                   >
-                    View AR
+                    View in AR
                   </a>
                 ) : null}
                 {!hasMobileAr ? (

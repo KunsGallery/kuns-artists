@@ -130,6 +130,10 @@ export type ArtistWorkDoc = {
   displayOrder?: number;
   isPublished?: boolean;
   archived?: boolean;
+  docentAudioEnabled?: boolean;
+  docentAudioUrl?: string;
+  docentAudioTitle?: string;
+  docentAudioDescription?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
@@ -163,6 +167,10 @@ export type ArtistWorkSavePayload = {
   frontRotationYDeg?: number;
   sideMode?: WorkSideMode;
   showBackLabel?: boolean;
+  docentAudioEnabled?: boolean;
+  docentAudioUrl?: string;
+  docentAudioTitle?: string;
+  docentAudioDescription?: string;
 };
 
 export type ArtistWorkAdminUpdatePayload = {
@@ -174,6 +182,10 @@ export type ArtistWorkAdminUpdatePayload = {
   generatedGlbUrl?: string;
   generatedUsdzUrl?: string;
   displayOrder?: number;
+  docentAudioEnabled?: boolean;
+  docentAudioUrl?: string;
+  docentAudioTitle?: string;
+  docentAudioDescription?: string;
 };
 
 function toOptionalString(value: unknown) {
@@ -458,6 +470,10 @@ function toArtistWorkDoc(id: string, rawData: Record<string, unknown>): ArtistWo
     displayOrder: toOptionalFiniteNumber(rawData.displayOrder),
     isPublished: toOptionalBoolean(rawData.isPublished),
     archived: toOptionalBoolean(rawData.archived),
+    docentAudioEnabled: toOptionalBoolean(rawData.docentAudioEnabled),
+    docentAudioUrl: toOptionalString(rawData.docentAudioUrl),
+    docentAudioTitle: toOptionalString(rawData.docentAudioTitle),
+    docentAudioDescription: toOptionalString(rawData.docentAudioDescription),
     createdAt: rawData.createdAt,
     updatedAt: rawData.updatedAt,
   };
@@ -476,6 +492,40 @@ function buildExhibitionSlug(
   }
 
   return `${artistPrefix}-exhibition-${documentId.slice(0, 6).toLowerCase()}`;
+}
+
+async function isSlugInUse(
+  collectionName: "works" | "exhibitions",
+  slug: string,
+  excludeDocId?: string
+) {
+  const snapshot = await getDocs(
+    query(collection(db, collectionName), where("slug", "==", slug))
+  );
+
+  return snapshot.docs.some((document) => document.id !== excludeDocId);
+}
+
+async function buildUniqueCollectionSlug(
+  collectionName: "works" | "exhibitions",
+  baseSlug: string,
+  excludeDocId?: string
+) {
+  const normalizedBaseSlug = baseSlug.trim();
+
+  if (!normalizedBaseSlug) {
+    return normalizedBaseSlug;
+  }
+
+  let candidate = normalizedBaseSlug;
+  let suffix = 2;
+
+  while (await isSlugInUse(collectionName, candidate, excludeDocId)) {
+    candidate = `${normalizedBaseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
 }
 
 function toExhibitionDoc(
@@ -639,7 +689,7 @@ async function updateArtistAdminDocument(
 }
 
 function buildArtistWorkEditablePayload(payload: ArtistWorkSavePayload) {
-  return {
+  const editablePayload: Record<string, unknown> = {
     title: payload.title.trim(),
     year: payload.year?.trim() ?? "",
     medium: payload.medium?.trim() ?? "",
@@ -654,6 +704,24 @@ function buildArtistWorkEditablePayload(payload: ArtistWorkSavePayload) {
     sideMode: payload.sideMode ?? "canvas",
     showBackLabel: payload.showBackLabel ?? true,
   };
+
+  if (payload.docentAudioEnabled !== undefined) {
+    editablePayload.docentAudioEnabled = payload.docentAudioEnabled;
+  }
+
+  if (payload.docentAudioUrl !== undefined) {
+    editablePayload.docentAudioUrl = payload.docentAudioUrl.trim();
+  }
+
+  if (payload.docentAudioTitle !== undefined) {
+    editablePayload.docentAudioTitle = payload.docentAudioTitle.trim();
+  }
+
+  if (payload.docentAudioDescription !== undefined) {
+    editablePayload.docentAudioDescription = payload.docentAudioDescription.trim();
+  }
+
+  return editablePayload;
 }
 
 function buildArtistWorkCreatePayload(
@@ -765,6 +833,64 @@ export async function getAllExhibitionsForAdmin(): Promise<ExhibitionDoc[]> {
   return sortExhibitionsByStartDateDesc(
     await fetchAllExhibitionDocs()
   );
+}
+
+export async function getExhibitionsForArtist(
+  artistId: string,
+  artistSlug?: string
+): Promise<ExhibitionDoc[]> {
+  const normalizedArtistId = artistId.trim();
+  const normalizedArtistSlug = artistSlug?.trim() || "";
+
+  if (!normalizedArtistId && !normalizedArtistSlug) {
+    return [];
+  }
+
+  const queryPromises: Promise<ExhibitionDoc[]>[] = [];
+
+  if (normalizedArtistId) {
+    queryPromises.push(
+      getDocs(
+        query(collection(db, "exhibitions"), where("artistId", "==", normalizedArtistId))
+      ).then((snapshot) =>
+        snapshot.docs.map((document) =>
+          toExhibitionDoc(
+            document.id,
+            document.data() as Record<string, unknown>
+          )
+        )
+      )
+    );
+  }
+
+  if (normalizedArtistSlug && normalizedArtistSlug !== normalizedArtistId) {
+    queryPromises.push(
+      getDocs(
+        query(
+          collection(db, "exhibitions"),
+          where("artistSlug", "==", normalizedArtistSlug)
+        )
+      ).then((snapshot) =>
+        snapshot.docs.map((document) =>
+          toExhibitionDoc(
+            document.id,
+            document.data() as Record<string, unknown>
+          )
+        )
+      )
+    );
+  }
+
+  const queriedExhibitions = (await Promise.all(queryPromises)).flat();
+  const uniqueExhibitions = Array.from(
+    new Map(queriedExhibitions.map((exhibition) => [exhibition.id, exhibition])).values()
+  ).filter(
+    (exhibition) =>
+      (normalizedArtistId && exhibition.artistId === normalizedArtistId) ||
+      (normalizedArtistSlug && exhibition.artistSlug === normalizedArtistSlug)
+  );
+
+  return sortExhibitionsByStartDateDesc(uniqueExhibitions);
 }
 
 export async function getPublicExhibitionsForArtistSlug(
@@ -1199,6 +1325,22 @@ export async function updateWorkForAdmin(
     }
   }
 
+  if (payload.docentAudioEnabled !== undefined) {
+    updatePayload.docentAudioEnabled = payload.docentAudioEnabled;
+  }
+
+  if (payload.docentAudioUrl !== undefined) {
+    updatePayload.docentAudioUrl = payload.docentAudioUrl.trim();
+  }
+
+  if (payload.docentAudioTitle !== undefined) {
+    updatePayload.docentAudioTitle = payload.docentAudioTitle.trim();
+  }
+
+  if (payload.docentAudioDescription !== undefined) {
+    updatePayload.docentAudioDescription = payload.docentAudioDescription.trim();
+  }
+
   await updateDoc(doc(db, "works", workId), updatePayload);
 }
 
@@ -1248,10 +1390,9 @@ export async function createWorkForArtist(
   payload: ArtistWorkSavePayload
 ) {
   const documentRef = doc(collection(db, "works"));
-  const slug = buildWorkSlug(
-    payload.title,
-    artist.slug ?? artistId,
-    documentRef.id
+  const slug = await buildUniqueCollectionSlug(
+    "works",
+    buildWorkSlug(payload.title, artist.slug ?? artistId, documentRef.id)
   );
 
   await setDoc(documentRef, {
@@ -1275,10 +1416,9 @@ export async function createWorkForAdmin(
   payload: ArtistWorkSavePayload
 ) {
   const documentRef = doc(collection(db, "works"));
-  const slug = buildWorkSlug(
-    payload.title,
-    artist.slug ?? artistId,
-    documentRef.id
+  const slug = await buildUniqueCollectionSlug(
+    "works",
+    buildWorkSlug(payload.title, artist.slug ?? artistId, documentRef.id)
   );
 
   await setDoc(documentRef, {
@@ -1328,10 +1468,9 @@ export async function createExhibitionForAdmin(
   payload: ExhibitionSavePayload
 ) {
   const documentRef = doc(collection(db, "exhibitions"));
-  const slug = buildExhibitionSlug(
-    payload.title,
-    artist.slug ?? artistId,
-    documentRef.id
+  const slug = await buildUniqueCollectionSlug(
+    "exhibitions",
+    buildExhibitionSlug(payload.title, artist.slug ?? artistId, documentRef.id)
   );
 
   await setDoc(documentRef, {
@@ -1350,13 +1489,15 @@ export async function updateExhibitionForAdmin(
   artist: ArtistDoc,
   payload: ExhibitionSavePayload
 ) {
+  const slug = await buildUniqueCollectionSlug(
+    "exhibitions",
+    buildExhibitionSlug(payload.title, artist.slug ?? artistId, exhibitionId),
+    exhibitionId
+  );
+
   await updateDoc(doc(db, "exhibitions", exhibitionId), {
     ...buildArtistExhibitionCreatePayload(artistId, artist, payload),
-    slug: buildExhibitionSlug(
-      payload.title,
-      artist.slug ?? artistId,
-      exhibitionId
-    ),
+    slug,
     updatedAt: serverTimestamp(),
   });
 }

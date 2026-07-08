@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import LogoutButton from "@/components/auth/LogoutButton";
 import R2ImageUploadField from "@/components/shared/R2ImageUploadField";
 import { artists as seedArtists } from "@/data/artists";
 import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import {
+  getAllArtistsForAdmin,
   deleteWorkForAdmin,
   getAllWorksForAdmin,
   resolveArtistWorkSlug,
   updateWorkForAdmin,
+  type ArtistDoc,
   type ArtistWorkAdminUpdatePayload,
   type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
@@ -29,6 +32,10 @@ const EMPTY_FORM: WorkFormValues = {
   modelUsdz: "",
   generatedGlbUrl: "",
   generatedUsdzUrl: "",
+  docentAudioEnabled: false,
+  docentAudioUrl: "",
+  docentAudioTitle: "",
+  docentAudioDescription: "",
 };
 
 const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
@@ -60,6 +67,10 @@ function toFormValues(work: ArtistWorkDoc): WorkFormValues {
     generatedGlbUrl: work.generatedGlbUrl || "",
     generatedUsdzUrl: work.generatedUsdzUrl || "",
     displayOrder: work.displayOrder,
+    docentAudioEnabled: work.docentAudioEnabled === true,
+    docentAudioUrl: work.docentAudioUrl || "",
+    docentAudioTitle: work.docentAudioTitle || "",
+    docentAudioDescription: work.docentAudioDescription || "",
   };
 }
 
@@ -139,6 +150,10 @@ function hasArAssetInForm(form: WorkFormValues) {
   );
 }
 
+function hasDocentAudioInForm(form: WorkFormValues) {
+  return Boolean(form.docentAudioEnabled && form.docentAudioUrl?.trim());
+}
+
 function hasTrimmedValue(value?: string | null) {
   return Boolean(value?.trim());
 }
@@ -167,6 +182,18 @@ function getArtistFilterMatches(work: ArtistWorkDoc, filter: ArtistFilter) {
   if (filter === "all") return true;
   if (filter === "represented") return isRepresentedArtistWork(work);
   return isProjectArtistWork(work);
+}
+
+function getArtistQueryMatches(work: ArtistWorkDoc, artistQuery: string) {
+  const normalizedQuery = artistQuery.trim();
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return (
+    work.artistId === normalizedQuery || work.artistSlug === normalizedQuery
+  );
 }
 
 function Badge({
@@ -650,7 +677,9 @@ function WorksEmptyState() {
   );
 }
 
-export default function AdminWorksPage() {
+function AdminWorksPageContent() {
+  const searchParams = useSearchParams();
+  const requestedArtist = searchParams.get("artist")?.trim() || "";
   const { errorMessage } = useProtectedArtist({
     requireAdmin: true,
     fallbackErrorMessage: "관리자 정보를 불러오는 중 오류가 발생했습니다.",
@@ -669,6 +698,7 @@ export default function AdminWorksPage() {
   const [arTestFileErrorMessage, setArTestFileErrorMessage] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [artistFilter, setArtistFilter] = useState<ArtistFilter>("all");
+  const [artistQueryFilter, setArtistQueryFilter] = useState("");
 
   useEffect(() => {
     let isActive = true;
@@ -677,7 +707,10 @@ export default function AdminWorksPage() {
       try {
         setIsLoadingWorks(true);
         setSaveErrorMessage("");
-        const result = await getAllWorksForAdmin();
+        const [result, artistResult] = await Promise.all([
+          getAllWorksForAdmin(),
+          getAllArtistsForAdmin(),
+        ]);
 
         if (!isActive) {
           return;
@@ -685,6 +718,28 @@ export default function AdminWorksPage() {
 
         setWorks(result);
         setSelectedWorkId((current) => current || result[0]?.id || "");
+        setArtistQueryFilter(() => {
+          if (!requestedArtist) {
+            return "";
+          }
+
+          const hasMatchingSeedArtist = seedArtists.some(
+            (artist) => artist.slug === requestedArtist
+          );
+          const hasMatchingFirestoreArtist = artistResult.some(
+            (artist: ArtistDoc) =>
+              artist.id === requestedArtist || artist.slug === requestedArtist
+          );
+          const hasMatchingWork = result.some((work) =>
+            getArtistQueryMatches(work, requestedArtist)
+          );
+
+          return hasMatchingSeedArtist ||
+            hasMatchingFirestoreArtist ||
+            hasMatchingWork
+            ? requestedArtist
+            : "";
+        });
       } catch (error) {
         if (!isActive) {
           return;
@@ -706,7 +761,7 @@ export default function AdminWorksPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [requestedArtist]);
 
   const counts = useMemo(() => {
     const published = works.filter(
@@ -730,10 +785,14 @@ export default function AdminWorksPage() {
       const matchesStatus =
         statusFilter === "all" || getWorkStatus(work) === statusFilter;
       const matchesArtist = getArtistFilterMatches(work, artistFilter);
+      const matchesRequestedArtist = getArtistQueryMatches(
+        work,
+        artistQueryFilter
+      );
 
-      return matchesStatus && matchesArtist;
+      return matchesStatus && matchesArtist && matchesRequestedArtist;
     });
-  }, [artistFilter, statusFilter, works]);
+  }, [artistFilter, artistQueryFilter, statusFilter, works]);
 
   const selectedWork = useMemo(
     () =>
@@ -1149,6 +1208,27 @@ export default function AdminWorksPage() {
               <p className="mt-4 text-sm leading-6 text-neutral-500">
                 {filteredWorks.length} / {works.length} works
               </p>
+
+              {artistQueryFilter ? (
+                <div className="mt-4 rounded-[1.25rem] border border-[#F37021]/20 bg-[#fff7f1] px-4 py-4 text-sm leading-6 text-[#b85d18]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-[0.24em] text-[#b85d18]/75">
+                        Artist filter
+                      </p>
+                      <p className="mt-2 break-all">
+                        {artistQueryFilter}
+                      </p>
+                    </div>
+                    <Link
+                      href="/admin/works"
+                      className="shrink-0 rounded-full border border-[#F37021]/30 bg-white px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-[#b85d18] transition hover:bg-[#fff2e8]"
+                    >
+                      Clear
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {isLoadingWorks ? (
@@ -1387,6 +1467,80 @@ export default function AdminWorksPage() {
                               target="work-image"
                               artistSlug={selectedWork.artistSlug}
                               workSlug={selectedWork.slug || selectedWork.id || undefined}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,#161616_0%,#121212_100%)] p-4 md:p-5">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                                Docent Audio
+                              </p>
+                              <p className="mt-2 text-sm leading-7 text-white/60">
+                                작품별 AR 페이지 하단에 도슨트 오디오 설명을 표시할 수 있습니다.
+                              </p>
+                            </div>
+                            <ArPill tone={hasDocentAudioInForm(selectedForm) ? "ready" : "neutral"}>
+                              {hasDocentAudioInForm(selectedForm) ? "Enabled" : "Hidden"}
+                            </ArPill>
+                          </div>
+
+                          <label className="mt-4 flex items-start gap-3 rounded-[1.25rem] border border-white/10 bg-white/[0.03] px-4 py-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedForm.docentAudioEnabled === true}
+                              onChange={(event) =>
+                                updateSelectedField(
+                                  "docentAudioEnabled",
+                                  event.target.checked
+                                )
+                              }
+                              className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-white/90">
+                                Enable Docent Audio
+                              </p>
+                              <p className="mt-1 text-sm leading-6 text-white/55">
+                                공개 AR 페이지에서 오디오 플레이어를 표시합니다.
+                              </p>
+                            </div>
+                          </label>
+
+                          <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            <ArTextField
+                              label="docentAudioTitle"
+                              value={selectedForm.docentAudioTitle || ""}
+                              onChange={(value) =>
+                                updateSelectedField("docentAudioTitle", value)
+                              }
+                              placeholder="Docent Audio Guide"
+                              helpText="오디오 플레이어 제목입니다."
+                            />
+                            <ArTextField
+                              label="docentAudioUrl"
+                              value={selectedForm.docentAudioUrl || ""}
+                              onChange={(value) =>
+                                updateSelectedField("docentAudioUrl", value)
+                              }
+                              placeholder="https://..."
+                              helpText="MP3, WAV, OGG 등 공개 URL을 입력하세요."
+                            />
+                          </div>
+
+                          <div className="mt-4">
+                            <ArTextField
+                              label="docentAudioDescription"
+                              value={selectedForm.docentAudioDescription || ""}
+                              onChange={(value) =>
+                                updateSelectedField(
+                                  "docentAudioDescription",
+                                  value
+                                )
+                              }
+                              placeholder="짧은 설명을 입력하세요."
+                              helpText="선택사항입니다. 공개 페이지에서는 보조 문구로만 노출됩니다."
                             />
                           </div>
                         </div>
@@ -1707,5 +1861,17 @@ export default function AdminWorksPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function AdminWorksPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="theme-dark min-h-screen bg-[#111111] text-[var(--foreground)]" />
+      }
+    >
+      <AdminWorksPageContent />
+    </Suspense>
   );
 }

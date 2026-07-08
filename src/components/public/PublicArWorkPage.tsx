@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import DocentAudioPlayer from "@/components/ar/DocentAudioPlayer";
 import DeviceRedirect from "@/components/ar/DeviceRedirect";
 import { getArtistBySlug } from "@/data/artists";
 import { getWorkBySlug as getStaticWorkBySlug } from "@/data/works";
@@ -57,6 +58,15 @@ function mapPublicWork(
       firestoreWork?.generatedGlbUrl ?? fallbackWork?.generatedGlbUrl,
     generatedUsdzUrl:
       firestoreWork?.generatedUsdzUrl ?? fallbackWork?.generatedUsdzUrl,
+    docentAudioEnabled:
+      firestoreWork?.docentAudioEnabled ?? fallbackWork?.docentAudioEnabled,
+    docentAudioUrl:
+      firestoreWork?.docentAudioUrl ?? fallbackWork?.docentAudioUrl,
+    docentAudioTitle:
+      firestoreWork?.docentAudioTitle ?? fallbackWork?.docentAudioTitle,
+    docentAudioDescription:
+      firestoreWork?.docentAudioDescription ??
+      fallbackWork?.docentAudioDescription,
     widthCm: firestoreWork?.widthCm ?? fallbackWork?.widthCm,
     heightCm: firestoreWork?.heightCm ?? fallbackWork?.heightCm,
     depthCm: firestoreWork?.depthCm ?? fallbackWork?.depthCm,
@@ -286,6 +296,12 @@ function PublicWorkContent({
   const workHref = getWorkHref(work);
   const artistHref = getArtistHref(work);
   const artistPageHref = work.artistSlug ? artistHref : "";
+  const docentAudioEnabled =
+    work.docentAudioEnabled === true && Boolean(work.docentAudioUrl?.trim());
+  const docentAudioUrl = work.docentAudioUrl?.trim() || "";
+  const docentAudioTitle =
+    work.docentAudioTitle?.trim() || "Docent Audio Guide";
+  const docentAudioDescription = work.docentAudioDescription?.trim() || "";
 
   const infoRows = [
     { label: "Title", value: work.title },
@@ -336,7 +352,7 @@ function PublicWorkContent({
                 KÜN’S GALLERY
               </span>
               <span className="inline-flex rounded-full border border-[#F37021]/25 bg-[#F37021]/10 px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-[#ffad76]">
-                AR PREVIEW
+                AR VIEWING ROOM
               </span>
               <span
                 className={`inline-flex rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.24em] ${
@@ -367,13 +383,13 @@ function PublicWorkContent({
               )}
 
               <span className="text-[11px] uppercase tracking-[0.24em] text-white/40">
-                private viewing room
+                mobile viewing room
               </span>
             </div>
 
             <p className="mt-5 max-w-2xl text-sm leading-7 text-white/68 md:text-[15px]">
               {arReady
-                ? "View this artwork through an augmented preview experience."
+                ? "View the artwork in AR, then continue with the docent audio guide below."
                 : "An AR preview for this artwork is being prepared."}
             </p>
 
@@ -475,6 +491,16 @@ function PublicWorkContent({
             </aside>
           </div>
         </section>
+
+        {docentAudioEnabled ? (
+          <section className="mx-auto max-w-7xl px-5 pt-6 md:px-8 md:pt-8">
+            <DocentAudioPlayer
+              title={docentAudioTitle}
+              description={docentAudioDescription}
+              src={docentAudioUrl}
+            />
+          </section>
+        ) : null}
 
         <section className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-8">
           <div className="rounded-[2.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.02)),#151515] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.28)] md:p-8">

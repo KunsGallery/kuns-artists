@@ -25,6 +25,10 @@ export type Work = {
   displayOrder?: number;
   isPublished?: boolean;
   archived?: boolean;
+  docentAudioEnabled?: boolean;
+  docentAudioUrl?: string;
+  docentAudioTitle?: string;
+  docentAudioDescription?: string;
 };
 
 export type WorkFormValues = {
@@ -42,4 +46,8 @@ export type WorkFormValues = {
   frontRotationYDeg: string;
   sideMode: "canvas" | "image";
   showBackLabel: boolean;
+  docentAudioEnabled?: boolean;
+  docentAudioUrl?: string;
+  docentAudioTitle?: string;
+  docentAudioDescription?: string;
 };

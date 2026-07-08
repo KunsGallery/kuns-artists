@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import LogoutButton from "@/components/auth/LogoutButton";
 import ArtistWorkGlbForm from "@/components/artist/ArtistWorkGlbForm";
 import { useProtectedArtist } from "@/hooks/useProtectedArtist";
@@ -46,8 +46,10 @@ function buildSavePayload(values: WorkFormValues) {
   };
 }
 
-export default function AdminNewWorkPage() {
+function AdminNewWorkPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedArtist = searchParams.get("artist")?.trim() || "";
   const { errorMessage } = useProtectedArtist({
     requireAdmin: true,
     fallbackErrorMessage: "관리자 정보를 불러오는 중 오류가 발생했습니다.",
@@ -70,7 +72,20 @@ export default function AdminNewWorkPage() {
         }
 
         setArtists(result);
-        setSelectedArtistId((current) => current || result[0]?.id || "");
+        setSelectedArtistId((current) => {
+          const matchedArtist = requestedArtist
+            ? result.find(
+                (artist) =>
+                  artist.id === requestedArtist || artist.slug === requestedArtist
+              )
+            : null;
+
+          if (matchedArtist) {
+            return matchedArtist.id;
+          }
+
+          return current || result[0]?.id || "";
+        });
         setLoadErrorMessage("");
       } catch (error) {
         if (!isActive) {
@@ -93,7 +108,7 @@ export default function AdminNewWorkPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [requestedArtist]);
 
   const selectedArtist = useMemo(
     () => artists.find((artist) => artist.id === selectedArtistId) ?? null,
@@ -216,5 +231,17 @@ export default function AdminNewWorkPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function AdminNewWorkPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950" />
+      }
+    >
+      <AdminNewWorkPageContent />
+    </Suspense>
   );
 }
