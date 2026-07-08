@@ -659,6 +659,7 @@ function StatusNote({
 }
 
 type ArBadgeTone = "ready" | "missing" | "preparing" | "neutral";
+type ArCanvasPreviewMode = "front" | "angle" | "back";
 
 function ArPill({
   tone,
@@ -736,6 +737,310 @@ function ArTextField({
         </p>
       ) : null}
     </label>
+  );
+}
+
+function ArDirectionControls({
+  rotationDeg,
+  flipX,
+  flipY,
+  onRotateLeft,
+  onRotateRight,
+  onRotate180,
+  onFlipX,
+  onFlipY,
+  onReset,
+}: {
+  rotationDeg: number;
+  flipX: boolean;
+  flipY: boolean;
+  onRotateLeft: () => void;
+  onRotateRight: () => void;
+  onRotate180: () => void;
+  onFlipX: () => void;
+  onFlipY: () => void;
+  onReset: () => void;
+}) {
+  const buttonClass =
+    "inline-flex min-h-11 min-w-[132px] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm whitespace-nowrap text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.07]";
+
+  return (
+    <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+            Direction Controls
+          </p>
+          <p className="mt-2 max-w-xl text-sm leading-7 text-white/58">
+            Rotate and flip the front image until the preview matches the intended orientation.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
+          <ArPill tone="neutral">Rotation: {rotationDeg}°</ArPill>
+          <ArPill tone="neutral">Flip X: {flipX ? "On" : "Off"}</ArPill>
+          <ArPill tone="neutral">Flip Y: {flipY ? "On" : "Off"}</ArPill>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <button type="button" onClick={onRotateLeft} className={buttonClass}>
+          Rotate Left
+        </button>
+        <button type="button" onClick={onRotateRight} className={buttonClass}>
+          Rotate Right
+        </button>
+        <button type="button" onClick={onRotate180} className={buttonClass}>
+          Rotate 180°
+        </button>
+        <button type="button" onClick={onFlipX} className={buttonClass}>
+          Flip Horizontal
+        </button>
+        <button type="button" onClick={onFlipY} className={buttonClass}>
+          Flip Vertical
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          className="inline-flex min-h-11 min-w-[132px] items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-4 py-2 text-sm whitespace-nowrap text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16"
+        >
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ArBackLabelPreview({
+  enabled,
+  rows,
+}: {
+  enabled: boolean;
+  rows: Array<{ label: string; value: string }>;
+}) {
+  return (
+    <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+            Back Label Preview
+          </p>
+          <p className="mt-2 max-w-2xl text-sm leading-7 text-white/58">
+            The back face uses the artwork information label when enabled, so iPhone Quick Look can mirror the same structure.
+          </p>
+        </div>
+        <ArPill tone={enabled ? "ready" : "missing"}>
+          {enabled ? "Label On" : "Label Off"}
+        </ArPill>
+      </div>
+
+      <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-[#f6f1e8] p-5 text-[#1f1d1a] shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
+        {enabled ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-[#67615a]">
+                Artwork back label
+              </p>
+              <span className="rounded-full border border-[#d9cfc0] bg-[#fffdf8] px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-[#67615a]">
+                Ivory label
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {rows.map((row) => (
+                <div
+                  key={row.label}
+                  className="rounded-[1rem] border border-[#e5dac9] bg-[#fffdf8] px-4 py-3"
+                >
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-[#7a7268]">
+                    {row.label}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[#1f1d1a]">
+                    {row.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex min-h-[220px] items-center justify-center rounded-[1.25rem] border border-dashed border-[#d4c9b8] bg-[#fffdf8] px-6 text-center text-sm leading-6 text-[#67615a]">
+            Back label disabled. The back face will use a solid ivory finish.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminArModelPreview({
+  imageUrl,
+  sideColor,
+  depthCm,
+  backLabelEnabled,
+  backLabelRows,
+  previewMode,
+  onPreviewModeChange,
+}: {
+  imageUrl: string;
+  sideColor: string;
+  depthCm: number;
+  backLabelEnabled: boolean;
+  backLabelRows: Array<{ label: string; value: string }>;
+  previewMode: ArCanvasPreviewMode;
+  onPreviewModeChange: (mode: ArCanvasPreviewMode) => void;
+}) {
+  const depthPx = Math.max(18, Math.round((depthCm / DEFAULT_AR_DEPTH_CM) * 42));
+  const modelRotation = {
+    front: "rotateX(4deg) rotateY(0deg)",
+    angle: "rotateX(58deg) rotateY(-28deg)",
+    back: "rotateX(4deg) rotateY(180deg)",
+  }[previewMode];
+  const stageLabel = {
+    front: "Front",
+    angle: "Angle",
+    back: "Back",
+  }[previewMode];
+
+  const sideShadowColor = sideColor.toLowerCase() === "#111111" ? "#080808" : "#1c1c1c";
+
+  return (
+    <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+            Canvas Model Preview
+          </p>
+          <p className="mt-2 max-w-2xl text-sm leading-7 text-white/58">
+            Visual guide for front face, side color, depth, and back label placement before generating AR files.
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
+          <ArPill tone="neutral">{depthCm.toFixed(1)} cm</ArPill>
+          <ArPill tone="neutral">{sideColor.toUpperCase()}</ArPill>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {(
+          [
+            ["front", "Front"],
+            ["angle", "Angle"],
+            ["back", "Back"],
+          ] as const
+        ).map(([mode, label]) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => onPreviewModeChange(mode)}
+            className={`inline-flex h-10 items-center justify-center rounded-full border px-4 text-sm whitespace-nowrap transition ${
+              previewMode === mode
+                ? "border-[#F37021]/35 bg-[#F37021]/10 text-[#ffbf8a]"
+                : "border-white/10 bg-white/[0.04] text-[#F7F1E8] hover:border-white/20 hover:bg-white/[0.07]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div
+        className="relative mt-4 overflow-hidden rounded-[1.6rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(243,112,33,0.12),transparent_38%),linear-gradient(180deg,#0f0f10_0%,#131313_100%)] px-4 py-6"
+        style={{ perspective: "1800px" }}
+      >
+        <div className="pointer-events-none absolute inset-x-10 bottom-4 h-10 rounded-full bg-black/35 blur-2xl" />
+
+        <div className="mx-auto flex min-h-[420px] w-full max-w-[360px] items-center justify-center">
+          <div
+            className="relative h-[440px] w-full max-w-[320px]"
+            style={{
+              transformStyle: "preserve-3d",
+              transform: modelRotation,
+            }}
+          >
+            <div
+              className="absolute inset-0 overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#f6f1e8] shadow-[0_30px_90px_rgba(0,0,0,0.45)]"
+              style={{ transform: `translateZ(${depthPx / 2}px)` }}
+            >
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt="Canvas front preview"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center px-6 text-center text-sm leading-7 text-[#8a8177]">
+                  Artwork image required for preview
+                </div>
+              )}
+            </div>
+
+            <div
+              className="absolute inset-0 overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#f6f1e8] shadow-[0_30px_90px_rgba(0,0,0,0.45)]"
+              style={{
+                transform: `rotateY(180deg) translateZ(${depthPx / 2}px)`,
+                backfaceVisibility: "hidden",
+              }}
+            >
+              {backLabelEnabled ? (
+                <div className="flex h-full flex-col justify-between p-5">
+                  <div className="space-y-3">
+                    <p className="text-[10px] uppercase tracking-[0.24em] text-[#6e675d]">
+                      Back label
+                    </p>
+                    <div className="grid gap-3">
+                      {backLabelRows.slice(0, 3).map((row) => (
+                        <div key={row.label} className="space-y-1">
+                          <p className="text-[10px] uppercase tracking-[0.22em] text-[#6e675d]">
+                            {row.label}
+                          </p>
+                          <p className="text-sm leading-6 text-[#1f1d1a]">
+                            {row.value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-[1rem] border border-[#ded4c6] bg-[#fffdf8] px-4 py-3">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-[#6e675d]">
+                      Front face hidden in back view
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-[#2c2823]">
+                      Quick Look back view should land on the label, not the artwork image.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center px-6 text-center text-sm leading-7 text-[#8a8177]">
+                  Back label disabled. The back face stays solid ivory.
+                </div>
+              )}
+            </div>
+
+            <div
+              className="absolute inset-y-0 left-0 rounded-l-[1.35rem] border-y border-l border-white/10"
+              style={{
+                width: `${depthPx}px`,
+                transformOrigin: "left center",
+                transform: `rotateY(-90deg) translateZ(${160}px)`,
+                background: `linear-gradient(180deg, ${sideShadowColor} 0%, ${sideColor} 52%, #050505 100%)`,
+              }}
+            />
+            <div
+              className="absolute inset-y-0 right-0 rounded-r-[1.35rem] border-y border-r border-white/10"
+              style={{
+                width: `${depthPx}px`,
+                transformOrigin: "right center",
+                transform: `rotateY(90deg) translateZ(${160}px)`,
+                background: `linear-gradient(180deg, ${sideColor} 0%, ${sideShadowColor} 100%)`,
+              }}
+            />
+
+            <div className="absolute inset-x-0 -bottom-10 flex justify-center">
+              <ArPill tone="neutral">{stageLabel} view</ArPill>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -838,6 +1143,8 @@ function AdminWorksPageContent() {
   const [isDeletingSelectedWork, setIsDeletingSelectedWork] = useState(false);
   const [arTestFileMessage, setArTestFileMessage] = useState("");
   const [arTestFileErrorMessage, setArTestFileErrorMessage] = useState("");
+  const [arCanvasPreviewMode, setArCanvasPreviewMode] =
+    useState<ArCanvasPreviewMode>("angle");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [artistFilter, setArtistFilter] = useState<ArtistFilter>("all");
   const [artistQueryFilter, setArtistQueryFilter] = useState("");
@@ -963,6 +1270,10 @@ function AdminWorksPageContent() {
     setArTestFileMessage("");
     setArTestFileErrorMessage("");
   }, [filteredWorks.length, selectedWork, selectedWorkId]);
+
+  useEffect(() => {
+    setArCanvasPreviewMode("angle");
+  }, [selectedWork?.id]);
 
   const selectedStatus = selectedWork ? getWorkStatus(selectedWork) : null;
   const selectedWorkSlug = selectedWork ? getPublicWorkSlug(selectedWork) : "";
@@ -1697,667 +2008,604 @@ function AdminWorksPageContent() {
                   title="4. AR Preview Builder"
                   description="Prepare and connect AR preview files for this artwork."
                 >
-                  <div className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(243,112,33,0.12),transparent_34%),linear-gradient(180deg,#1a1a1a_0%,#141414_100%)] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.24)] md:p-5">
-                    <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-                      <div className="space-y-4">
-                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
+                  <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.35fr)_minmax(390px,0.85fr)]">
+                    <div className="min-w-0 space-y-6">
+                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                          Artwork Image
+                        </p>
+                        <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
+                          Upload the artwork image that powers both the public artwork page and the AR preview flow.
+                        </p>
+                        <div className="mt-4">
+                          <R2ImageUploadField
+                            label="Artwork Image"
+                            description="Upload an image or paste a public URL. This value is used for the public artwork and AR preview."
+                            value={selectedForm.coverImageUrl || ""}
+                            onChange={(value) =>
+                              updateSelectedField("coverImageUrl", value)
+                            }
+                            target="work-image"
+                            artistSlug={selectedWork.artistSlug}
+                            workSlug={selectedWork.slug || selectedWork.id || undefined}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
                           <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                            Artwork Image
+                            Original Image
+                          </p>
+                          <p className="mt-2 text-sm leading-7 text-white/58">
+                            Reference the source image before applying any AR-specific transforms.
+                          </p>
+                          <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/20">
+                            {selectedArtworkImageUrl ? (
+                              <img
+                                src={selectedArtworkImageUrl}
+                                alt={selectedWork.title || "Original artwork"}
+                                className="aspect-[4/5] w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-white/38">
+                                이미지 없음
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                            Front Direction Preview
+                          </p>
+                          <p className="mt-2 text-sm leading-7 text-white/58">
+                            Use this only to check image rotation and flips before generating AR files.
+                          </p>
+                          <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/20">
+                            {selectedArtworkImageUrl ? (
+                              <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#151515]">
+                                <img
+                                  src={selectedArtworkImageUrl}
+                                  alt="Front direction preview"
+                                  className="absolute inset-0 h-full w-full object-cover"
+                                  style={{
+                                    transform: arFrontPreviewTransform,
+                                    transformOrigin: "center",
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-white/38">
+                                Front preview unavailable
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <AdminArModelPreview
+                        imageUrl={selectedArtworkImageUrl}
+                        sideColor={currentArSideColor}
+                        depthCm={currentArDepthCm}
+                        backLabelEnabled={currentArBackLabelEnabled}
+                        backLabelRows={arBackLabelPreviewRows}
+                        previewMode={arCanvasPreviewMode}
+                        onPreviewModeChange={setArCanvasPreviewMode}
+                      />
+
+                      <ArBackLabelPreview
+                        enabled={currentArBackLabelEnabled}
+                        rows={arBackLabelPreviewRows}
+                      />
+
+                      {hasObjectSettings ? (
+                        <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                            Stored AR Settings
                           </p>
                           <p className="mt-2 text-sm leading-7 text-white/60">
-                            Use the same image that will power the public artwork and AR preview pages.
+                            Read-only summary of the AR model settings currently in the work document.
                           </p>
-                          <div className="mt-4">
-                            <R2ImageUploadField
-                              label="Artwork Image"
-                              description="Upload an image or paste a public URL. This value is used for the public artwork and AR preview."
-                              value={selectedForm.coverImageUrl || ""}
-                              onChange={(value) =>
-                                updateSelectedField("coverImageUrl", value)
-                              }
-                              target="work-image"
-                              artistSlug={selectedWork.artistSlug}
-                              workSlug={selectedWork.slug || selectedWork.id || undefined}
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            <ObjectSettingChip
+                              label="Rotation"
+                              value={`${currentArTextureRotationDeg}°`}
+                            />
+                            <ObjectSettingChip
+                              label="Flip X"
+                              value={currentArTextureFlipX ? "On" : "Off"}
+                            />
+                            <ObjectSettingChip
+                              label="Flip Y"
+                              value={currentArTextureFlipY ? "On" : "Off"}
+                            />
+                            <ObjectSettingChip
+                              label="Edge Color"
+                              value={currentArSideColor.toUpperCase()}
+                            />
+                            <ObjectSettingChip
+                              label="Depth"
+                              value={`${currentArDepthCm.toFixed(1)} cm`}
+                            />
+                            <ObjectSettingChip
+                              label="Back Label"
+                              value={currentArBackLabelEnabled ? "On" : "Off"}
                             />
                           </div>
                         </div>
+                      ) : null}
+                    </div>
 
-                        <div className="rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,#171717_0%,#111111_100%)] p-4 md:p-5">
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                AR Model Preview &amp; Settings
-                              </p>
-                              <p className="mt-2 text-sm leading-7 text-white/62">
-                                AR 파일을 생성하기 전에 정면 방향, 측면 마감, 뒷면 라벨을 확인하고 조정합니다.
-                              </p>
-                            </div>
-                            <ArPill tone={hasArSettingsModified ? "preparing" : "neutral"}>
-                              {hasArSettingsModified ? "Settings changed" : "In sync"}
-                            </ArPill>
-                          </div>
+                    <div className="min-w-0 space-y-6">
+                      <ArDirectionControls
+                        rotationDeg={currentArTextureRotationDeg}
+                        flipX={currentArTextureFlipX}
+                        flipY={currentArTextureFlipY}
+                        onRotateLeft={() =>
+                          updateSelectedField(
+                            "arTextureRotationDeg",
+                            normalizeArTextureRotationDeg(
+                              currentArTextureRotationDeg - 90
+                            )
+                          )
+                        }
+                        onRotateRight={() =>
+                          updateSelectedField(
+                            "arTextureRotationDeg",
+                            normalizeArTextureRotationDeg(
+                              currentArTextureRotationDeg + 90
+                            )
+                          )
+                        }
+                        onRotate180={() =>
+                          updateSelectedField(
+                            "arTextureRotationDeg",
+                            normalizeArTextureRotationDeg(
+                              currentArTextureRotationDeg + 180
+                            )
+                          )
+                        }
+                        onFlipX={() =>
+                          updateSelectedField(
+                            "arTextureFlipX",
+                            !currentArTextureFlipX
+                          )
+                        }
+                        onFlipY={() =>
+                          updateSelectedField(
+                            "arTextureFlipY",
+                            !currentArTextureFlipY
+                          )
+                        }
+                        onReset={() => {
+                          updateSelectedField("arTextureRotationDeg", 0);
+                          updateSelectedField("arTextureFlipX", false);
+                          updateSelectedField("arTextureFlipY", false);
+                        }}
+                      />
 
-                          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                            <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
-                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                Original
-                              </p>
-                              <div className="mt-3 overflow-hidden rounded-[1.1rem] border border-white/10 bg-black/20">
-                                {selectedArtworkImageUrl ? (
-                                  <img
-                                    src={selectedArtworkImageUrl}
-                                    alt={selectedWork.title || "Original artwork"}
-                                    className="aspect-[4/5] w-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-white/38">
-                                    이미지 없음
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
-                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                AR Front Preview
-                              </p>
-                              <div className="mt-3 overflow-hidden rounded-[1.1rem] border border-white/10 bg-black/20">
-                                {selectedArtworkImageUrl ? (
-                                  <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#151515]">
-                                    <img
-                                      src={selectedArtworkImageUrl}
-                                      alt="AR front preview"
-                                      className="absolute inset-0 h-full w-full object-cover"
-                                      style={{
-                                        transform: arFrontPreviewTransform,
-                                        transformOrigin: "center",
-                                      }}
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-white/38">
-                                    AR preview unavailable
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                            <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                    Front Direction Controls
-                                  </p>
-                                  <p className="mt-2 text-sm leading-7 text-white/58">
-                                    Rotate and flip the front image until the preview matches the original.
-                                  </p>
-                                </div>
-                                <ArPill tone="neutral">
-                                  {currentArTextureRotationDeg}° / X{currentArTextureFlipX ? " on" : " off"} / Y{currentArTextureFlipY ? " on" : " off"}
-                                </ArPill>
-                              </div>
-
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                {[90, 180, 270].map((step) => (
-                                  <button
-                                    key={step}
-                                    type="button"
-                                    onClick={() =>
-                                      updateSelectedField(
-                                        "arTextureRotationDeg",
-                                        step as 90 | 180 | 270
-                                      )
-                                    }
-                                    className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.07]"
-                                  >
-                                    Rotate {step}°
-                                  </button>
-                                ))}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    updateSelectedField(
-                                      "arTextureFlipX",
-                                      !currentArTextureFlipX
-                                    )
-                                  }
-                                  className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.07]"
-                                >
-                                  Flip Horizontal
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    updateSelectedField(
-                                      "arTextureFlipY",
-                                      !currentArTextureFlipY
-                                    )
-                                  }
-                                  className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.07]"
-                                >
-                                  Flip Vertical
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    updateSelectedField("arTextureRotationDeg", 0);
-                                    updateSelectedField("arTextureFlipX", false);
-                                    updateSelectedField("arTextureFlipY", false);
-                                  }}
-                                  className="inline-flex h-10 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-4 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16"
-                                >
-                                  Reset Direction
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                  <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                    Edge / Depth Settings
-                                  </p>
-                                  <p className="mt-2 text-sm leading-7 text-white/58">
-                                    Adjust the edge finish and depth before generating AR files.
-                                  </p>
-                                </div>
-                                <ArPill tone="neutral">
-                                  {currentArDepthCm.toFixed(1)} cm
-                                </ArPill>
-                              </div>
-
-                              <div className="mt-4 space-y-4">
-                                <div className="grid gap-2 sm:grid-cols-3">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateSelectedField(
-                                        "arSideColor",
-                                        "#111111"
-                                      )
-                                    }
-                                    className={`rounded-[1rem] border px-4 py-3 text-left transition ${
-                                      currentArSideColor.toLowerCase() === "#111111"
-                                        ? "border-white/25 bg-white/[0.08]"
-                                        : "border-white/10 bg-white/[0.03] hover:border-white/20"
-                                    }`}
-                                  >
-                                    <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-                                      Preset
-                                    </span>
-                                    <span className="mt-2 block text-sm text-[#F7F1E8]">
-                                      Matte Black
-                                    </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateSelectedField(
-                                        "arSideColor",
-                                        "#d6cec0"
-                                      )
-                                    }
-                                    className={`rounded-[1rem] border px-4 py-3 text-left transition ${
-                                      currentArSideColor.toLowerCase() === "#d6cec0"
-                                        ? "border-white/25 bg-white/[0.08]"
-                                        : "border-white/10 bg-white/[0.03] hover:border-white/20"
-                                    }`}
-                                  >
-                                    <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-                                      Preset
-                                    </span>
-                                    <span className="mt-2 block text-sm text-[#F7F1E8]">
-                                      Warm Ivory
-                                    </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateSelectedField(
-                                        "arSideColor",
-                                        "#444444"
-                                      )
-                                    }
-                                    className={`rounded-[1rem] border px-4 py-3 text-left transition ${
-                                      currentArSideColor.toLowerCase() === "#444444"
-                                        ? "border-white/25 bg-white/[0.08]"
-                                        : "border-white/10 bg-white/[0.03] hover:border-white/20"
-                                    }`}
-                                  >
-                                    <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-                                      Preset
-                                    </span>
-                                    <span className="mt-2 block text-sm text-[#F7F1E8]">
-                                      Neutral Gray
-                                    </span>
-                                  </button>
-                                </div>
-
-                                <label className="block">
-                                  <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                    Side Color
-                                  </span>
-                                  <input
-                                    type="color"
-                                    value={normalizeArSideColor(
-                                      selectedForm.arSideColor
-                                    )}
-                                    onChange={(event) =>
-                                      updateSelectedField(
-                                        "arSideColor",
-                                        event.target.value
-                                      )
-                                    }
-                                    className="mt-2 h-12 w-full rounded-[1.1rem] border border-white/10 bg-white/[0.04] p-1"
-                                  />
-                                </label>
-
-                                <label className="block">
-                                  <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                    AR Depth (cm)
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min="3"
-                                    step="0.5"
-                                    value={selectedForm.arDepthCm}
-                                    onChange={(event) =>
-                                      updateSelectedField(
-                                        "arDepthCm",
-                                        event.target.value
-                                      )
-                                    }
-                                    className="mt-2 h-13 w-full rounded-[1.15rem] border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] outline-none transition placeholder:text-white/24 focus:border-white/20 focus:bg-white/[0.06]"
-                                  />
-                                  <p className="mt-2 text-[11px] leading-5 text-white/48">
-                                    Current depth: {currentArDepthCm.toFixed(1)} cm. 3 cm 이상을 권장합니다.
-                                  </p>
-                                </label>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-4 rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div>
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                  Back Label Preview
-                                </p>
-                                <p className="mt-2 text-sm leading-7 text-white/58">
-                                  The back face uses the artwork information label when enabled.
-                                </p>
-                              </div>
-                              <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70">
-                                <input
-                                  type="checkbox"
-                                  checked={currentArBackLabelEnabled}
-                                  onChange={(event) =>
-                                    updateSelectedField(
-                                      "arBackLabelEnabled",
-                                      event.target.checked
-                                    )
-                                  }
-                                  className="h-4 w-4 rounded border-white/20 bg-transparent"
-                                />
-                                Show Back Label
-                              </label>
-                            </div>
-
-                            <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-[#f6f1e8] p-4 text-[#1f1d1a]">
-                              {currentArBackLabelEnabled ? (
-                                <div className="space-y-3">
-                                  <p className="text-[10px] uppercase tracking-[0.24em] text-[#67615a]">
-                                    Artwork back label
-                                  </p>
-                                  <div className="space-y-1">
-                                    {arBackLabelPreviewRows.map((row) => (
-                                      <div key={row.label}>
-                                        <p className="text-[10px] uppercase tracking-[0.22em] text-[#67615a]">
-                                          {row.label}
-                                        </p>
-                                        <p className="text-sm leading-6 text-[#1f1d1a]">
-                                          {row.value}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex min-h-[180px] items-center justify-center rounded-[1rem] border border-dashed border-[#d4c9b8] bg-[#fffdf8] text-center text-sm leading-6 text-[#67615a]">
-                                  Back label disabled. The back face will render as a solid ivory surface.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {hasArSettingsModified ? (
-                            <p className="mt-4 rounded-[1.1rem] border border-[#F37021]/25 bg-[#F37021]/10 px-4 py-3 text-sm leading-6 text-[#FFBF8A]">
-                              Settings changed. Regenerate AR Files to apply them.
+                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                              Edge / Depth Settings
                             </p>
-                          ) : null}
+                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/58">
+                              Adjust the edge finish and depth before generating AR files.
+                            </p>
+                          </div>
+                          <ArPill tone="neutral">
+                            {currentArDepthCm.toFixed(1)} cm
+                          </ArPill>
                         </div>
 
-                        <div className="rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,#161616_0%,#121212_100%)] p-4 md:p-5">
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                Docent Audio
-                              </p>
-                              <p className="mt-2 text-sm leading-7 text-white/60">
-                                작품별 AR 페이지 하단에 도슨트 오디오 설명을 표시할 수 있습니다.
-                              </p>
-                            </div>
-                            <ArPill tone={hasDocentAudioInForm(selectedForm) ? "ready" : "neutral"}>
-                              {hasDocentAudioInForm(selectedForm) ? "Enabled" : "Hidden"}
-                            </ArPill>
+                        <div className="mt-4 space-y-4">
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateSelectedField("arSideColor", "#111111")
+                              }
+                              className={`min-h-[88px] rounded-[1rem] border px-4 py-3 text-left transition ${
+                                currentArSideColor.toLowerCase() === "#111111"
+                                  ? "border-white/25 bg-white/[0.08]"
+                                  : "border-white/10 bg-white/[0.03] hover:border-white/20"
+                              }`}
+                            >
+                              <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+                                Preset
+                              </span>
+                              <span className="mt-2 block whitespace-nowrap text-sm text-[#F7F1E8]">
+                                Matte Black
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateSelectedField("arSideColor", "#d6cec0")
+                              }
+                              className={`min-h-[88px] rounded-[1rem] border px-4 py-3 text-left transition ${
+                                currentArSideColor.toLowerCase() === "#d6cec0"
+                                  ? "border-white/25 bg-white/[0.08]"
+                                  : "border-white/10 bg-white/[0.03] hover:border-white/20"
+                              }`}
+                            >
+                              <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+                                Preset
+                              </span>
+                              <span className="mt-2 block whitespace-nowrap text-sm text-[#F7F1E8]">
+                                Warm Ivory
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateSelectedField("arSideColor", "#444444")
+                              }
+                              className={`min-h-[88px] rounded-[1rem] border px-4 py-3 text-left transition ${
+                                currentArSideColor.toLowerCase() === "#444444"
+                                  ? "border-white/25 bg-white/[0.08]"
+                                  : "border-white/10 bg-white/[0.03] hover:border-white/20"
+                              }`}
+                            >
+                              <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+                                Preset
+                              </span>
+                              <span className="mt-2 block whitespace-nowrap text-sm text-[#F7F1E8]">
+                                Neutral Gray
+                              </span>
+                            </button>
                           </div>
 
-                          <label className="mt-4 flex items-start gap-3 rounded-[1.25rem] border border-white/10 bg-white/[0.03] px-4 py-4">
+                          <label className="block">
+                            <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                              Side Color
+                            </span>
                             <input
-                              type="checkbox"
-                              checked={selectedForm.docentAudioEnabled === true}
+                              type="color"
+                              value={normalizeArSideColor(selectedForm.arSideColor)}
                               onChange={(event) =>
                                 updateSelectedField(
-                                  "docentAudioEnabled",
+                                  "arSideColor",
+                                  event.target.value
+                                )
+                              }
+                              className="mt-2 h-12 w-full rounded-[1.1rem] border border-white/10 bg-white/[0.04] p-1"
+                            />
+                          </label>
+
+                          <label className="block">
+                            <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                              AR Depth (cm)
+                            </span>
+                            <input
+                              type="number"
+                              min="3"
+                              step="0.5"
+                              value={selectedForm.arDepthCm}
+                              onChange={(event) =>
+                                updateSelectedField(
+                                  "arDepthCm",
+                                  event.target.value
+                                )
+                              }
+                              className="mt-2 h-13 w-full rounded-[1.15rem] border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] outline-none transition placeholder:text-white/24 focus:border-white/20 focus:bg-white/[0.06]"
+                            />
+                            <p className="mt-2 text-[11px] leading-5 text-white/48">
+                              Current depth: {currentArDepthCm.toFixed(1)} cm. 3 cm 이상을 권장합니다.
+                            </p>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                              Back Label
+                            </p>
+                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/58">
+                              Toggle the back label that will be used on the exported canvas model.
+                            </p>
+                          </div>
+                          <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70">
+                            <input
+                              type="checkbox"
+                              checked={currentArBackLabelEnabled}
+                              onChange={(event) =>
+                                updateSelectedField(
+                                  "arBackLabelEnabled",
                                   event.target.checked
                                 )
                               }
-                              className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
+                              className="h-4 w-4 rounded border-white/20 bg-transparent"
                             />
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-white/90">
-                                Enable Docent Audio
-                              </p>
-                              <p className="mt-1 text-sm leading-6 text-white/55">
-                                공개 AR 페이지에서 오디오 플레이어를 표시합니다.
-                              </p>
-                            </div>
+                            Show Back Label
                           </label>
-
-                          <div className="mt-4 grid gap-4 md:grid-cols-2">
-                            <ArTextField
-                              label="docentAudioTitle"
-                              value={selectedForm.docentAudioTitle || ""}
-                              onChange={(value) =>
-                                updateSelectedField("docentAudioTitle", value)
-                              }
-                              placeholder="Docent Audio Guide"
-                              helpText="오디오 플레이어 제목입니다."
-                            />
-                            <ArTextField
-                              label="docentAudioUrl"
-                              value={selectedForm.docentAudioUrl || ""}
-                              onChange={(value) =>
-                                updateSelectedField("docentAudioUrl", value)
-                              }
-                              placeholder="https://..."
-                              helpText="MP3, WAV, OGG 등 공개 URL을 입력하세요."
-                            />
-                          </div>
-
-                          <div className="mt-4">
-                            <ArTextField
-                              label="docentAudioDescription"
-                              value={selectedForm.docentAudioDescription || ""}
-                              onChange={(value) =>
-                                updateSelectedField(
-                                  "docentAudioDescription",
-                                  value
-                                )
-                              }
-                              placeholder="짧은 설명을 입력하세요."
-                              helpText="선택사항입니다. 공개 페이지에서는 보조 문구로만 노출됩니다."
-                            />
-                          </div>
                         </div>
-
-                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                            Status
-                          </p>
-                          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="max-w-2xl">
-                              <h4 className="text-2xl font-semibold tracking-[-0.04em] text-[#F7F1E8]">
-                                {isIphonePlacementReady
-                                  ? "iPhone AR Placement Ready"
-                                  : isWebPreviewReady
-                                    ? "Web / Android Preview Ready"
-                                    : "AR Preview Preparing"}
-                              </h4>
-                              <p className="mt-2 text-sm leading-7 text-white/66">
-                                {isIphonePlacementReady
-                                  ? "USDZ is connected, so iPhone Quick Look placement is ready. GLB still powers the web and Android preview."
-                                  : isWebPreviewReady
-                                    ? "GLB is connected, so web and Android previews are ready. Add a USDZ URL to restore iPhone placement."
-                                    : "Connect a GLB or USDZ URL, or generate a test AR file set, to enable the preview flow."}
-                              </p>
-                            </div>
-                            <div className="flex flex-col items-start gap-2">
-                              <ArPill
-                                tone={
-                                  isIphonePlacementReady
-                                    ? "ready"
-                                    : isWebPreviewReady
-                                      ? "preparing"
-                                      : "missing"
-                                }
-                              >
-                                {isIphonePlacementReady
-                                  ? "iPhone Ready"
-                                  : isWebPreviewReady
-                                    ? "Web Ready"
-                                    : "Waiting"}
-                              </ArPill>
-                              <span className="text-[11px] uppercase tracking-[0.22em] text-white/40">
-                                USDZ unlocks Quick Look placement
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                Readiness checklist
-                              </p>
-                              <p className="mt-2 text-sm leading-7 text-white/60">
-                                Check the items below before generating or linking AR files.
-                              </p>
-                            </div>
-                            <ArPill tone="neutral">6 checks</ArPill>
-                          </div>
-
-                          <div className="mt-4 grid gap-3 md:grid-cols-2">
-                            {arChecklistItems.map((item) => (
-                              <ArChecklistItem
-                                key={item.label}
-                                label={item.label}
-                                detail={item.detail}
-                                tone={item.tone}
-                              />
-                            ))}
-                          </div>
-                        </div>
-
-                        {hasObjectSettings ? (
-                          <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              Stored AR Settings
-                            </p>
-                            <p className="mt-2 text-sm leading-7 text-white/60">
-                              Read-only summary of the AR model settings currently in the work document.
-                            </p>
-
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                              <ObjectSettingChip
-                                label="Rotation"
-                                value={`${currentArTextureRotationDeg}°`}
-                              />
-                              <ObjectSettingChip
-                                label="Flip X"
-                                value={currentArTextureFlipX ? "On" : "Off"}
-                              />
-                              <ObjectSettingChip
-                                label="Flip Y"
-                                value={currentArTextureFlipY ? "On" : "Off"}
-                              />
-                              <ObjectSettingChip
-                                label="Edge Color"
-                                value={currentArSideColor.toUpperCase()}
-                              />
-                              <ObjectSettingChip
-                                label="Depth"
-                                value={`${currentArDepthCm.toFixed(1)} cm`}
-                              />
-                              <ObjectSettingChip
-                                label="Back Label"
-                                value={currentArBackLabelEnabled ? "On" : "Off"}
-                              />
-                            </div>
-                          </div>
-                        ) : null}
+                        <p className="mt-4 text-sm leading-7 text-white/58">
+                          {currentArBackLabelEnabled
+                            ? "Back label is enabled, so the exported model will use an ivory label face with artwork information."
+                            : "Back label disabled. The back face will use a solid ivory finish."}
+                        </p>
                       </div>
 
-                      <div className="space-y-4">
-                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                            Generate AR Files
-                          </p>
-                          <p className="mt-2 text-sm leading-7 text-white/66">
-                            Preview settings affect the next generated GLB/USDZ files.
-                          </p>
-                          <p className="mt-2 text-sm leading-7 text-white/58">
-                            Check the front direction and back label before generating AR files.
-                          </p>
-                          <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-black/20 px-4 py-4">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/40">
-                              Before generating
+                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                              Status
                             </p>
-                            <ul className="mt-3 space-y-2 text-sm leading-6 text-white/58">
-                              <li>Artwork image is required.</li>
-                              <li>Width and height are required.</li>
-                              <li>Web / Android Preview uses GLB.</li>
-                              <li>iPhone Quick Look uses USDZ.</li>
-                              <li>Save Changes after generating to persist the URLs.</li>
-                            </ul>
+                            <h4 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#F7F1E8]">
+                              {isIphonePlacementReady
+                                ? "iPhone AR Placement Ready"
+                                : isWebPreviewReady
+                                  ? "Web / Android Preview Ready"
+                                  : "AR Preview Preparing"}
+                            </h4>
+                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/66">
+                              {isIphonePlacementReady
+                                ? "USDZ is connected, so iPhone Quick Look placement is ready. GLB still powers the web and Android preview."
+                                : isWebPreviewReady
+                                  ? "GLB is connected, so web and Android previews are ready. Add a USDZ URL to restore iPhone placement."
+                                  : "Connect a GLB or USDZ URL, or generate a test AR file set, to enable the preview flow."}
+                            </p>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => void handleGenerateArTestFile()}
-                            disabled={isGeneratingArTestFile}
-                            className="mt-4 inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16 disabled:cursor-not-allowed disabled:opacity-60"
+                          <ArPill
+                            tone={
+                              isIphonePlacementReady
+                                ? "ready"
+                                : isWebPreviewReady
+                                  ? "preparing"
+                                  : "missing"
+                            }
                           >
-                            {isGeneratingArTestFile
-                              ? "Generating AR Files..."
-                              : "Generate AR Files"}
-                          </button>
+                            {isIphonePlacementReady
+                              ? "iPhone Ready"
+                              : isWebPreviewReady
+                                ? "Web Ready"
+                                : "Waiting"}
+                          </ArPill>
+                        </div>
+                        <p className="mt-4 text-[11px] uppercase tracking-[0.22em] text-white/40">
+                          USDZ unlocks Quick Look placement
+                        </p>
+                      </div>
 
-                          {arTestFileMessage ? (
-                            <p
-                              role="status"
-                              aria-live="polite"
-                              className="mt-3 rounded-[1.15rem] border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-100"
-                            >
-                              {arTestFileMessage}
+                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                              Readiness checklist
                             </p>
-                          ) : null}
-
-                          {arTestFileErrorMessage ? (
-                            <p
-                              role="alert"
-                              aria-live="assertive"
-                              className="mt-3 rounded-[1.15rem] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100"
-                            >
-                              {arTestFileErrorMessage}
+                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
+                              Check the items below before generating or linking AR files.
                             </p>
-                          ) : null}
+                          </div>
+                          <ArPill tone="neutral">6 checks</ArPill>
                         </div>
 
-                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                            Preview Links
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                          {arChecklistItems.map((item) => (
+                            <ArChecklistItem
+                              key={item.label}
+                              label={item.label}
+                              detail={item.detail}
+                              tone={item.tone}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                          Preview Links
+                        </p>
+                        <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
+                          After saving, check how this artwork appears on the public artwork and AR preview pages.
+                        </p>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <PreviewLinkCard
+                            label="Artwork Page"
+                            href={publicWorkHref}
+                            pathLabel={`/works/${selectedWorkSlug || "work-slug"}`}
+                            buttonLabel="View Artwork"
+                            disabledMessage="Save to unlock"
+                          />
+                          <PreviewLinkCard
+                            label="AR Preview Page"
+                            href={arHref}
+                            pathLabel={`/ar/${selectedWorkSlug || "work-slug"}`}
+                            buttonLabel="View AR Preview"
+                            disabledMessage="Save to unlock"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                              Manual AR File URLs
+                            </p>
+                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
+                              If the automatic generator is not enough, connect GLB and USDZ URLs directly here.
+                            </p>
+                          </div>
+                          <ArPill tone="neutral">Optional</ArPill>
+                        </div>
+
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                          <ArTextField
+                            label="generatedGlbUrl"
+                            value={selectedForm.generatedGlbUrl || ""}
+                            onChange={(value) =>
+                              updateSelectedField("generatedGlbUrl", value)
+                            }
+                            placeholder="https://..."
+                            helpText="Generated GLB URL. This powers web and Android preview."
+                          />
+                          <ArTextField
+                            label="generatedUsdzUrl"
+                            value={selectedForm.generatedUsdzUrl || ""}
+                            onChange={(value) =>
+                              updateSelectedField("generatedUsdzUrl", value)
+                            }
+                            placeholder="https://..."
+                            helpText="Generated USDZ URL. This restores iPhone Quick Look placement."
+                          />
+                          <ArTextField
+                            label="modelGlb"
+                            value={selectedForm.modelGlb || ""}
+                            onChange={(value) =>
+                              updateSelectedField("modelGlb", value)
+                            }
+                            placeholder="https://..."
+                            helpText="Manual GLB URL if you already prepared one."
+                          />
+                          <ArTextField
+                            label="modelUsdz"
+                            value={selectedForm.modelUsdz || ""}
+                            onChange={(value) =>
+                              updateSelectedField("modelUsdz", value)
+                            }
+                            placeholder="https://..."
+                            helpText="Manual USDZ URL for iPhone AR placement."
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,#161616_0%,#121212_100%)] p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                              Docent Audio
+                            </p>
+                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
+                              작품별 AR 페이지 하단에 도슨트 오디오 설명을 표시할 수 있습니다.
+                            </p>
+                          </div>
+                          <ArPill tone={hasDocentAudioInForm(selectedForm) ? "ready" : "neutral"}>
+                            {hasDocentAudioInForm(selectedForm) ? "Enabled" : "Hidden"}
+                          </ArPill>
+                        </div>
+
+                        <label className="mt-4 flex items-start gap-3 rounded-[1.25rem] border border-white/10 bg-white/[0.03] px-4 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedForm.docentAudioEnabled === true}
+                            onChange={(event) =>
+                              updateSelectedField(
+                                "docentAudioEnabled",
+                                event.target.checked
+                              )
+                            }
+                            className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-white/90">
+                              Enable Docent Audio
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-white/55">
+                              공개 AR 페이지에서 오디오 플레이어를 표시합니다.
+                            </p>
+                          </div>
+                        </label>
+
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                          <ArTextField
+                            label="docentAudioTitle"
+                            value={selectedForm.docentAudioTitle || ""}
+                            onChange={(value) =>
+                              updateSelectedField("docentAudioTitle", value)
+                            }
+                            placeholder="Docent Audio Guide"
+                            helpText="오디오 플레이어 제목입니다."
+                          />
+                          <ArTextField
+                            label="docentAudioUrl"
+                            value={selectedForm.docentAudioUrl || ""}
+                            onChange={(value) =>
+                              updateSelectedField("docentAudioUrl", value)
+                            }
+                            placeholder="https://..."
+                            helpText="MP3, WAV, OGG 등 공개 URL을 입력하세요."
+                          />
+                        </div>
+
+                        <div className="mt-4">
+                          <ArTextField
+                            label="docentAudioDescription"
+                            value={selectedForm.docentAudioDescription || ""}
+                            onChange={(value) =>
+                              updateSelectedField("docentAudioDescription", value)
+                            }
+                            placeholder="짧은 설명을 입력하세요."
+                            helpText="선택사항입니다. 공개 페이지에서는 보조 문구로만 노출됩니다."
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.6rem] border border-[#F37021]/20 bg-[#F37021]/8 p-5">
+                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
+                          Generate AR Files
+                        </p>
+                        <p className="mt-2 max-w-2xl text-sm leading-7 text-white/66">
+                          Preview settings affect the next generated GLB/USDZ files.
+                        </p>
+                        <p className="mt-2 max-w-2xl text-sm leading-7 text-white/58">
+                          Check the front direction and back label before generating AR files.
+                        </p>
+                        <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-black/20 px-4 py-4">
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/40">
+                            Before generating
                           </p>
-                          <p className="mt-2 text-sm leading-7 text-white/60">
-                            After saving, check how this artwork appears on the public artwork and AR preview pages.
+                          <ul className="mt-3 space-y-2 text-sm leading-6 text-white/58">
+                            <li>Artwork image is required.</li>
+                            <li>Width and height are required.</li>
+                            <li>Web / Android Preview uses GLB.</li>
+                            <li>iPhone Quick Look uses USDZ.</li>
+                            <li>Save Changes after generating to persist the URLs.</li>
+                          </ul>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => void handleGenerateArTestFile()}
+                          disabled={isGeneratingArTestFile}
+                          className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm font-medium whitespace-nowrap text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isGeneratingArTestFile
+                            ? "Generating AR Files..."
+                            : "Generate AR Files"}
+                        </button>
+
+                        {arTestFileMessage ? (
+                          <p
+                            role="status"
+                            aria-live="polite"
+                            className="mt-3 rounded-[1.15rem] border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-100"
+                          >
+                            {arTestFileMessage}
                           </p>
+                        ) : null}
 
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            <PreviewLinkCard
-                              label="Artwork Page"
-                              href={publicWorkHref}
-                              pathLabel={`/works/${selectedWorkSlug || "work-slug"}`}
-                              buttonLabel="View Artwork"
-                              disabledMessage="Save to unlock"
-                            />
-                            <PreviewLinkCard
-                              label="AR Preview Page"
-                              href={arHref}
-                              pathLabel={`/ar/${selectedWorkSlug || "work-slug"}`}
-                              buttonLabel="View AR Preview"
-                              disabledMessage="Save to unlock"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.03] p-4 md:p-5">
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                                Manual AR File URLs
-                              </p>
-                              <p className="mt-2 text-sm leading-7 text-white/60">
-                                If the automatic generator is not enough, connect GLB and USDZ URLs directly here.
-                              </p>
-                            </div>
-                            <ArPill tone="neutral">Optional</ArPill>
-                          </div>
-
-                          <div className="mt-4 grid gap-4 md:grid-cols-2">
-                            <ArTextField
-                              label="generatedGlbUrl"
-                              value={selectedForm.generatedGlbUrl || ""}
-                              onChange={(value) =>
-                                updateSelectedField("generatedGlbUrl", value)
-                              }
-                              placeholder="https://..."
-                              helpText="Generated GLB URL. This powers web and Android preview."
-                            />
-                            <ArTextField
-                              label="generatedUsdzUrl"
-                              value={selectedForm.generatedUsdzUrl || ""}
-                              onChange={(value) =>
-                                updateSelectedField("generatedUsdzUrl", value)
-                              }
-                              placeholder="https://..."
-                              helpText="Generated USDZ URL. This restores iPhone Quick Look placement."
-                            />
-                            <ArTextField
-                              label="modelGlb"
-                              value={selectedForm.modelGlb || ""}
-                              onChange={(value) =>
-                                updateSelectedField("modelGlb", value)
-                              }
-                              placeholder="https://..."
-                              helpText="Manual GLB URL if you already prepared one."
-                            />
-                            <ArTextField
-                              label="modelUsdz"
-                              value={selectedForm.modelUsdz || ""}
-                              onChange={(value) =>
-                                updateSelectedField("modelUsdz", value)
-                              }
-                              placeholder="https://..."
-                              helpText="Manual USDZ URL for iPhone AR placement."
-                            />
-                          </div>
-                        </div>
+                        {arTestFileErrorMessage ? (
+                          <p
+                            role="alert"
+                            aria-live="assertive"
+                            className="mt-3 rounded-[1.15rem] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100"
+                          >
+                            {arTestFileErrorMessage}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
+
                 </SectionCard>
 
                 <SectionCard
