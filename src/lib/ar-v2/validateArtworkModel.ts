@@ -1,0 +1,127 @@
+import {
+  Box3,
+  Mesh,
+  MeshStandardMaterial,
+  Vector3,
+  type BufferGeometry,
+  type Object3D,
+  type Scene,
+} from "three";
+import { ATLAS_RECTS } from "./buildTextureAtlas";
+import type { ArV2Diagnostic, ArtworkScene, ArtworkValidationResult } from "./types";
+
+const EPSILON = 0.001;
+
+function pass(code: string, label: string, detail: string): ArV2Diagnostic {
+  return { severity: "PASS", code, label, detail };
+}
+function warning(code: string, label: string, detail: string): ArV2Diagnostic {
+  return { severity: "WARNING", code, label, detail };
+}
+function fail(code: string, label: string, detail: string): ArV2Diagnostic {
+  return { severity: "FAIL", code, label, detail };
+}
+function near(actual: number, expected: number) {
+  return Math.abs(actual - expected) <= Math.max(Math.abs(expected) * EPSILON, 0.00001);
+}
+
+function collectMeshes(scene: Scene) {
+  const meshes: Mesh[] = [];
+  scene.traverse((object) => {
+    if (object instanceof Mesh) meshes.push(object);
+  });
+  return meshes;
+}
+
+function validateNormals(geometry: BufferGeometry) {
+  const diagnostics: ArV2Diagnostic[] = [];
+  const normals = geometry.getAttribute("normal");
+  const positions = geometry.getAttribute("position");
+  const expected = [
+    [0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0],
+  ];
+  let correct = true;
+  for (let face = 0; face < 6; face += 1) {
+    const [nx, ny, nz] = expected[face];
+    for (let vertex = 0; vertex < 4; vertex += 1) {
+      const index = face * 4 + vertex;
+      const x = normals.getX(index);
+      const y = normals.getY(index);
+      const z = normals.getZ(index);
+      const length = Math.hypot(x, y, z);
+      if (Math.abs(length - 1) > 0.0001 || Math.abs(x - nx) > 0.0001 || Math.abs(y - ny) > 0.0001 || Math.abs(z - nz) > 0.0001) correct = false;
+      const px = positions.getX(index);
+      const py = positions.getY(index);
+      const pz = positions.getZ(index);
+      if (px * nx + py * ny + pz * nz <= 0) correct = false;
+    }
+  }
+  diagnostics.push(correct ? pass("normals", "Face normals", "All six faces have unit outward normals.") : fail("normals", "Face normals", "A face normal is not unit length or not outward-facing."));
+  return diagnostics;
+}
+
+export function validateArtworkScene(artwork: ArtworkScene): ArtworkValidationResult {
+  const diagnostics: ArV2Diagnostic[] = [];
+  const meshes = collectMeshes(artwork.scene);
+  if (meshes.length !== 1) diagnostics.push(fail("mesh-count", "Mesh count", `Expected 1 mesh; found ${meshes.length}.`));
+  else diagnostics.push(pass("mesh-count", "Mesh count", "Scene contains exactly one mesh."));
+
+  const [mesh] = meshes;
+  if (!mesh) return { diagnostics, hasFailure: true };
+  const geometry = mesh.geometry as BufferGeometry;
+  const material = mesh.material;
+  if (Array.isArray(material)) diagnostics.push(fail("material-array", "Material structure", "Material arrays are not allowed."));
+  else if (!(material instanceof MeshStandardMaterial)) diagnostics.push(fail("material-type", "Material type", "MeshStandardMaterial is required."));
+  else diagnostics.push(pass("material", "Material structure", "One MeshStandardMaterial uses one atlas texture."));
+
+  const positionCount = geometry.getAttribute("position").count;
+  const indexCount = geometry.index?.count ?? 0;
+  if (positionCount === 24 && indexCount === 36) diagnostics.push(pass("geometry-count", "Geometry counts", "24 vertices and 36 indices are present."));
+  else diagnostics.push(fail("geometry-count", "Geometry counts", `Expected 24 vertices / 36 indices; found ${positionCount} / ${indexCount}.`));
+  const position = geometry.getAttribute("position");
+  const uv = geometry.getAttribute("uv");
+  if (attributeIsFinite(position) && attributeIsFinite(uv)) diagnostics.push(pass("finite", "Finite geometry", "Position and UV attributes contain no NaN or Infinity."));
+  else diagnostics.push(fail("finite", "Finite geometry", "Position or UV attributes contain a non-finite value."));
+  let uvInRange = true;
+  for (let index = 0; index < uv.count; index += 1) if (uv.getX(index) < 0 || uv.getX(index) > 1 || uv.getY(index) < 0 || uv.getY(index) > 1) uvInRange = false;
+  diagnostics.push(uvInRange ? pass("uv-range", "UV range", "All atlas UVs are within 0–1.") : fail("uv-range", "UV range", "At least one UV falls outside 0–1."));
+
+  const bounds = geometry.boundingBox ?? new Box3().setFromBufferAttribute(position as import("three").BufferAttribute);
+  const expectedSize = [artwork.dimensions.widthCm / 100, artwork.dimensions.heightCm / 100, artwork.dimensions.depthCm / 100];
+  const actualSize = bounds.getSize(new Vector3());
+  const boundsMatch = near(actualSize.x, expectedSize[0]) && near(actualSize.y, expectedSize[1]) && near(actualSize.z, expectedSize[2]);
+  diagnostics.push(boundsMatch ? pass("bounds", "Physical bounds", "Bounding box matches the requested dimensions.") : fail("bounds", "Physical bounds", "Bounding box does not match the requested dimensions."));
+  diagnostics.push(...validateNormals(geometry));
+
+  const atlas = artwork.atlas;
+  const atlasValid = atlas.canvas.width === 2048 && atlas.canvas.height === 2048 && Object.keys(ATLAS_RECTS).every((face) => Boolean(atlas.rects[face as keyof typeof atlas.rects]));
+  diagnostics.push(atlasValid ? pass("atlas", "Texture atlas", "2048² opaque atlas contains front, back, and four side cells.") : fail("atlas", "Texture atlas", "Texture atlas dimensions or face rects are invalid."));
+  const atlasContext = atlas.canvas.getContext("2d");
+  const atlasIsOpaque = atlasContext ? [
+    atlasContext.getImageData(0, 0, 1, 1).data[3],
+    atlasContext.getImageData(1023, 1023, 1, 1).data[3],
+    atlasContext.getImageData(2047, 2047, 1, 1).data[3],
+  ].every((alpha) => alpha === 255) : false;
+  diagnostics.push(atlasIsOpaque ? pass("atlas-alpha", "Atlas opacity", "Atlas samples are fully opaque.") : fail("atlas-alpha", "Atlas opacity", "Atlas contains a transparent sample or could not be inspected."));
+  diagnostics.push(atlas.texture.flipY === false ? pass("texture-flipy", "Texture orientation", "CanvasTexture.flipY is fixed to false.") : fail("texture-flipy", "Texture orientation", "CanvasTexture.flipY must remain false."));
+  diagnostics.push(mesh.rotation.x === 0 && mesh.rotation.y === 0 && mesh.rotation.z === 0 && mesh.scale.x === 1 && mesh.scale.y === 1 && mesh.scale.z === 1 ? pass("transform", "Transforms", "Mesh has no rotation, scale correction, or negative scale.") : fail("transform", "Transforms", "Mesh transform contains a correction that is not allowed."));
+  const helperExists = artwork.scene.children.some((child: Object3D) => child !== mesh);
+  diagnostics.push(helperExists ? fail("helpers", "Scene contents", "Scene contains an unexpected helper object.") : pass("helpers", "Scene contents", "Scene contains only the artwork mesh."));
+
+  return { diagnostics, hasFailure: diagnostics.some((item) => item.severity === "FAIL") };
+}
+
+function attributeIsFinite(attribute: { count: number; itemSize: number; getX: (index: number) => number; getY?: (index: number) => number; getZ?: (index: number) => number }) {
+  for (let index = 0; index < attribute.count; index += 1) {
+    if (!Number.isFinite(attribute.getX(index))) return false;
+    if (attribute.itemSize > 1 && attribute.getY && !Number.isFinite(attribute.getY(index))) return false;
+    if (attribute.itemSize > 2 && attribute.getZ && !Number.isFinite(attribute.getZ(index))) return false;
+  }
+  return true;
+}
+
+export function validateArtworkBlob(blob: Blob): ArV2Diagnostic {
+  if (blob.type !== "model/gltf-binary") return fail("blob-type", "GLB MIME type", `Expected model/gltf-binary; found ${blob.type || "empty"}.`);
+  if (blob.size < 10 * 1024) return warning("blob-size", "GLB size", `GLB is ${blob.size} bytes, below the 10 KB recommendation.`);
+  return pass("blob", "GLB output", `Binary GLB is ready (${Math.round(blob.size / 1024)} KB).`);
+}
