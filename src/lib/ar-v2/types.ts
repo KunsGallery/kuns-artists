@@ -16,6 +16,25 @@ export type ArtworkOrientation = {
   flipY: boolean;
 };
 
+export type ArtworkProductionMetadata = {
+  title: string;
+  artistName: string;
+  year: string;
+  medium: string;
+  inventoryNumber?: string;
+};
+
+export type ArtworkImageFit = "contain";
+
+export type ArtworkRatioStatus = "pass" | "warning" | "fail";
+
+export type ArtworkImageRatio = {
+  imageAspect: number;
+  physicalAspect: number;
+  differenceRatio: number;
+  status: ArtworkRatioStatus;
+};
+
 export type PhysicalDimensions = {
   widthCm: number;
   heightCm: number;
@@ -29,6 +48,8 @@ export type ArtworkBuildConfig = PhysicalDimensions & {
   image?: HTMLImageElement;
   sideColor: string;
   showBackLabel: boolean;
+  metadata?: ArtworkProductionMetadata;
+  allowRatioMismatch?: boolean;
 };
 
 export type AtlasRect = {
@@ -50,6 +71,7 @@ export type ArtworkScene = {
   mesh: Mesh;
   atlas: ArtworkAtlas;
   dimensions: PhysicalDimensions;
+  buildConfig: ArtworkBuildConfig;
 };
 
 export type DiagnosticSeverity = "PASS" | "WARNING" | "FAIL";

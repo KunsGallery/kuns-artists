@@ -36,5 +36,6 @@ export function buildArtworkScene(config: ArtworkBuildConfig): ArtworkScene {
     mesh,
     atlas,
     dimensions: { widthCm: config.widthCm, heightCm: config.heightCm, depthCm: config.depthCm },
+    buildConfig: config,
   };
 }

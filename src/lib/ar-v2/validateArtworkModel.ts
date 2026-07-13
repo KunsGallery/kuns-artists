@@ -8,6 +8,7 @@ import {
   type Scene,
 } from "three";
 import { ATLAS_RECTS, GEOMETRY_FACE_ORDER, atlasRectToUv } from "./buildTextureAtlas";
+import { getArtworkImageRatio } from "./productionArtwork";
 import type { ArV2Diagnostic, ArtworkScene, ArtworkValidationResult } from "./types";
 
 const EPSILON = 0.001;
@@ -86,6 +87,57 @@ function validateAtlasUvMapping(geometry: BufferGeometry) {
     : fail("atlas-uv-mapping", "Atlas UV mapping", "Geometry face order or vertex UV order does not match the diagnostic atlas.");
 }
 
+function rectIsOpaque(canvas: HTMLCanvasElement, rect: { x: number; y: number; width: number; height: number }) {
+  const context = canvas.getContext("2d");
+  if (!context) return false;
+  const samples = [
+    [rect.x + 1, rect.y + 1],
+    [rect.x + rect.width - 2, rect.y + 1],
+    [rect.x + 1, rect.y + rect.height - 2],
+    [rect.x + rect.width - 2, rect.y + rect.height - 2],
+    [rect.x + Math.floor(rect.width / 2), rect.y + Math.floor(rect.height / 2)],
+  ];
+  return samples.every(([x, y]) => context.getImageData(x, y, 1, 1).data[3] === 255);
+}
+
+function validateProductionArtwork(artwork: ArtworkScene) {
+  const diagnostics: ArV2Diagnostic[] = [];
+  const config = artwork.buildConfig;
+  if (config.buildMode !== "production" || config.sourceMode !== "local-image") return diagnostics;
+
+  const metadata = config.metadata;
+  diagnostics.push(metadata?.title.trim() ? pass("production-metadata-title", "Artwork title", "Production metadata includes an artwork title.") : fail("production-metadata-title", "Artwork title", "Production Artwork requires an artwork title."));
+  diagnostics.push(metadata?.artistName.trim() ? pass("production-metadata-artist", "Artist name", "Production metadata includes an artist name.") : fail("production-metadata-artist", "Artist name", "Production Artwork requires an artist name."));
+
+  const imageReadable = Boolean(config.image?.naturalWidth && config.image.naturalHeight);
+  diagnostics.push(imageReadable ? pass("artwork-image-readable", "Artwork image", `Source image is readable at ${config.image?.naturalWidth} × ${config.image?.naturalHeight}px.`) : fail("artwork-image-readable", "Artwork image", "Production Artwork requires a readable local image."));
+
+  const ratio = getArtworkImageRatio(config.image, config, config.orientation);
+  if (!ratio) {
+    diagnostics.push(fail("artwork-ratio", "Image / physical ratio", "Image ratio could not be calculated."));
+  } else if (ratio.status === "pass") {
+    diagnostics.push(pass("artwork-ratio", "Image / physical ratio", `Ratio difference is ${(ratio.differenceRatio * 100).toFixed(1)}% after orientation.`));
+  } else if (ratio.status === "warning") {
+    diagnostics.push(warning("artwork-ratio", "Image / physical ratio", `Ratio difference is ${(ratio.differenceRatio * 100).toFixed(1)}%; contain mode preserves the full image.`));
+  } else if (config.allowRatioMismatch) {
+    diagnostics.push(warning("artwork-ratio", "Image / physical ratio", `Ratio difference is ${(ratio.differenceRatio * 100).toFixed(1)}%; intentional mismatch confirmed for this test.`));
+  } else {
+    diagnostics.push(fail("artwork-ratio", "Image / physical ratio", `Ratio difference is ${(ratio.differenceRatio * 100).toFixed(1)}%, above 5%. Confirm the intentional mismatch before building.`));
+  }
+
+  const productionRects = [ATLAS_RECTS.front, ATLAS_RECTS.back, ATLAS_RECTS.left, ATLAS_RECTS.right, ATLAS_RECTS.top, ATLAS_RECTS.bottom];
+  diagnostics.push(productionRects.every((rect) => rectIsOpaque(artwork.atlas.canvas, rect))
+    ? pass("production-atlas-opacity", "Production atlas opacity", "Front, back, and side atlas cells are opaque.")
+    : fail("production-atlas-opacity", "Production atlas opacity", "A production atlas cell contains transparency."));
+
+  if (config.showBackLabel) {
+    diagnostics.push(metadata && rectIsOpaque(artwork.atlas.canvas, ATLAS_RECTS.back)
+      ? pass("production-back-label", "Production back label", "The back label cell was generated inside the back atlas rect.")
+      : fail("production-back-label", "Production back label", "Production back label metadata or atlas rect is missing."));
+  }
+  return diagnostics;
+}
+
 export function validateArtworkScene(artwork: ArtworkScene): ArtworkValidationResult {
   const diagnostics: ArV2Diagnostic[] = [];
   const meshes = collectMeshes(artwork.scene);
@@ -134,6 +186,7 @@ export function validateArtworkScene(artwork: ArtworkScene): ArtworkValidationRe
   diagnostics.push(mesh.rotation.x === 0 && mesh.rotation.y === 0 && mesh.rotation.z === 0 && mesh.scale.x === 1 && mesh.scale.y === 1 && mesh.scale.z === 1 ? pass("transform", "Transforms", "Mesh has no rotation, scale correction, or negative scale.") : fail("transform", "Transforms", "Mesh transform contains a correction that is not allowed."));
   const helperExists = artwork.scene.children.some((child: Object3D) => child !== mesh);
   diagnostics.push(helperExists ? fail("helpers", "Scene contents", "Scene contains an unexpected helper object.") : pass("helpers", "Scene contents", "Scene contains only the artwork mesh."));
+  diagnostics.push(...validateProductionArtwork(artwork));
 
   return { diagnostics, hasFailure: diagnostics.some((item) => item.severity === "FAIL") };
 }

@@ -32,7 +32,14 @@ export function ArtworkModelViewer({ objectUrl, arDisabled, onEvent }: Props) {
       ["error", () => onEvent("error", "Model viewer error")],
       ["ar-status", (event) => {
         const status = String((event as CustomEvent).detail?.status ?? "status changed");
-        onEvent("ar-status", status === "failed" ? "AR session failed" : `AR ${status}`);
+        const message = status === "failed"
+          ? "AR session failed"
+          : status === "session-started"
+            ? "AR session started"
+            : status === "not-presenting"
+              ? "AR opened"
+              : `AR ${status}`;
+        onEvent("ar-status", message);
       }],
       ["progress", (event) => {
         const detail = (event as CustomEvent).detail as { totalProgress?: number } | undefined;

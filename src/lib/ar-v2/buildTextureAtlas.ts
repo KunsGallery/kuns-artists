@@ -6,6 +6,7 @@ import {
   SRGBColorSpace,
 } from "three";
 import { createOrientationFixture } from "./createOrientationFixture";
+import { drawContainedArtworkImage, drawProductionBackLabel } from "./productionArtwork";
 import type {
   ArtworkAtlas,
   ArtworkBuildConfig,
@@ -41,58 +42,11 @@ export function atlasRectToUv(rect: AtlasRect, atlasSize = ATLAS_SIZE) {
   };
 }
 
-function drawOrientedImage(
-  context: CanvasRenderingContext2D,
-  image: CanvasImageSource,
-  rect: AtlasRect,
-  orientation: ArtworkBuildConfig["orientation"],
-) {
-  const centerX = rect.x + rect.width / 2;
-  const centerY = rect.y + rect.height / 2;
-  const drawWidth = rect.width - rect.padding * 2;
-  const drawHeight = rect.height - rect.padding * 2;
-  const naturalWidth = "naturalWidth" in image ? image.naturalWidth : "width" in image && typeof image.width === "number" ? image.width : 0;
-  const naturalHeight = "naturalHeight" in image ? image.naturalHeight : "height" in image && typeof image.height === "number" ? image.height : 0;
-  if (!naturalWidth || !naturalHeight) throw new Error("Selected image has no readable dimensions.");
-  const rotated = orientation.rotationDeg === 90 || orientation.rotationDeg === 270;
-  const imageWidth = rotated ? naturalHeight : naturalWidth;
-  const imageHeight = rotated ? naturalWidth : naturalHeight;
-  const scale = Math.min(drawWidth / imageWidth, drawHeight / imageHeight);
-
-  context.save();
-  context.translate(centerX, centerY);
-  context.rotate((orientation.rotationDeg * Math.PI) / 180);
-  context.scale(orientation.flipX ? -1 : 1, orientation.flipY ? -1 : 1);
-  context.drawImage(
-    image,
-    (-naturalWidth * scale) / 2,
-    (-naturalHeight * scale) / 2,
-    naturalWidth * scale,
-    naturalHeight * scale,
-  );
-  context.restore();
-}
-
-function drawLabel(
-  context: CanvasRenderingContext2D,
-  rect: AtlasRect,
-  label: string,
-  color = "#f0eadf",
-) {
-  context.fillStyle = color;
-  context.fillRect(rect.x, rect.y, rect.width, rect.height);
-  context.strokeStyle = "#111111";
-  context.lineWidth = 7;
-  context.strokeRect(rect.x + 8, rect.y + 8, rect.width - 16, rect.height - 16);
-  context.fillStyle = "#111111";
-  context.font = `800 ${Math.max(24, Math.round(rect.width / 15))}px Arial, sans-serif`;
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2);
-}
-
 export function buildTextureAtlas(config: ArtworkBuildConfig): ArtworkAtlas {
   if (typeof document === "undefined") throw new Error("Texture atlas requires a browser canvas.");
+  if (config.buildMode === "production" && config.sourceMode === "local-image" && (!config.metadata?.title.trim() || !config.metadata.artistName.trim())) {
+    throw new Error("Production Artwork requires Artwork Title and Artist Name.");
+  }
   const canvas = document.createElement("canvas");
   canvas.width = ATLAS_SIZE;
   canvas.height = ATLAS_SIZE;
@@ -105,8 +59,7 @@ export function buildTextureAtlas(config: ArtworkBuildConfig): ArtworkAtlas {
   const front = config.sourceMode === "local-image" && config.image ? config.image : fixtures.front;
 
   if (config.sourceMode === "local-image" && config.image) {
-    drawLabel(context, ATLAS_RECTS.front, config.sideColor);
-    drawOrientedImage(context, front, ATLAS_RECTS.front, config.orientation);
+    drawContainedArtworkImage(context, front, ATLAS_RECTS.front, config.orientation, config.sideColor);
   } else {
     context.drawImage(fixtures.front, ATLAS_RECTS.front.x, ATLAS_RECTS.front.y);
   }
@@ -124,7 +77,9 @@ export function buildTextureAtlas(config: ArtworkBuildConfig): ArtworkAtlas {
     }
     context.fillStyle = "#f0eadf";
     context.fillRect(ATLAS_RECTS.back.x, ATLAS_RECTS.back.y, ATLAS_RECTS.back.width, ATLAS_RECTS.back.height);
-    if (config.showBackLabel) drawLabel(context, ATLAS_RECTS.back, "BACK / WORK LABEL");
+    if (config.showBackLabel && config.metadata) {
+      drawProductionBackLabel(context, ATLAS_RECTS.back, config.metadata, config);
+    }
   }
 
   const texture = new CanvasTexture(canvas);

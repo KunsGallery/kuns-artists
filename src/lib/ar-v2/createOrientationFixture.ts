@@ -70,8 +70,6 @@ function drawFixtureCard(
     drawCenteredText(context, "ARTIST NAME TEST", width / 2, 500, 38, "#111111", 700);
     drawCenteredText(context, "2026", width / 2, height / 2 + 90, 86, "#111111", 800);
     drawCenteredText(context, "100 × 100 × 3.5 cm", width / 2, height - 170, 34, "#111111", 700);
-    context.fillStyle = "#111111";
-    context.fillRect(width / 2 - 28, height / 2 - 20, 56, 56);
   }
 }
 

@@ -17,7 +17,7 @@ export function ArtworkOrientationEditor({ orientation, onChange }: Props) {
     <section className="arv2-control-section">
       <div className="arv2-section-heading">
         <div>
-          <p className="arv2-kicker">Atlas-only transform</p>
+          <p className="arv2-kicker">E / Artwork Orientation · front only</p>
           <h2>Artwork Orientation</h2>
         </div>
         <span className="arv2-value-chip">{orientation.rotationDeg}°</span>
