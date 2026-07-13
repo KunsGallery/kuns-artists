@@ -136,18 +136,7 @@ export function createOrientationFixture(orientation: ArtworkOrientation) {
   back.height = 1024;
   const backContext = back.getContext("2d");
   if (!backContext) throw new Error("Could not create back fixture context.");
-  applyOrientation(
-    backContext,
-    orientation,
-    () => {
-      backContext.translate(-back.width / 2, -back.height / 2);
-      drawFixtureCard(backContext, back.width, back.height, "BACK");
-    },
-    back.width / 2,
-    back.height / 2,
-    back.width,
-    back.height,
-  );
+  drawFixtureCard(backContext, back.width, back.height, "BACK");
 
   const sides = {
     left: createSideCanvas("#ef4b45", "LEFT OUTSIDE"),

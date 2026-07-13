@@ -7,7 +7,7 @@ import {
   type Object3D,
   type Scene,
 } from "three";
-import { ATLAS_RECTS } from "./buildTextureAtlas";
+import { ATLAS_RECTS, GEOMETRY_FACE_ORDER, atlasRectToUv } from "./buildTextureAtlas";
 import type { ArV2Diagnostic, ArtworkScene, ArtworkValidationResult } from "./types";
 
 const EPSILON = 0.001;
@@ -60,6 +60,32 @@ function validateNormals(geometry: BufferGeometry) {
   return diagnostics;
 }
 
+function validateAtlasUvMapping(geometry: BufferGeometry) {
+  const uv = geometry.getAttribute("uv");
+  let correct = true;
+  GEOMETRY_FACE_ORDER.forEach((face, faceIndex) => {
+    const rect = atlasRectToUv(ATLAS_RECTS[face]);
+    const values = [
+      rect.uLeft, rect.vBottom,
+      rect.uRight, rect.vBottom,
+      rect.uRight, rect.vTop,
+      rect.uLeft, rect.vTop,
+    ];
+    for (let vertex = 0; vertex < 4; vertex += 1) {
+      const index = faceIndex * 4 + vertex;
+      if (
+        Math.abs(uv.getX(index) - values[vertex * 2]) > 0.000001 ||
+        Math.abs(uv.getY(index) - values[vertex * 2 + 1]) > 0.000001
+      ) {
+        correct = false;
+      }
+    }
+  });
+  return correct
+    ? pass("atlas-uv-mapping", "Atlas UV mapping", "Geometry face order and vertex UV order match the diagnostic atlas.")
+    : fail("atlas-uv-mapping", "Atlas UV mapping", "Geometry face order or vertex UV order does not match the diagnostic atlas.");
+}
+
 export function validateArtworkScene(artwork: ArtworkScene): ArtworkValidationResult {
   const diagnostics: ArV2Diagnostic[] = [];
   const meshes = collectMeshes(artwork.scene);
@@ -85,6 +111,7 @@ export function validateArtworkScene(artwork: ArtworkScene): ArtworkValidationRe
   let uvInRange = true;
   for (let index = 0; index < uv.count; index += 1) if (uv.getX(index) < 0 || uv.getX(index) > 1 || uv.getY(index) < 0 || uv.getY(index) > 1) uvInRange = false;
   diagnostics.push(uvInRange ? pass("uv-range", "UV range", "All atlas UVs are within 0–1.") : fail("uv-range", "UV range", "At least one UV falls outside 0–1."));
+  diagnostics.push(validateAtlasUvMapping(geometry));
 
   const bounds = geometry.boundingBox ?? new Box3().setFromBufferAttribute(position as import("three").BufferAttribute);
   const expectedSize = [artwork.dimensions.widthCm / 100, artwork.dimensions.heightCm / 100, artwork.dimensions.depthCm / 100];

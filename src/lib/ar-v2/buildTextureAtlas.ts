@@ -23,12 +23,21 @@ export const ATLAS_RECTS: Record<FaceName, AtlasRect> = {
   bottom: { x: 1536, y: 1024, width: 512, height: 512, padding: 16 },
 };
 
+export const GEOMETRY_FACE_ORDER: FaceName[] = [
+  "front",
+  "back",
+  "right",
+  "left",
+  "top",
+  "bottom",
+];
+
 export function atlasRectToUv(rect: AtlasRect, atlasSize = ATLAS_SIZE) {
   return {
-    u0: (rect.x + rect.padding) / atlasSize,
-    u1: (rect.x + rect.width - rect.padding) / atlasSize,
-    v0: 1 - (rect.y + rect.height - rect.padding) / atlasSize,
-    v1: 1 - (rect.y + rect.padding) / atlasSize,
+    uLeft: (rect.x + rect.padding) / atlasSize,
+    uRight: (rect.x + rect.width - rect.padding) / atlasSize,
+    vTop: (rect.y + rect.padding) / atlasSize,
+    vBottom: (rect.y + rect.height - rect.padding) / atlasSize,
   };
 }
 
@@ -132,9 +141,14 @@ export function buildTextureAtlas(config: ArtworkBuildConfig): ArtworkAtlas {
 
 export function applyAtlasUvs(geometry: import("three").BufferGeometry) {
   const uv = geometry.getAttribute("uv");
-  (Object.keys(ATLAS_RECTS) as FaceName[]).forEach((face, faceIndex) => {
+  GEOMETRY_FACE_ORDER.forEach((face, faceIndex) => {
     const rect = atlasRectToUv(ATLAS_RECTS[face]);
-    const values = [rect.u0, rect.v0, rect.u1, rect.v0, rect.u1, rect.v1, rect.u0, rect.v1];
+    const values = [
+      rect.uLeft, rect.vBottom,
+      rect.uRight, rect.vBottom,
+      rect.uRight, rect.vTop,
+      rect.uLeft, rect.vTop,
+    ];
     for (let vertex = 0; vertex < 4; vertex += 1) {
       uv.setXY(faceIndex * 4 + vertex, values[vertex * 2], values[vertex * 2 + 1]);
     }
