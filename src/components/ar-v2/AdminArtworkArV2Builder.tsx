@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArtworkModelViewer } from "./ArtworkModelViewer";
 import { ArV2Diagnostics } from "./ArV2Diagnostics";
 import { AdminArV2Status, getWorkArV2Summary } from "./AdminArV2Status";
@@ -9,6 +9,7 @@ import {
   buildArtworkGlb,
   createArV2SourceSignature,
   loadArtworkImageForArV2,
+  type ModelViewerLoadStatus,
   type ArV2Diagnostic,
   type ArtworkOrientation,
   type ArtworkProductionMetadata,
@@ -23,6 +24,15 @@ const ORIENTATION_CHOICES = [0, 90, 180, 270] as const;
 const DEFAULT_SIDE_COLOR = "#111111";
 const DEFAULT_DEPTH_CM = 3.5;
 const DEFAULT_GENERATOR_VERSION = "ar-v2.1";
+
+type ApprovalStatus =
+  | "idle"
+  | "confirming"
+  | "uploading-r2"
+  | "saving-firestore"
+  | "cleaning-old-asset"
+  | "complete"
+  | "error";
 
 function normalizeRotationDeg(value?: number) {
   const normalized = ((Math.round(value ?? 0) % 360) + 360) % 360;
@@ -179,6 +189,10 @@ export function AdminArtworkArV2Builder({
   const [successMessage, setSuccessMessage] = useState("");
   const [isBuilding, setIsBuilding] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [viewerLoadStatus, setViewerLoadStatus] = useState<ModelViewerLoadStatus>("idle");
+  const [viewerMessage, setViewerMessage] = useState("");
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>("idle");
+  const [approvalMessage, setApprovalMessage] = useState("");
   const [imageLoadStatus, setImageLoadStatus] = useState<ImageLoadStatus>("idle");
   const [imageLoadAttempt, setImageLoadAttempt] = useState(0);
   const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
@@ -241,6 +255,29 @@ export function AdminArtworkArV2Builder({
     return "";
   }, [coverImageUrl, depthCm, imageLoadStatus, loadedImage, work.artistName, work.heightCm, work.title, work.widthCm]);
 
+  const approvalStageLabel =
+    approvalStatus === "confirming"
+      ? "Confirming"
+      : approvalStatus === "uploading-r2"
+        ? "Uploading to R2"
+        : approvalStatus === "saving-firestore"
+          ? "Saving to Firestore"
+          : approvalStatus === "cleaning-old-asset"
+            ? "Cleaning previous asset"
+            : approvalStatus === "complete"
+              ? "Complete"
+              : approvalStatus === "error"
+                ? "Error"
+                : "Idle";
+  const approvalStageTone =
+    approvalStatus === "complete"
+      ? "ready"
+      : approvalStatus === "error"
+        ? "amber"
+        : approvalStatus === "idle"
+          ? "gray"
+          : "preparing";
+
   const missingChecks = [
     { label: "Artwork image", done: Boolean(coverImageUrl), detail: coverImageUrl || "Missing coverImageUrl" },
     { label: "Title", done: Boolean(work.title?.trim()), detail: work.title || "Missing title" },
@@ -262,6 +299,7 @@ export function AdminArtworkArV2Builder({
   const canApprove = Boolean(
     previewBlob &&
       previewObjectUrl &&
+      viewerLoadStatus === "ready" &&
       !hasDiagnosticsFailure &&
       !previewOutdated &&
       previewWorkId === work.id &&
@@ -269,6 +307,20 @@ export function AdminArtworkArV2Builder({
       !isBuilding &&
       !isUploading,
   );
+  const approvalDisabledReason = useMemo(() => {
+    if (!previewBlob) return "Build AR V2 Preview first.";
+    if (viewerLoadStatus === "preparing" || viewerLoadStatus === "loading") {
+      return "The actual GLB preview is still loading.";
+    }
+    if (viewerLoadStatus === "error") {
+      return "The actual GLB preview could not be loaded.";
+    }
+    if (hasDiagnosticsFailure) return "Resolve the failed diagnostics before approval.";
+    if (previewOutdated) return "Preview is outdated. Build it again.";
+    if (previewWorkId !== work.id) return "The preview belongs to another artwork.";
+    if (isUploading) return "AR V2 upload is in progress.";
+    return "";
+  }, [hasDiagnosticsFailure, isUploading, previewBlob, previewOutdated, previewWorkId, viewerLoadStatus, work.id]);
 
   useEffect(() => {
     setRotationDeg(getInitialOrientation(work).rotationDeg);
@@ -285,6 +337,10 @@ export function AdminArtworkArV2Builder({
     setPreviewSummary("");
     setErrorMessage("");
     setSuccessMessage("");
+    setViewerLoadStatus("idle");
+    setViewerMessage("");
+    setApprovalStatus("idle");
+    setApprovalMessage("");
     setImageLoadStatus("idle");
     setImageLoadError(null);
     setImageLoadAttempt(0);
@@ -354,6 +410,10 @@ export function AdminArtworkArV2Builder({
     setErrorMessage("");
     setSuccessMessage("");
     setPreviewSummary("");
+    setApprovalStatus("idle");
+    setApprovalMessage("");
+    setViewerLoadStatus("preparing");
+    setViewerMessage("Preparing 3D viewer…");
 
     try {
       if (!coverImageUrl) throw new Error("작품 이미지를 불러올 수 없습니다. R2 이미지 CORS 설정을 확인해주세요.");
@@ -392,6 +452,8 @@ export function AdminArtworkArV2Builder({
       setPreviewWorkId(work.id);
       setPreviewSummary(buildMessageFromDiagnostics(result.diagnostics));
       setSuccessMessage("Preview generated. Review the exact GLB before approving.");
+      setViewerLoadStatus("preparing");
+      setViewerMessage("Preparing 3D viewer…");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "AR v2 preview could not be built.");
       setPreviewDiagnostics([{ severity: "FAIL", code: "build", label: "Build failed", detail: error instanceof Error ? error.message : "AR v2 preview could not be built." }]);
@@ -400,6 +462,8 @@ export function AdminArtworkArV2Builder({
       setPreviewSignature("");
       setPreviewWorkId("");
       setPreviewSummary("");
+      setViewerLoadStatus("error");
+      setViewerMessage(error instanceof Error ? error.message : "AR v2 preview could not be built.");
     } finally {
       setIsBuilding(false);
     }
@@ -422,6 +486,8 @@ export function AdminArtworkArV2Builder({
     setIsUploading(true);
     setErrorMessage("");
     setSuccessMessage("");
+    setApprovalStatus("confirming");
+    setApprovalMessage("Confirming approval for the exact preview Blob.");
 
     const config = getArV2Config(orientation, sideColor, depthCm, backLabelEnabled, allowRatioMismatch);
     const previousGlbUrl = work.arV2Asset?.glbUrl?.trim() || "";
@@ -438,6 +504,8 @@ export function AdminArtworkArV2Builder({
     let uploadedUrl = "";
 
     try {
+      setApprovalStatus("uploading-r2");
+      setApprovalMessage("Uploading the exact preview Blob to R2…");
       const uploadResult = await uploadGlbFileToR2({
         blob: previewBlob,
         filename,
@@ -446,22 +514,52 @@ export function AdminArtworkArV2Builder({
       });
       uploadedUrl = uploadResult.publicUrl;
       asset.glbUrl = uploadResult.publicUrl;
+      setApprovalStatus("saving-firestore");
+      setApprovalMessage("Saving the AR v2 config and asset to Firestore…");
       await saveWorkArV2ForAdmin(work.id, { config, asset });
       onUploaded?.(config, asset);
+      setApprovalStatus("cleaning-old-asset");
+      setApprovalMessage("Removing the previous stored asset if it changed…");
+      if (previousGlbUrl && previousGlbUrl !== uploadedUrl) {
+        await deleteR2ObjectsByPublicUrls([previousGlbUrl]).catch(() => undefined);
+      }
+      setApprovalStatus("complete");
+      setApprovalMessage("AR v2 GLB uploaded, saved, and cleaned up.");
       setPreviewSummary("Approved and uploaded.");
       setSuccessMessage("AR v2 GLB uploaded and saved to Firestore.");
-      if (previousGlbUrl && previousGlbUrl !== uploadedUrl) {
-        void deleteR2ObjectsByPublicUrls([previousGlbUrl]).catch(() => undefined);
-      }
     } catch (error) {
       if (uploadedUrl) {
         void deleteR2ObjectsByPublicUrls([uploadedUrl]).catch(() => undefined);
       }
+      setApprovalStatus("error");
+      setApprovalMessage(error instanceof Error ? error.message : "AR v2 upload failed.");
       setErrorMessage(error instanceof Error ? error.message : "AR v2 upload failed.");
     } finally {
       setIsUploading(false);
     }
   };
+
+  const handleViewerEvent = useCallback((type: string, message: string) => {
+    setViewerMessage(message);
+    if (type === "load") {
+      setViewerLoadStatus("ready");
+      return;
+    }
+    if (type === "error") {
+      setViewerLoadStatus("error");
+      return;
+    }
+    if (type === "progress") {
+      setViewerLoadStatus((current) => (current === "ready" ? current : "loading"));
+    }
+  }, []);
+
+  const handleViewerLoadStatusChange = useCallback((status: ModelViewerLoadStatus, message?: string) => {
+    setViewerLoadStatus(status);
+    if (message) {
+      setViewerMessage(message);
+    }
+  }, []);
 
   const storedAsset = getWorkArV2Summary(work);
 
@@ -657,7 +755,7 @@ export function AdminArtworkArV2Builder({
                 type="button"
                 onClick={() => void handleBuild()}
                 disabled={!canBuild}
-                className="inline-flex h-12 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm font-medium text-[#b85d18] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/12 px-5 text-sm font-medium text-[#8f4600] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/18 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/35 disabled:opacity-100"
               >
                 {isBuilding ? "Building…" : "Build AR V2 Preview"}
               </button>
@@ -665,7 +763,7 @@ export function AdminArtworkArV2Builder({
                 type="button"
                 onClick={() => void handleApprove()}
                 disabled={!canApprove}
-                className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/10 px-5 text-sm font-medium text-emerald-900 transition hover:border-emerald-400/40 hover:bg-emerald-400/14 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-500/18 px-5 text-sm font-medium text-emerald-950 transition hover:border-emerald-300/50 hover:bg-emerald-500/24 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/35 disabled:opacity-100"
               >
                 {isUploading ? "Uploading…" : "Approve & Upload AR V2"}
               </button>
@@ -674,6 +772,12 @@ export function AdminArtworkArV2Builder({
             {!canBuild && buildDisabledReason ? (
               <p className="mt-4 rounded-[1.15rem] border border-black/8 bg-white px-4 py-3 text-sm leading-6 text-neutral-600">
                 {buildDisabledReason}
+              </p>
+            ) : null}
+
+            {!canApprove && approvalDisabledReason ? (
+              <p className="mt-3 rounded-[1.15rem] border border-black/8 bg-white px-4 py-3 text-sm leading-6 text-neutral-600">
+                {approvalDisabledReason}
               </p>
             ) : null}
 
@@ -700,6 +804,37 @@ export function AdminArtworkArV2Builder({
                 {previewSummary}
               </p>
             ) : null}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Pill tone={approvalStageTone}>{approvalStageLabel}</Pill>
+              <Pill
+                tone={
+                  viewerLoadStatus === "ready"
+                    ? "ready"
+                    : viewerLoadStatus === "error"
+                      ? "amber"
+                      : viewerLoadStatus === "loading" || viewerLoadStatus === "preparing"
+                        ? "preparing"
+                        : "gray"
+                }
+              >
+                {viewerLoadStatus === "ready"
+                  ? "Viewer Ready"
+                  : viewerLoadStatus === "preparing"
+                    ? "Viewer Preparing"
+                    : viewerLoadStatus === "loading"
+                      ? "Viewer Loading"
+                      : viewerLoadStatus === "error"
+                        ? "Viewer Error"
+                        : "Viewer Idle"}
+              </Pill>
+            </div>
+
+            {approvalMessage ? (
+              <p className="mt-3 rounded-[1.15rem] border border-black/8 bg-white px-4 py-3 text-sm leading-6 text-neutral-600">
+                {approvalMessage}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -714,16 +849,42 @@ export function AdminArtworkArV2Builder({
                   The same generated Blob is used for desktop preview and later approval.
                 </p>
               </div>
-              <Pill tone={previewBlob ? "green" : "gray"}>{previewObjectUrl ? "READY" : "IDLE"}</Pill>
+              <Pill
+                tone={
+                  viewerLoadStatus === "ready"
+                    ? "ready"
+                    : viewerLoadStatus === "error"
+                      ? "amber"
+                      : viewerLoadStatus === "loading" || viewerLoadStatus === "preparing"
+                        ? "preparing"
+                        : "gray"
+                }
+              >
+                {viewerLoadStatus === "ready"
+                  ? "Ready"
+                  : viewerLoadStatus === "preparing"
+                    ? "Preparing"
+                    : viewerLoadStatus === "loading"
+                      ? "Loading"
+                      : viewerLoadStatus === "error"
+                        ? "Error"
+                        : "Idle"}
+              </Pill>
             </div>
 
             <div className="mt-4 overflow-hidden rounded-[1.6rem] border border-black/8 bg-[#ece8df]">
               <ArtworkModelViewer
                 objectUrl={previewObjectUrl}
                 arDisabled={!previewObjectUrl || hasDiagnosticsFailure}
-                onEvent={() => undefined}
+                onEvent={handleViewerEvent}
+                onLoadStatusChange={handleViewerLoadStatusChange}
               />
             </div>
+            {viewerMessage ? (
+              <p className="mt-3 rounded-[1.15rem] border border-black/8 bg-white px-4 py-3 text-sm leading-6 text-neutral-600">
+                {viewerMessage}
+              </p>
+            ) : null}
           </div>
 
           <AdminArV2Status work={work} />

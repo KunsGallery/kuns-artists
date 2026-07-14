@@ -13,20 +13,41 @@ type Props = {
   onRetry: () => void;
 };
 
-export function ArV2SourceImageStatus({ status, coverImageUrl, image, error, siteOrigin, onRetry }: Props) {
+export function ArV2SourceImageStatus({
+  status,
+  coverImageUrl,
+  image,
+  error,
+  siteOrigin,
+  onRetry,
+}: Props) {
   const host = getHostName(coverImageUrl);
   const canRetry = status === "error" && Boolean(coverImageUrl);
-  const badgeTone = status === "ready" ? "green" : status === "loading" ? "amber" : status === "error" ? "amber" : "gray";
-  const badgeLabel = status === "ready" ? "Source Ready" : status === "loading" ? "Loading" : status === "error" ? "CORS Error" : "Missing Source";
+  const badgeLabel =
+    status === "ready"
+      ? "Source Ready"
+      : status === "loading"
+        ? "Loading"
+        : status === "error"
+          ? "CORS Error"
+          : "Missing Source";
+  const badgeClass =
+    status === "ready"
+      ? "border-emerald-300/35 bg-emerald-400/15 text-emerald-50"
+      : status === "loading"
+        ? "border-amber-300/35 bg-amber-400/15 text-amber-50"
+        : status === "error"
+          ? "border-rose-300/35 bg-rose-500/15 text-rose-50"
+          : "border-white/10 bg-white/5 text-white/60";
 
   return (
-    <div className="rounded-[1.4rem] border border-black/8 bg-white p-4">
+    <div className="rounded-[1.4rem] border border-white/10 bg-slate-950/80 p-4 text-white shadow-sm ring-1 ring-white/5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+          <p className="text-[11px] uppercase tracking-[0.24em] text-white/45">
             Source Status
           </p>
-          <p className="mt-2 text-sm leading-7 text-neutral-600">
+          <p className="mt-2 text-sm leading-7 text-white/80">
             {status === "loading"
               ? "Loading artwork source…"
               : status === "ready"
@@ -36,13 +57,9 @@ export function ArV2SourceImageStatus({ status, coverImageUrl, image, error, sit
                   : "No artwork image URL."}
           </p>
         </div>
-        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.22em] ${
-          badgeTone === "green"
-            ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-900"
-            : badgeTone === "amber"
-              ? "border-amber-400/25 bg-amber-400/10 text-amber-900"
-              : "border-black/10 bg-[#f7f6f2] text-neutral-700"
-        }`}>
+        <span
+          className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.22em] ${badgeClass}`}
+        >
           {badgeLabel}
         </span>
       </div>
@@ -51,23 +68,34 @@ export function ArV2SourceImageStatus({ status, coverImageUrl, image, error, sit
         <InfoRow label="Site origin" value={error?.siteOrigin || siteOrigin || "—"} />
         <InfoRow label="Image host" value={error?.imageHost || host || "—"} />
         <InfoRow label="Required method" value="GET / HEAD" />
-        <InfoRow label="Status" value={status === "error" ? "CORS blocked" : status === "loading" ? "Loading" : status === "ready" ? "Ready" : "Missing source"} />
+        <InfoRow
+          label="Status"
+          value={
+            status === "error"
+              ? "CORS blocked"
+              : status === "loading"
+                ? "Loading"
+                : status === "ready"
+                  ? "Ready"
+                  : "Missing source"
+          }
+        />
       </div>
 
       {status === "ready" && image ? (
-        <div className="mt-4 rounded-[1.15rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
+        <div className="mt-4 rounded-[1.15rem] border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-50">
           Decoded image: {image.naturalWidth} × {image.naturalHeight}px
         </div>
       ) : null}
 
       {status === "error" ? (
-        <div className="mt-4 rounded-[1.15rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-          <p className="font-medium">Artwork source could not be loaded</p>
-          <p className="mt-2">
+        <div className="mt-4 rounded-[1.15rem] border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-50">
+          <p className="font-medium text-amber-50">Artwork source could not be loaded</p>
+          <p className="mt-2 text-amber-50/90">
             {error?.detail ||
               "The image URL is public, but JavaScript cannot read it because the R2 response does not allow this site origin."}
           </p>
-          <p className="mt-2">
+          <p className="mt-2 text-amber-50/80">
             Cloudflare R2 Bucket Settings의 CORS Policy에 현재 사이트 주소를 추가한 뒤 다시 시도하세요.
           </p>
         </div>
@@ -77,7 +105,7 @@ export function ArV2SourceImageStatus({ status, coverImageUrl, image, error, sit
         <button
           type="button"
           onClick={onRetry}
-          className="mt-4 inline-flex h-11 items-center justify-center rounded-full border border-black/10 bg-white px-4 text-sm text-neutral-700 transition hover:border-black/20 hover:bg-[#faf9f5]"
+          className="mt-4 inline-flex h-11 items-center justify-center rounded-full border border-white/15 bg-white/8 px-4 text-sm text-white/90 transition hover:border-white/25 hover:bg-white/12"
         >
           Retry Artwork Image
         </button>
@@ -96,9 +124,9 @@ function getHostName(value: string) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[1rem] border border-black/8 bg-[#fcfbf8] px-4 py-3">
-      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">{label}</p>
-      <p className="mt-2 break-all text-sm leading-6 text-neutral-700">{value}</p>
+    <div className="rounded-[1rem] border border-white/10 bg-white/[0.06] px-4 py-3">
+      <p className="text-[11px] uppercase tracking-[0.24em] text-white/45">{label}</p>
+      <p className="mt-2 break-all text-sm leading-6 text-white/85">{value}</p>
     </div>
   );
 }

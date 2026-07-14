@@ -47,6 +47,10 @@ export type WorkArV2Asset = {
   errorMessage?: string;
 };
 
+export type ModelViewerDefinitionStatus = "loading" | "ready" | "error";
+
+export type ModelViewerLoadStatus = "idle" | "preparing" | "loading" | "ready" | "error";
+
 export type ArV2SourceSignatureInput = {
   workId: string;
   coverImageUrl: string;

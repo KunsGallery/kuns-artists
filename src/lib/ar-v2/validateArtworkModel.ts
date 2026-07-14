@@ -31,6 +31,10 @@ function near(actual: number, expected: number) {
   return Math.abs(actual - expected) <= Math.max(Math.abs(expected) * EPSILON, 0.00001);
 }
 
+function getReadbackContext(canvas: HTMLCanvasElement) {
+  return canvas.getContext("2d", { alpha: false, willReadFrequently: true });
+}
+
 function collectMeshes(scene: Scene) {
   const meshes: Mesh[] = [];
   scene.traverse((object) => {
@@ -93,7 +97,7 @@ function validateAtlasUvMapping(geometry: BufferGeometry) {
 }
 
 function rectIsOpaque(canvas: HTMLCanvasElement, rect: { x: number; y: number; width: number; height: number }) {
-  const context = canvas.getContext("2d");
+  const context = getReadbackContext(canvas);
   if (!context) return false;
   const samples = [
     [rect.x + 1, rect.y + 1],
@@ -106,7 +110,7 @@ function rectIsOpaque(canvas: HTMLCanvasElement, rect: { x: number; y: number; w
 }
 
 function samplePixel(canvas: HTMLCanvasElement, x: number, y: number) {
-  const context = canvas.getContext("2d");
+  const context = getReadbackContext(canvas);
   if (!context) return null;
   const [r, g, b, a] = context.getImageData(x, y, 1, 1).data;
   return { r, g, b, a };
@@ -238,7 +242,7 @@ export function validateArtworkScene(artwork: ArtworkScene): ArtworkValidationRe
   const atlas = artwork.atlas;
   const atlasValid = atlas.canvas.width === 2048 && atlas.canvas.height === 2048 && Object.keys(ATLAS_RECTS).every((face) => Boolean(atlas.rects[face as keyof typeof atlas.rects]));
   diagnostics.push(atlasValid ? pass("atlas", "Texture atlas", "2048² opaque atlas contains front, back, and four side cells.") : fail("atlas", "Texture atlas", "Texture atlas dimensions or face rects are invalid."));
-  const atlasContext = atlas.canvas.getContext("2d");
+  const atlasContext = getReadbackContext(atlas.canvas);
   const atlasIsOpaque = atlasContext ? [
     atlasContext.getImageData(0, 0, 1, 1).data[3],
     atlasContext.getImageData(1023, 1023, 1, 1).data[3],

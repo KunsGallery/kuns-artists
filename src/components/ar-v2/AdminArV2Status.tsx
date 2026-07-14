@@ -85,10 +85,10 @@ function ToneChip({
   children: React.ReactNode;
 }) {
   const toneClass = {
-    ready: "border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
-    missing: "border-amber-400/25 bg-amber-400/10 text-amber-100",
-    preparing: "border-[#F37021]/25 bg-[#F37021]/10 text-[#FFBF8A]",
-    neutral: "border-white/10 bg-white/[0.04] text-white/72",
+    ready: "border-emerald-300/35 bg-emerald-400/15 text-emerald-950",
+    missing: "border-amber-300/35 bg-amber-400/15 text-amber-950",
+    preparing: "border-[#F37021]/30 bg-[#F37021]/14 text-[#8f4600]",
+    neutral: "border-black/10 bg-white text-neutral-700",
   }[tone];
 
   return (
@@ -126,7 +126,7 @@ export function AdminArV2Status({ work }: { work: ArtistWorkDoc }) {
       </div>
 
       {asset?.status === "error" && asset.errorMessage ? (
-        <p className="mt-4 rounded-[1.15rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+        <p className="mt-4 rounded-[1.15rem] border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-950">
           {asset.errorMessage}
         </p>
       ) : null}
