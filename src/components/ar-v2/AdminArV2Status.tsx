@@ -85,7 +85,7 @@ function ToneChip({
   children: React.ReactNode;
 }) {
   const toneClass = {
-    ready: "border-emerald-300/35 bg-emerald-400/15 text-emerald-950",
+    ready: "border-emerald-300/40 bg-emerald-500/20 text-white",
     missing: "border-amber-300/35 bg-amber-400/15 text-amber-950",
     preparing: "border-[#F37021]/30 bg-[#F37021]/14 text-[#8f4600]",
     neutral: "border-black/10 bg-white text-neutral-700",
@@ -126,7 +126,7 @@ export function AdminArV2Status({ work }: { work: ArtistWorkDoc }) {
       </div>
 
       {asset?.status === "error" && asset.errorMessage ? (
-        <p className="mt-4 rounded-[1.15rem] border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-950">
+        <p className="mt-4 rounded-[1.15rem] border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-white">
           {asset.errorMessage}
         </p>
       ) : null}

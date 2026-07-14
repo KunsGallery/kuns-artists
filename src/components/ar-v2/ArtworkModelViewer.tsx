@@ -74,92 +74,131 @@ export function ArtworkModelViewer({
   }, [onEvent]);
 
   useEffect(() => {
+    if (definitionStatus !== "ready") {
+      if (definitionStatus === "loading") {
+        onLoadStatusChange?.("preparing", "Preparing 3D viewer…");
+      } else {
+        onLoadStatusChange?.("error", "The 3D viewer could not be loaded.");
+      }
+      return;
+    }
+
     if (!objectUrl) {
       onLoadStatusChange?.("idle", "No preview model.");
       return;
     }
 
-    if (definitionStatus === "loading") {
-      onLoadStatusChange?.("preparing", "Preparing 3D viewer…");
+    const viewer = viewerRef.current;
+    if (!viewer) {
       return;
     }
 
-    if (definitionStatus === "error") {
-      onLoadStatusChange?.("error", "The 3D viewer could not be loaded.");
-      return;
-    }
+    let disposed = false;
+    let frameId = 0;
+
+    const markReady = () => {
+      if (disposed) return;
+
+      onEvent("load", "Actual GLB loaded successfully.");
+      onLoadStatusChange?.("ready", "Actual GLB loaded successfully.");
+      if (viewer.canActivateAR === false) {
+        onEvent("ar-support", "AR unsupported on this browser or device");
+      }
+    };
+
+    const handleLoad = () => {
+      markReady();
+    };
+
+    const handleError = (event: Event) => {
+      if (disposed) return;
+
+      const message = getEventErrorMessage(event);
+      onEvent("error", message);
+      onLoadStatusChange?.("error", message);
+    };
+
+    const handleProgress = (event: Event) => {
+      if (disposed) return;
+
+      const detail = (event as CustomEvent).detail as
+        | { totalProgress?: number }
+        | undefined;
+      const progress =
+        typeof detail?.totalProgress === "number"
+          ? Math.round(detail.totalProgress * 100)
+          : null;
+
+      onEvent(
+        "progress",
+        progress === null ? "GLB loading" : `GLB loading ${progress}%`,
+      );
+      onLoadStatusChange?.(
+        "loading",
+        progress === null
+          ? "Actual GLB preview is loading."
+          : `Actual GLB preview is loading (${progress}%).`,
+      );
+    };
+
+    const handleArStatus = (event: Event) => {
+      if (disposed) return;
+
+      const status = String(
+        (event as CustomEvent).detail?.status ?? "status changed",
+      );
+      const message =
+        status === "failed"
+          ? "AR session failed"
+          : status === "session-started"
+            ? "AR session started"
+            : status === "not-presenting"
+              ? "AR opened"
+              : `AR ${status}`;
+      onEvent("ar-status", message);
+    };
+
+    const handleCameraChange = () => {
+      if (disposed) return;
+
+      onEvent("camera-change", "Camera changed");
+    };
+
+    viewer.addEventListener("load", handleLoad);
+    viewer.addEventListener("error", handleError);
+    viewer.addEventListener("progress", handleProgress);
+    viewer.addEventListener("ar-status", handleArStatus);
+    viewer.addEventListener("camera-change", handleCameraChange);
 
     onLoadStatusChange?.("loading", "Actual GLB preview is loading.");
-  }, [definitionStatus, objectUrl, onLoadStatusChange]);
 
-  useEffect(() => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
+    viewer.removeAttribute("src");
 
-    const listeners: Array<[string, EventListener]> = [
-      [
-        "load",
-        () => {
-          onEvent("load", "Actual GLB loaded successfully.");
-          onLoadStatusChange?.("ready", "Actual GLB loaded successfully.");
-          if (viewer.canActivateAR === false) {
-            onEvent("ar-support", "AR unsupported on this browser or device");
-          }
-        },
-      ],
-      [
-        "error",
-        (event) => {
-          const message = getEventErrorMessage(event as Event);
-          onEvent("error", message);
-          onLoadStatusChange?.("error", "Actual GLB preview failed.");
-        },
-      ],
-      [
-        "ar-status",
-        (event) => {
-          const status = String(
-            (event as CustomEvent).detail?.status ?? "status changed",
-          );
-          const message =
-            status === "failed"
-              ? "AR session failed"
-              : status === "session-started"
-                ? "AR session started"
-                : status === "not-presenting"
-                  ? "AR opened"
-                  : `AR ${status}`;
-          onEvent("ar-status", message);
-        },
-      ],
-      [
-        "progress",
-        (event) => {
-          const detail = (event as CustomEvent).detail as
-            | { totalProgress?: number }
-            | undefined;
-          const progress =
-            typeof detail?.totalProgress === "number"
-              ? Math.round(detail.totalProgress * 100)
-              : null;
-          onEvent(
-            "progress",
-            progress === null ? "GLB loading" : `GLB loading ${progress}%`,
-          );
-          onLoadStatusChange?.(
-            "loading",
-            progress === null
-              ? "Actual GLB preview is loading."
-              : `Actual GLB preview is loading (${progress}%).`,
-          );
-        },
-      ],
-      ["camera-change", () => onEvent("camera-change", "Camera changed")],
-    ];
+    frameId = window.requestAnimationFrame(() => {
+      if (disposed) return;
 
-    listeners.forEach(([name, listener]) => viewer.addEventListener(name, listener));
-    return () => listeners.forEach(([name, listener]) => viewer.removeEventListener(name, listener));
-  }, [objectUrl, onEvent, onLoadStatusChange]);
+      viewer.setAttribute("src", objectUrl);
+
+      queueMicrotask(() => {
+        if (disposed) return;
+        if (viewer.loaded === true) {
+          markReady();
+        }
+      });
+    });
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(frameId);
+
+      viewer.removeEventListener("load", handleLoad);
+      viewer.removeEventListener("error", handleError);
+      viewer.removeEventListener("progress", handleProgress);
+      viewer.removeEventListener("ar-status", handleArStatus);
+      viewer.removeEventListener("camera-change", handleCameraChange);
+      viewer.removeAttribute("src");
+    };
+  }, [definitionStatus, objectUrl, onEvent, onLoadStatusChange]);
 
   const setOrbit = (orbit: string) => {
     if (viewerRef.current) viewerRef.current.cameraOrbit = orbit;
@@ -187,7 +226,6 @@ export function ArtworkModelViewer({
           <model-viewer
             key={objectUrl}
             ref={viewerRef}
-            src={objectUrl}
             alt="Actual GLB Preview of the AR v2 artwork model"
             camera-controls
             ar={!arDisabled}

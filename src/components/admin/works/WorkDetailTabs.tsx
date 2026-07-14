@@ -25,7 +25,7 @@ export function WorkDetailTabs({ activeTab, onChange, tabs }: WorkDetailTabsProp
           const active = tab.value === activeTab;
           const toneClass = {
             neutral: "border-black/10 bg-[#f7f6f2] text-neutral-700",
-            green: "border-emerald-400/25 bg-emerald-400/10 text-emerald-900",
+            green: "border-emerald-300/40 bg-emerald-500/20 text-white",
             amber: "border-amber-400/25 bg-amber-400/10 text-amber-900",
             red: "border-red-300 bg-red-50 text-red-700",
           }[tab.tone || "neutral"];

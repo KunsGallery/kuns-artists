@@ -33,7 +33,7 @@ export function ArV2SourceImageStatus({
           : "Missing Source";
   const badgeClass =
     status === "ready"
-      ? "border-emerald-300/35 bg-emerald-400/15 text-emerald-50"
+      ? "border-emerald-300/40 bg-emerald-500/20 text-white"
       : status === "loading"
         ? "border-amber-300/35 bg-amber-400/15 text-amber-50"
         : status === "error"
@@ -83,7 +83,7 @@ export function ArV2SourceImageStatus({
       </div>
 
       {status === "ready" && image ? (
-        <div className="mt-4 rounded-[1.15rem] border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+        <div className="mt-4 rounded-[1.15rem] border border-emerald-300/30 bg-emerald-500/15 px-4 py-3 text-sm leading-6 text-white">
           Decoded image: {image.naturalWidth} × {image.naturalHeight}px
         </div>
       ) : null}

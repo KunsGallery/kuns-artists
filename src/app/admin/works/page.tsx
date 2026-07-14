@@ -337,7 +337,7 @@ function Badge({
   tone,
   children,
 }: {
-  tone: "published" | "pending" | "archived" | "neutral" | "orange";
+  tone: "published" | "pending" | "archived" | "neutral" | "orange" | "green";
   children: React.ReactNode;
 }) {
   const toneClass = {
@@ -346,6 +346,7 @@ function Badge({
     archived: "border-slate-200 bg-slate-50 text-slate-600",
     neutral: "border-black/10 bg-[#f7f6f2] text-neutral-600",
     orange: "border-[#F37021]/35 bg-[#F37021]/10 text-[#b85d18]",
+    green: "border-emerald-300/40 bg-emerald-500/20 text-white",
   }[tone];
 
   return (
@@ -435,7 +436,7 @@ function MiniStatus({
   tone: "green" | "amber" | "gray";
 }) {
   const toneClass = {
-    green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    green: "border-emerald-300/40 bg-emerald-500/20 text-white",
     amber: "border-amber-200 bg-amber-50 text-amber-900",
     gray: "border-black/10 bg-[#f7f6f2] text-neutral-500",
   }[tone];
@@ -665,7 +666,7 @@ function ArPill({
   children: React.ReactNode;
 }) {
   const toneClass = {
-    ready: "border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
+    ready: "border-emerald-300/40 bg-emerald-500/20 text-white",
     missing: "border-amber-400/25 bg-amber-400/10 text-amber-100",
     preparing: "border-[#F37021]/25 bg-[#F37021]/10 text-[#FFBF8A]",
     neutral: "border-white/10 bg-white/[0.04] text-white/72",
@@ -1721,7 +1722,7 @@ function AdminWorksPageContent() {
                         <Badge tone={selectedStatus === "published" ? "published" : selectedStatus === "archived" ? "archived" : "pending"}>
                           {getWorkStatusLabel(selectedStatus || "pending")}
                         </Badge>
-                        <Badge tone={selectedWorkArV2Summary?.tone === "ready" ? "orange" : "neutral"}>
+                        <Badge tone={selectedWorkArV2Summary?.tone === "ready" ? "green" : "neutral"}>
                           {selectedWorkArV2Summary?.label || "AR V2"}
                         </Badge>
                       </div>
@@ -2155,7 +2156,7 @@ function AdminWorksPageContent() {
               <div
                 role="status"
                 aria-live="polite"
-                className="rounded-[1.75rem] border border-emerald-200 bg-emerald-50 p-5 text-sm leading-7 text-emerald-800"
+                className="rounded-[1.75rem] border border-emerald-300/30 bg-emerald-500/15 p-5 text-sm leading-7 text-white"
               >
                 {saveMessage}
               </div>

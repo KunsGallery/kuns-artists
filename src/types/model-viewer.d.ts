@@ -4,6 +4,7 @@ declare global {
   interface HTMLModelViewerElement extends HTMLElement {
     src: string;
     cameraOrbit: string;
+    loaded?: boolean;
     canActivateAR?: boolean;
     resetTurntableRotation?: () => void;
     jumpCameraToGoal?: () => void;

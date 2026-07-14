@@ -763,7 +763,7 @@ export function AdminArtworkArV2Builder({
                 type="button"
                 onClick={() => void handleApprove()}
                 disabled={!canApprove}
-                className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-500/18 px-5 text-sm font-medium text-emerald-950 transition hover:border-emerald-300/50 hover:bg-emerald-500/24 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/35 disabled:opacity-100"
+                className="inline-flex h-12 items-center justify-center rounded-full border border-emerald-300/45 bg-emerald-500/25 px-5 text-sm font-medium text-white transition hover:bg-emerald-500/32 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.06] disabled:text-white/45 disabled:opacity-100"
               >
                 {isUploading ? "Uploading…" : "Approve & Upload AR V2"}
               </button>
@@ -794,7 +794,7 @@ export function AdminArtworkArV2Builder({
             ) : null}
 
             {successMessage ? (
-              <p className="mt-4 rounded-[1.15rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-700">
+              <p className="mt-4 rounded-[1.15rem] border border-emerald-300/30 bg-emerald-500/15 px-4 py-3 text-sm leading-6 text-white">
                 {successMessage}
               </p>
             ) : null}
@@ -933,10 +933,10 @@ function Pill({
   tone?: "green" | "amber" | "gray" | "ready" | "missing" | "preparing" | "neutral";
 }) {
   const toneClass = {
-    green: "border-emerald-400/25 bg-emerald-400/10 text-emerald-900",
+    green: "border-emerald-300/40 bg-emerald-500/20 text-white",
     amber: "border-amber-400/25 bg-amber-400/10 text-amber-900",
     gray: "border-black/10 bg-white text-neutral-700",
-    ready: "border-emerald-400/25 bg-emerald-400/10 text-emerald-900",
+    ready: "border-emerald-300/40 bg-emerald-500/20 text-white",
     preparing: "border-amber-400/25 bg-amber-400/10 text-amber-900",
     missing: "border-black/10 bg-white text-neutral-700",
     neutral: "border-black/10 bg-white text-neutral-700",
@@ -1003,7 +1003,7 @@ function ChecklistLine({
     <div className="flex items-start gap-3 rounded-[1.15rem] border border-black/8 bg-white px-4 py-3">
       <span
         className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${
-          done ? "bg-emerald-400/10 text-emerald-900" : "bg-slate-100 text-slate-400"
+          done ? "bg-emerald-500/20 text-white" : "bg-slate-100 text-slate-400"
         }`}
       >
         {done ? "✓" : "•"}

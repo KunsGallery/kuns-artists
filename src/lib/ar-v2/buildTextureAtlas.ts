@@ -54,7 +54,7 @@ export function buildTextureAtlas(config: ArtworkBuildConfig): ArtworkAtlas {
   const canvas = document.createElement("canvas");
   canvas.width = ATLAS_SIZE;
   canvas.height = ATLAS_SIZE;
-  const context = canvas.getContext("2d", { alpha: false });
+  const context = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
   if (!context) throw new Error("Could not create the texture atlas canvas.");
 
   context.fillStyle = config.sideColor;
