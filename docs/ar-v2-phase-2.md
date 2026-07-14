@@ -50,14 +50,14 @@ An over-5% mismatch disables Build Preview Model until the local confirmation ch
 
 ## 6. Back label layout
 
-`drawProductionBackLabel` is shared by the atlas builder and Back Label Source Preview. It creates an ivory full-cell background, a warm-white bordered card, and left-aligned information hierarchy:
+`createProductionBackLabelCanvas` generates an offscreen label surface whose pixel aspect matches the artwork's physical `widthCm / heightCm` ratio. The canvas draws an ivory background, a warm-white bordered 4:5 card sized from the artwork's shorter side, and left-aligned information hierarchy:
 
 - KÜN’S GALLERY
 - title
 - artist
 - year, medium, dimensions, and optional inventory number
 
-Long title and medium values wrap to bounded lines with final-line ellipsis. No orientation transform is applied to the back label. The Diagnostic back fixture remains separate from this production label.
+Long title and medium values wrap to bounded lines with final-line ellipsis. The offscreen canvas is then baked into the square back atlas rect, which means the atlas preview can look pre-distorted while the actual GLB restores the physical proportions. No orientation transform is applied to the back label. The Diagnostic back fixture remains separate from this production label.
 
 ## 7. Production UI
 
@@ -72,7 +72,7 @@ Long title and medium values wrap to bounded lines with final-line ellipsis. No 
 7. Finish, side color, back label, and mismatch confirmation.
 8. Build, Diagnostics, Phase 2 Test Checklist, and Event Log.
 
-The Source Preview and Back Label Source Preview are input-review surfaces. Actual GLB Preview remains the only model preview.
+The Source Preview and Back Label Source Preview are input-review surfaces. The Back Label Source Preview reuses the same offscreen canvas as the atlas bake and shows it with contain behavior. Actual GLB Preview remains the only model preview.
 
 ## 8. QA presets and checklist
 

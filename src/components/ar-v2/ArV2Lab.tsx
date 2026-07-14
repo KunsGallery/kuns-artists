@@ -304,7 +304,7 @@ export function ArV2Lab() {
 
             {productionMode ? <ArtworkMetadataEditor metadata={metadata} onChange={setMetadata} /> : null}
             {productionMode && sourceMode === "local-image" ? <ArtworkSourcePreview image={image} dimensions={numericDimensions} orientation={orientation} /> : null}
-            {productionMode ? <BackLabelSourcePreview metadata={metadata} dimensions={numericDimensions} /> : null}
+            {productionMode ? <BackLabelSourcePreview metadata={metadata} dimensions={numericDimensions} showBackLabel={showBackLabel} /> : null}
 
             <ArtworkOrientationEditor orientation={orientation} onChange={setOrientation} />
 

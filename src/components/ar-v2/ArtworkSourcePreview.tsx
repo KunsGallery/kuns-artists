@@ -3,7 +3,9 @@
 import { useEffect, useRef } from "react";
 import {
   drawContainedArtworkThumbnail,
-  drawProductionBackLabel,
+  createProductionBackLabelCanvas,
+  drawCanvasContained,
+  PRODUCTION_COLORS,
   formatDimensions,
   formatRatioPercent,
   getArtworkImageRatio,
@@ -64,19 +66,27 @@ export function ArtworkSourcePreview({ image, dimensions, orientation }: SourceP
 type BackProps = {
   metadata: ArtworkProductionMetadata;
   dimensions: PhysicalDimensions;
+  showBackLabel: boolean;
 };
 
-export function BackLabelSourcePreview({ metadata, dimensions }: BackProps) {
+export function BackLabelSourcePreview({ metadata, dimensions, showBackLabel }: BackProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.width = 360;
-    canvas.height = 360;
+    canvas.height = 420;
     const context = canvas.getContext("2d");
-    if (context) drawProductionBackLabel(context, { x: 0, y: 0, width: canvas.width, height: canvas.height, padding: 0 }, metadata, dimensions);
-  }, [dimensions, metadata]);
+    if (!context) return;
+    if (!showBackLabel) {
+      context.fillStyle = PRODUCTION_COLORS.backBackground;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    const labelCanvas = createProductionBackLabelCanvas(metadata, dimensions);
+    drawCanvasContained(context, labelCanvas, { x: 0, y: 0, width: canvas.width, height: canvas.height, padding: 18 }, PRODUCTION_COLORS.backBackground);
+  }, [dimensions, metadata, showBackLabel]);
 
   return (
     <section className="arv2-panel" aria-labelledby="back-label-preview-title">
@@ -85,10 +95,10 @@ export function BackLabelSourcePreview({ metadata, dimensions }: BackProps) {
           <p className="arv2-kicker">Input review only</p>
           <h2 id="back-label-preview-title">Back Label Source Preview</h2>
         </div>
-        <span className="arv2-value-chip">FIXED</span>
+        <span className="arv2-value-chip">{showBackLabel ? "ON" : "OFF"}</span>
       </div>
       <canvas ref={canvasRef} className="arv2-back-label-preview" aria-label="Production back label preview" />
-      <p className="arv2-helper-text">This preview uses the same label layout as the production atlas. Orientation is never applied to the back label.</p>
+      <p className="arv2-helper-text">{showBackLabel ? "This preview uses the same label canvas as the production atlas. The square atlas cell is pre-distorted for the physical artwork ratio." : "Back label is disabled. Production back face stays warm ivory."}</p>
       <p className="arv2-helper-text">Dimensions: {formatDimensions(dimensions)}</p>
     </section>
   );

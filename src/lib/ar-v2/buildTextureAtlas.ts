@@ -6,7 +6,11 @@ import {
   SRGBColorSpace,
 } from "three";
 import { createOrientationFixture } from "./createOrientationFixture";
-import { drawArtworkImageToFrontAtlas, drawProductionBackLabel } from "./productionArtwork";
+import {
+  createProductionBackLabelCanvas,
+  drawArtworkImageToFrontAtlas,
+  drawProductionBackLabelToAtlas,
+} from "./productionArtwork";
 import type {
   ArtworkAtlas,
   ArtworkBuildConfig,
@@ -70,6 +74,9 @@ export function buildTextureAtlas(config: ArtworkBuildConfig): ArtworkAtlas {
   context.drawImage(fixtures.bottom, ATLAS_RECTS.bottom.x, ATLAS_RECTS.bottom.y);
 
   if (config.buildMode === "production") {
+    const backLabelCanvas = config.showBackLabel && config.metadata
+      ? createProductionBackLabelCanvas(config.metadata, config)
+      : null;
     context.fillStyle = config.sideColor;
     for (const face of ["left", "right", "top", "bottom"] as const) {
       const rect = ATLAS_RECTS[face];
@@ -77,8 +84,8 @@ export function buildTextureAtlas(config: ArtworkBuildConfig): ArtworkAtlas {
     }
     context.fillStyle = "#f0eadf";
     context.fillRect(ATLAS_RECTS.back.x, ATLAS_RECTS.back.y, ATLAS_RECTS.back.width, ATLAS_RECTS.back.height);
-    if (config.showBackLabel && config.metadata) {
-      drawProductionBackLabel(context, ATLAS_RECTS.back, config.metadata, config);
+    if (backLabelCanvas) {
+      drawProductionBackLabelToAtlas(context, ATLAS_RECTS.back, backLabelCanvas);
     }
   }
 

@@ -8,7 +8,12 @@ import {
   type Scene,
 } from "three";
 import { ATLAS_RECTS, GEOMETRY_FACE_ORDER, atlasRectToUv } from "./buildTextureAtlas";
-import { getArtworkImageRatio } from "./productionArtwork";
+import {
+  LABEL_WIDTH_TO_HEIGHT,
+  MAX_SHORT_SIDE_FRACTION,
+  getArtworkImageRatio,
+  getBackLabelCardMetrics,
+} from "./productionArtwork";
 import type { ArV2Diagnostic, ArtworkScene, ArtworkValidationResult } from "./types";
 
 const EPSILON = 0.001;
@@ -100,6 +105,25 @@ function rectIsOpaque(canvas: HTMLCanvasElement, rect: { x: number; y: number; w
   return samples.every(([x, y]) => context.getImageData(x, y, 1, 1).data[3] === 255);
 }
 
+function samplePixel(canvas: HTMLCanvasElement, x: number, y: number) {
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  const [r, g, b, a] = context.getImageData(x, y, 1, 1).data;
+  return { r, g, b, a };
+}
+
+function hexToRgb(value: string) {
+  const normalized = value.replace("#", "");
+  if (normalized.length !== 6) return null;
+  const parsed = Number.parseInt(normalized, 16);
+  if (Number.isNaN(parsed)) return null;
+  return {
+    r: (parsed >> 16) & 0xff,
+    g: (parsed >> 8) & 0xff,
+    b: parsed & 0xff,
+  };
+}
+
 function validateProductionArtwork(artwork: ArtworkScene) {
   const diagnostics: ArV2Diagnostic[] = [];
   const config = artwork.buildConfig;
@@ -131,9 +155,48 @@ function validateProductionArtwork(artwork: ArtworkScene) {
     : fail("production-atlas-opacity", "Production atlas opacity", "A production atlas cell contains transparency."));
 
   if (config.showBackLabel) {
-    diagnostics.push(metadata && rectIsOpaque(artwork.atlas.canvas, ATLAS_RECTS.back)
-      ? pass("production-back-label", "Production back label", "The back label cell was generated inside the back atlas rect.")
-      : fail("production-back-label", "Production back label", "Production back label metadata or atlas rect is missing."));
+    const metrics = getBackLabelCardMetrics(config.widthCm, config.heightCm);
+    const physicalAspect = config.widthCm / config.heightCm;
+    const surfaceAspect = metrics.surface.width / metrics.surface.height;
+    const surfaceDiff = Math.abs(surfaceAspect - physicalAspect) / physicalAspect;
+    const cardRatio = metrics.cardWidth / metrics.cardHeight;
+    const cardRatioDiff = Math.abs(cardRatio - LABEL_WIDTH_TO_HEIGHT) / LABEL_WIDTH_TO_HEIGHT;
+    const shortSideScale = metrics.labelHeightCm / metrics.shortSideCm;
+    const cardInsideSurface = metrics.cardX >= 0
+      && metrics.cardY >= 0
+      && metrics.cardX + metrics.cardWidth <= metrics.surface.width
+      && metrics.cardY + metrics.cardHeight <= metrics.surface.height;
+
+    diagnostics.push(surfaceDiff <= 0.01
+      ? pass("back-label-surface-aspect", "Back label surface aspect", "The offscreen back label surface matches the artwork aspect.")
+      : surfaceDiff <= 0.02
+        ? warning("back-label-surface-aspect", "Back label surface aspect", "The offscreen back label surface is slightly off the artwork aspect.")
+        : fail("back-label-surface-aspect", "Back label surface aspect", "The offscreen back label surface does not match the artwork aspect."));
+    diagnostics.push(cardInsideSurface
+      ? pass("back-label-card-bounds", "Back label card bounds", "The 4:5 label card stays inside the back label surface.")
+      : fail("back-label-card-bounds", "Back label card bounds", "The 4:5 label card would overflow the back label surface."));
+    diagnostics.push(cardRatioDiff <= 0.01
+      ? pass("back-label-card-ratio", "Back label card ratio", "The label card keeps the requested 4:5 ratio.")
+      : cardRatioDiff <= 0.05
+        ? warning("back-label-card-ratio", "Back label card ratio", "The label card is slightly off the requested 4:5 ratio.")
+        : fail("back-label-card-ratio", "Back label card ratio", "The label card is too far from the requested 4:5 ratio."));
+    diagnostics.push(shortSideScale <= MAX_SHORT_SIDE_FRACTION + 0.0001
+      ? pass("back-label-short-side-scale", "Back label short-side scale", "The label card height is capped from the shorter artwork side.")
+      : fail("back-label-short-side-scale", "Back label short-side scale", "The label card exceeds the shorter artwork side cap."));
+    const backBackground = hexToRgb("#f0eadf");
+    const centerSample = samplePixel(
+      artwork.atlas.canvas,
+      ATLAS_RECTS.back.x + Math.floor(ATLAS_RECTS.back.width / 2),
+      ATLAS_RECTS.back.y + Math.floor(ATLAS_RECTS.back.height / 2),
+    );
+    const baked = Boolean(metadata && centerSample && backBackground && (
+      centerSample.r !== backBackground.r
+      || centerSample.g !== backBackground.g
+      || centerSample.b !== backBackground.b
+    ));
+    diagnostics.push(baked
+      ? pass("back-label-atlas-bake", "Back label atlas bake", "The generated back label changed the back atlas rect center away from the warm ivory fill.")
+      : fail("back-label-atlas-bake", "Back label atlas bake", "The back atlas rect center still looks like a plain warm ivory fill."));
   }
   return diagnostics;
 }
