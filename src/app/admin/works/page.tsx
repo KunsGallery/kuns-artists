@@ -18,12 +18,11 @@ import {
 } from "@/lib/firebase/firestore";
 import {
   deleteR2ObjectsByPublicUrls,
-  uploadGlbFileToR2,
-  uploadUsdzFileToR2,
 } from "@/lib/r2/client";
 import { hasArAsset } from "@/lib/workDisplay";
-import { createCanvasArFiles, createSafeGlbFilename } from "@/lib/ar/createCanvasGlb";
 import { AdminArtworkArV2Builder } from "@/components/ar-v2/AdminArtworkArV2Builder";
+import { getWorkArV2Summary } from "@/components/ar-v2/AdminArV2Status";
+import { WorkDetailTabs, type WorkDetailTab } from "@/components/admin/works/WorkDetailTabs";
 
 const DEFAULT_AR_SIDE_COLOR = "#111111";
 const DEFAULT_AR_DEPTH_CM = 3.5;
@@ -256,23 +255,6 @@ function hasTrimmedValue(value?: string | null) {
 
 function hasPositiveNumber(value?: number | null) {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
-}
-
-function hasFiniteNumber(value?: number | null) {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function formatArDepthCm(value?: string | number | null) {
-  if (typeof value === "string") {
-    const parsed = parseOptionalNumberInput(value);
-    return parsed !== undefined ? parsed : DEFAULT_AR_DEPTH_CM;
-  }
-
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  return DEFAULT_AR_DEPTH_CM;
 }
 
 function getArDepthCmNumber(form: WorkFormValues, work?: ArtistWorkDoc | null) {
@@ -1153,10 +1135,8 @@ function AdminWorksPageContent() {
   const [saveMessage, setSaveMessage] = useState("");
   const [saveErrorMessage, setSaveErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [isGeneratingArTestFile, setIsGeneratingArTestFile] = useState(false);
   const [isDeletingSelectedWork, setIsDeletingSelectedWork] = useState(false);
-  const [arTestFileMessage, setArTestFileMessage] = useState("");
-  const [arTestFileErrorMessage, setArTestFileErrorMessage] = useState("");
+  const [activeDetailTab, setActiveDetailTab] = useState<WorkDetailTab>("review");
   const [arCanvasPreviewMode, setArCanvasPreviewMode] =
     useState<ArCanvasPreviewMode>("angle");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -1268,8 +1248,6 @@ function AdminWorksPageContent() {
   useEffect(() => {
     if (!selectedWork) {
       setSelectedForm(EMPTY_FORM);
-      setArTestFileMessage("");
-      setArTestFileErrorMessage("");
       if (selectedWorkId && filteredWorks.length === 0) {
         setSelectedWorkId("");
       }
@@ -1281,8 +1259,6 @@ function AdminWorksPageContent() {
     }
 
     setSelectedForm(toFormValues(selectedWork));
-    setArTestFileMessage("");
-    setArTestFileErrorMessage("");
   }, [filteredWorks.length, selectedWork, selectedWorkId]);
 
   useEffect(() => {
@@ -1290,6 +1266,7 @@ function AdminWorksPageContent() {
   }, [selectedWork?.id]);
 
   const selectedStatus = selectedWork ? getWorkStatus(selectedWork) : null;
+  const selectedWorkArV2Summary = selectedWork ? getWorkArV2Summary(selectedWork) : null;
   const selectedWorkSlug = selectedWork ? getPublicWorkSlug(selectedWork) : "";
   const artistHref = selectedWork?.artistSlug
     ? `/artists/${selectedWork.artistSlug}`
@@ -1311,6 +1288,19 @@ function AdminWorksPageContent() {
   const hasArtistSlug = hasTrimmedValue(selectedWork?.artistSlug);
   const hasWorkRouteSlug = hasTrimmedValue(selectedWorkSlug);
   const hasArSettingsModified = hasArSettingsChanged(selectedForm, selectedWork);
+  const reviewMissingCount = [
+    !hasArtworkImage,
+    !hasArtworkDimensions,
+    !hasArtistSlug,
+    !hasWorkRouteSlug,
+  ].filter(Boolean).length;
+  const arV2TabBadge =
+    selectedWork?.arV2Asset?.status === "error"
+      ? "Error"
+      : selectedWork?.arV2Asset?.status === "ready"
+        ? "Ready"
+        : "Not Built";
+  const legacyTabBadge = hasArSettingsModified || hasGlbInForm || hasUsdzInForm ? "Legacy Asset" : "Empty";
   const currentArTextureRotationDeg = getArTextureRotationDeg(
     selectedForm,
     selectedWork
@@ -1494,148 +1484,6 @@ function AdminWorksPageContent() {
       );
     } finally {
       setIsDeletingSelectedWork(false);
-    }
-  }
-
-  async function handleGenerateArTestFile() {
-    if (!selectedWork) {
-      return;
-    }
-
-    const coverImageUrl =
-      selectedForm.coverImageUrl?.trim() || selectedWork.coverImageUrl?.trim() || "";
-    const widthCm = selectedWork.widthCm;
-    const heightCm = selectedWork.heightCm;
-    const artistSlugForUpload =
-      selectedWork.artistSlug?.trim() || selectedWork.id?.trim() || "";
-    const workSlugForUpload = selectedWorkSlug || selectedWork.id?.trim() || "";
-
-    if (!coverImageUrl) {
-      setArTestFileErrorMessage("작품 이미지가 필요합니다.");
-      setArTestFileMessage("");
-      return;
-    }
-
-    if (!widthCm || !heightCm) {
-      setArTestFileErrorMessage(
-        "AR 테스트 파일 생성을 위해 작품의 가로/세로 크기가 필요합니다."
-      );
-      setArTestFileMessage("");
-      return;
-    }
-
-    if (!artistSlugForUpload || !workSlugForUpload) {
-      setArTestFileErrorMessage("작가 또는 작품 주소 정보를 확인할 수 없습니다.");
-      setArTestFileMessage("");
-      return;
-    }
-
-    setIsGeneratingArTestFile(true);
-    setArTestFileMessage("");
-    setArTestFileErrorMessage("");
-
-    try {
-      const { glbBlob, usdzBlob, usdzError } = await createCanvasArFiles(
-        {
-          imageUrl: coverImageUrl,
-          title: selectedWork.title || "Artwork",
-          widthCm,
-          heightCm,
-          depthCm: selectedWork.depthCm,
-          artistName: selectedWork.artistName,
-          year: selectedWork.year,
-          medium: selectedWork.medium,
-          dimensions: selectedWork.dimensions,
-        },
-        {
-          useArModelSettings: true,
-          textureRotationDeg: currentArTextureRotationDeg,
-          textureFlipX: currentArTextureFlipX,
-          textureFlipY: currentArTextureFlipY,
-          sideColor: currentArSideColor,
-          depthCm: currentArDepthCm,
-          showBackLabel: currentArBackLabelEnabled,
-        }
-      );
-
-      const glbFilename = createSafeGlbFilename(
-        selectedWork.title || selectedWork.slug || selectedWork.id || "artwork"
-      );
-      const usdzFilename = glbFilename.replace(/\.glb$/i, ".usdz");
-
-      const glbUploadResult = await uploadGlbFileToR2({
-        blob: glbBlob,
-        filename: glbFilename,
-        artistSlug: artistSlugForUpload,
-        workSlug: workSlugForUpload,
-      });
-
-      let usdzUploadResult: Awaited<ReturnType<typeof uploadUsdzFileToR2>> | null =
-        null;
-      let usdzUploadErrorMessage = "";
-
-      if (usdzBlob) {
-        try {
-          usdzUploadResult = await uploadUsdzFileToR2({
-            blob: usdzBlob,
-            filename: usdzFilename,
-            artistSlug: artistSlugForUpload,
-            workSlug: workSlugForUpload,
-          });
-        } catch (error) {
-          usdzUploadErrorMessage =
-            error instanceof Error
-              ? error.message
-              : "AR 준비용 USDZ 파일 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.";
-        }
-      } else if (usdzError) {
-        usdzUploadErrorMessage = usdzError;
-      }
-
-      setSelectedForm((current) => ({
-        ...current,
-        generatedGlbUrl: glbUploadResult.publicUrl,
-        ...(usdzUploadResult?.publicUrl
-          ? { generatedUsdzUrl: usdzUploadResult.publicUrl }
-          : {}),
-      }));
-      setWorks((current) =>
-        current.map((work) =>
-          work.id === selectedWork.id
-            ? {
-              ...work,
-                generatedGlbUrl: glbUploadResult.publicUrl,
-                ...(usdzUploadResult?.publicUrl
-                  ? { generatedUsdzUrl: usdzUploadResult.publicUrl }
-                  : {}),
-              }
-            : work
-        )
-      );
-      if (usdzUploadResult) {
-        setArTestFileMessage(
-          "GLB generated for web/Android preview. USDZ generated for iPhone Quick Look."
-        );
-      } else {
-        setArTestFileMessage(
-          `GLB generated for web/Android preview, but USDZ generation failed. iPhone AR placement still requires a valid USDZ file.${usdzUploadErrorMessage ? ` ${usdzUploadErrorMessage}` : ""}`
-        );
-      }
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message ===
-          "AR 준비용 파일 업로드에 실패했습니다. 잠시 후 다시 시도해주세요."
-      ) {
-        setArTestFileErrorMessage(error.message);
-      } else {
-        setArTestFileErrorMessage(
-          "Failed to generate the test GLB. Check artwork image and dimensions."
-        );
-      }
-      setArTestFileMessage("");
-    } finally {
-      setIsGeneratingArTestFile(false);
     }
   }
 
@@ -1840,846 +1688,451 @@ function AdminWorksPageContent() {
           <div className="space-y-6">
             {selectedWork ? (
               <>
-                <AdminArtworkArV2Builder
-                  work={selectedWork}
-                  coverImageUrl={selectedForm.coverImageUrl || selectedWork.coverImageUrl || ""}
-                  onUploaded={async () => {
-                    const refreshed = await getAllWorksForAdmin();
-                    setWorks(refreshed);
-                    setSaveMessage("AR v2 model saved.");
-                  }}
-                />
-
-                <SectionCard
-                  title="Quick check"
-                  description="공개 가능 여부를 빠르게 판단할 수 있도록 핵심 항목을 먼저 확인합니다."
-                >
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <ChecklistRow
-                      label="이미지 있음"
-                      detail={selectedWork.coverImageUrl ? "있음" : "없음"}
-                      done={Boolean(selectedWork.coverImageUrl)}
-                    />
-                    <ChecklistRow
-                      label="제목 있음"
-                      detail={selectedWork.title ? "있음" : "없음"}
-                      done={Boolean(selectedWork.title)}
-                    />
-                    <ChecklistRow
-                      label="작가명 있음"
-                      detail={selectedWork.artistName ? "있음" : "없음"}
-                      done={Boolean(selectedWork.artistName)}
-                    />
-                    <ChecklistRow
-                      label="크기 있음"
-                      detail={selectedWork.dimensions ? "있음" : "없음"}
-                      done={Boolean(selectedWork.dimensions)}
-                    />
-                    <ChecklistRow
-                      label="공개 상태 설정됨"
-                      detail={getWorkStatusLabel(selectedStatus || "pending")}
-                      done={Boolean(selectedWork)}
-                    />
-                  </div>
-                </SectionCard>
-
-                <SectionCard
-                  title="1. Artwork Preview"
-                  description="대표 이미지와 작품 기본 정보를 함께 확인합니다."
-                >
-                  <div className="overflow-hidden rounded-[1.75rem] border border-black/8 bg-[#f7f6f2]">
-                    {selectedWork.coverImageUrl ? (
-                      <img
-                        src={selectedWork.coverImageUrl}
-                        alt={selectedWork.title || "Artwork preview"}
-                        className="aspect-[4/5] w-full object-cover md:aspect-[3/4]"
-                      />
-                    ) : (
-                      <div className="flex aspect-[4/5] items-center justify-center bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(247,246,242,0.96)),radial-gradient(circle_at_25%_20%,rgba(243,112,33,0.16),transparent_28%)] px-6 text-center text-sm leading-7 text-neutral-400 md:aspect-[3/4]">
-                        이미지 없음
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3 rounded-[1.5rem] border border-black/8 bg-[#fcfbf8] p-4 md:grid-cols-2">
-                    <div className="md:col-span-2">
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                        Overview
-                      </p>
-                      <h4 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-neutral-950">
-                        {selectedWork.title || "Untitled"}
-                      </h4>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                        Artist Name
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-neutral-600">
-                        {selectedWork.artistName || "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                        Year
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-neutral-600">
-                        {selectedWork.year || "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                        Medium
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-neutral-600">
-                        {selectedWork.medium || "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                        Dimensions
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-neutral-600">
-                        {selectedWork.dimensions || "—"}
-                      </p>
-                    </div>
-                  </div>
-                </SectionCard>
-
-                <SectionCard
-                  title="2. Basic Info"
-                  description="공개 목록에서 확인할 수 있는 핵심 정보입니다."
-                >
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <InfoCard label="Title" value={selectedWork.title || ""} />
-                    <InfoCard
-                      label="Artist Name"
-                      value={selectedWork.artistName || ""}
-                    />
-                    <InfoCard label="Year" value={selectedWork.year || ""} />
-                    <InfoCard label="Medium" value={selectedWork.medium || ""} />
-                    <div className="md:col-span-2">
-                      <InfoCard
-                        label="Dimensions"
-                        value={selectedWork.dimensions || ""}
-                      />
-                    </div>
-                  </div>
-                </SectionCard>
-
-                <SectionCard
-                  title="3. Publication Status"
-                  description="공개와 보관 상태를 여기서만 조정합니다."
-                >
-                  {selectedStatus ? <StatusNote status={selectedStatus} /> : null}
-
-                  <div className="grid gap-5 md:grid-cols-2">
-                    <ToggleField
-                      label="isPublished"
-                      checked={selectedForm.isPublished === true}
-                      onChange={(checked) =>
-                        updateSelectedField("isPublished", checked)
-                      }
-                      description={
-                        selectedStatus === "published"
-                          ? "Published: 공개 작가 페이지에 표시됩니다."
-                          : selectedStatus === "archived"
-                            ? "Archived: 보관 처리되어 공개 목록에서 제외됩니다."
-                            : "Review Pending: 아직 공개되지 않습니다."
-                      }
-                    />
-                    <ToggleField
-                      label="archived"
-                      checked={selectedForm.archived === true}
-                      onChange={(checked) =>
-                        updateSelectedField("archived", checked)
-                      }
-                      description="보관 처리 시 공개 목록에서 제외됩니다."
-                    />
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)] md:items-end">
-                    <label className="block">
-                      <span className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                        Display Order
-                      </span>
-                      <input
-                        type="number"
-                        step="1"
-                        value={selectedForm.displayOrder ?? ""}
-                        onChange={(event) =>
-                          updateSelectedField(
-                            "displayOrder",
-                            parseOptionalNumberInput(event.target.value)
-                          )
-                        }
-                        placeholder="빈 값 가능"
-                        className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
-                      />
-                    </label>
-
-                    <div className="rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 py-4">
-                      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-                        노출 순서
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-neutral-600">
-                        숫자가 낮을수록 작가 페이지에서 먼저 표시됩니다.
-                      </p>
-                    </div>
-                  </div>
-                </SectionCard>
-
-                <details className="rounded-[1.75rem] border border-black/8 bg-white p-6 shadow-sm md:p-7">
-                  <summary className="cursor-pointer list-none text-[11px] font-medium tracking-[0.24em] text-neutral-400">
-                    LEGACY AR V1 ASSETS
-                  </summary>
-                  <p className="mt-3 max-w-2xl text-sm leading-7 text-neutral-600">
-                    Used by the current public AR route until Phase 4 migration.
-                  </p>
-                  <div className="mt-5">
-
-                <SectionCard
-                  title="4. AR Preview Builder"
-                  description="Prepare and connect AR preview files for this artwork."
-                >
-                  <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.35fr)_minmax(390px,0.85fr)]">
-                    <div className="min-w-0 space-y-6">
-                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                          Artwork Image
-                        </p>
-                        <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
-                          Upload the artwork image that powers both the public artwork page and the AR preview flow.
-                        </p>
-                        <div className="mt-4">
-                          <R2ImageUploadField
-                            label="Artwork Image"
-                            description="Upload an image or paste a public URL. This value is used for the public artwork and AR preview."
-                            value={selectedForm.coverImageUrl || ""}
-                            onChange={(value) =>
-                              updateSelectedField("coverImageUrl", value)
-                            }
-                            target="work-image"
-                            artistSlug={selectedWork.artistSlug}
-                            workSlug={selectedWork.slug || selectedWork.id || undefined}
-                          />
+                <div className="space-y-6">
+                  <div className="sticky top-4 z-20 rounded-[1.75rem] border border-black/8 bg-white/90 p-5 shadow-sm backdrop-blur">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div className="h-16 w-16 overflow-hidden rounded-[1.25rem] border border-black/8 bg-[#f7f6f2]">
+                          {selectedArtworkImageUrl ? (
+                            <img
+                              src={selectedArtworkImageUrl}
+                              alt={selectedWork.title || "Selected artwork"}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                              No Img
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                            Selected Work
+                          </p>
+                          <h3 className="mt-1 truncate text-2xl font-semibold tracking-[-0.04em] text-neutral-950">
+                            {selectedWork.title || "Untitled"}
+                          </h3>
+                          <p className="mt-1 text-sm leading-6 text-neutral-600">
+                            {selectedWork.artistName || "Unknown artist"} · {selectedWork.year || "—"}
+                          </p>
                         </div>
                       </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge tone={selectedStatus === "published" ? "published" : selectedStatus === "archived" ? "archived" : "pending"}>
+                          {getWorkStatusLabel(selectedStatus || "pending")}
+                        </Badge>
+                        <Badge tone={selectedWorkArV2Summary?.tone === "ready" ? "orange" : "neutral"}>
+                          {selectedWorkArV2Summary?.label || "AR V2"}
+                        </Badge>
+                      </div>
+                    </div>
 
-                      <div className="grid gap-4 xl:grid-cols-2">
-                        <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                            Original Image
-                          </p>
-                          <p className="mt-2 text-sm leading-7 text-white/58">
-                            Reference the source image before applying any AR-specific transforms.
-                          </p>
-                          <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/20">
-                            {selectedArtworkImageUrl ? (
-                              <img
-                                src={selectedArtworkImageUrl}
-                                alt={selectedWork.title || "Original artwork"}
-                                className="aspect-[4/5] w-full object-cover"
+                    <div className="mt-4">
+                      <WorkDetailTabs
+                        activeTab={activeDetailTab}
+                        onChange={setActiveDetailTab}
+                        tabs={[
+                          { value: "review", label: "작품 검수", badge: `${reviewMissingCount}`, tone: reviewMissingCount === 0 ? "green" : "amber" },
+                          { value: "publication", label: "공개 설정", badge: getWorkStatusLabel(selectedStatus || "pending"), tone: selectedStatus === "published" ? "green" : selectedStatus === "archived" ? "amber" : "neutral" },
+                          { value: "ar-v2", label: "AR V2", badge: arV2TabBadge, tone: arV2TabBadge === "Ready" ? "green" : arV2TabBadge === "Error" ? "amber" : "neutral" },
+                          { value: "docent", label: "도슨트", badge: hasDocentAudioInForm(selectedForm) ? "On" : "Off", tone: hasDocentAudioInForm(selectedForm) ? "green" : "neutral" },
+                          { value: "legacy", label: "레거시·관리", badge: legacyTabBadge, tone: legacyTabBadge === "Legacy Asset" ? "amber" : "neutral" },
+                        ]}
+                      />
+                    </div>
+                  </div>
+
+                  <div
+                    id={`work-panel-${activeDetailTab}`}
+                    role="tabpanel"
+                    aria-labelledby={`work-tab-${activeDetailTab}`}
+                    className="space-y-6"
+                  >
+                    {activeDetailTab === "review" ? (
+                      <>
+                        <SectionCard
+                          title="Quick check"
+                          description="공개 가능 여부를 빠르게 판단할 수 있도록 핵심 항목을 먼저 확인합니다."
+                        >
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <ChecklistRow label="이미지 있음" detail={hasArtworkImage ? "있음" : "없음"} done={hasArtworkImage} />
+                            <ChecklistRow label="제목 있음" detail={selectedWork.title ? "있음" : "없음"} done={Boolean(selectedWork.title)} />
+                            <ChecklistRow label="작가명 있음" detail={selectedWork.artistName ? "있음" : "없음"} done={Boolean(selectedWork.artistName)} />
+                            <ChecklistRow label="크기 있음" detail={selectedWork.dimensions ? "있음" : "없음"} done={Boolean(selectedWork.dimensions)} />
+                            <ChecklistRow label="공개 상태 설정됨" detail={getWorkStatusLabel(selectedStatus || "pending")} done={Boolean(selectedWork)} />
+                          </div>
+                        </SectionCard>
+
+                        <SectionCard
+                          title="Artwork Preview"
+                          description="대표 이미지와 방향 확인을 이 탭에서만 처리합니다."
+                        >
+                          <div className="grid gap-6 xl:grid-cols-2">
+                            <div className="space-y-4">
+                              <R2ImageUploadField
+                                label="Artwork Image"
+                                description="Upload an image or paste a public URL."
+                                value={selectedForm.coverImageUrl || ""}
+                                onChange={(value) => updateSelectedField("coverImageUrl", value)}
+                                target="work-image"
+                                artistSlug={selectedWork.artistSlug}
+                                workSlug={selectedWork.slug || selectedWork.id || undefined}
                               />
-                            ) : (
-                              <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-white/38">
-                                이미지 없음
+                              <div className="rounded-[1.5rem] border border-black/8 bg-[#fcfbf8] p-4">
+                                <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">Original Image</p>
+                                <div className="mt-3 overflow-hidden rounded-[1.25rem] border border-black/8 bg-[#f7f6f2]">
+                                  {selectedArtworkImageUrl ? (
+                                    <img
+                                      src={selectedArtworkImageUrl}
+                                      alt={selectedWork.title || "Original artwork"}
+                                      className="aspect-[4/5] w-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-neutral-400">
+                                      이미지 없음
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            )}
+                            </div>
+
+                            <div className="rounded-[1.5rem] border border-black/8 bg-[#fcfbf8] p-4">
+                              <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">Front Direction Preview</p>
+                              <div className="mt-3 overflow-hidden rounded-[1.25rem] border border-black/8 bg-black/10">
+                                {selectedArtworkImageUrl ? (
+                                  <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#151515]">
+                                    <img
+                                      src={selectedArtworkImageUrl}
+                                      alt="Front direction preview"
+                                      className="absolute inset-0 h-full w-full object-cover"
+                                      style={{
+                                        transform: arFrontPreviewTransform,
+                                        transformOrigin: "center",
+                                      }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-neutral-400">
+                                    Front preview unavailable
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
+                        </SectionCard>
 
-                        <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                            Front Direction Preview
-                          </p>
-                          <p className="mt-2 text-sm leading-7 text-white/58">
-                            Use this only to check image rotation and flips before generating AR files.
-                          </p>
-                          <div className="mt-4 overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/20">
-                            {selectedArtworkImageUrl ? (
-                              <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#151515]">
-                                <img
-                                  src={selectedArtworkImageUrl}
-                                  alt="Front direction preview"
-                                  className="absolute inset-0 h-full w-full object-cover"
-                                  style={{
-                                    transform: arFrontPreviewTransform,
-                                    transformOrigin: "center",
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex aspect-[4/5] items-center justify-center px-4 text-center text-sm leading-6 text-white/38">
-                                Front preview unavailable
-                              </div>
-                            )}
+                        <SectionCard
+                          title="Basic Info"
+                          description="공개 목록에서 확인할 수 있는 핵심 정보입니다."
+                        >
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <InfoCard label="Title" value={selectedWork.title || ""} />
+                            <InfoCard label="Artist Name" value={selectedWork.artistName || ""} />
+                            <InfoCard label="Year" value={selectedWork.year || ""} />
+                            <InfoCard label="Medium" value={selectedWork.medium || ""} />
+                            <div className="md:col-span-2">
+                              <InfoCard label="Dimensions" value={selectedWork.dimensions || ""} />
+                            </div>
                           </div>
-                        </div>
-                      </div>
+                        </SectionCard>
+                      </>
+                    ) : null}
 
-                      <AdminArModelPreview
-                        imageUrl={selectedArtworkImageUrl}
-                        sideColor={currentArSideColor}
-                        depthCm={currentArDepthCm}
-                        backLabelEnabled={currentArBackLabelEnabled}
-                        backLabelRows={arBackLabelPreviewRows}
-                        previewMode={arCanvasPreviewMode}
-                        onPreviewModeChange={setArCanvasPreviewMode}
-                      />
-
-                      <ArBackLabelPreview
-                        enabled={currentArBackLabelEnabled}
-                        rows={arBackLabelPreviewRows}
-                      />
-
-                      {hasObjectSettings ? (
-                        <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                            Stored AR Settings
-                          </p>
-                          <p className="mt-2 text-sm leading-7 text-white/60">
-                            Read-only summary of the AR model settings currently in the work document.
-                          </p>
-
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            <ObjectSettingChip
-                              label="Rotation"
-                              value={`${currentArTextureRotationDeg}°`}
+                    {activeDetailTab === "publication" ? (
+                      <>
+                        <SectionCard title="Publication Status" description="공개와 보관 상태를 여기서만 조정합니다.">
+                          {selectedStatus ? <StatusNote status={selectedStatus} /> : null}
+                          <div className="grid gap-5 md:grid-cols-2">
+                            <ToggleField
+                              label="isPublished"
+                              checked={selectedForm.isPublished === true}
+                              onChange={(checked) => updateSelectedField("isPublished", checked)}
+                              description={getWorkStatusMessage(selectedStatus || "pending")}
                             />
-                            <ObjectSettingChip
-                              label="Flip X"
-                              value={currentArTextureFlipX ? "On" : "Off"}
-                            />
-                            <ObjectSettingChip
-                              label="Flip Y"
-                              value={currentArTextureFlipY ? "On" : "Off"}
-                            />
-                            <ObjectSettingChip
-                              label="Edge Color"
-                              value={currentArSideColor.toUpperCase()}
-                            />
-                            <ObjectSettingChip
-                              label="Depth"
-                              value={`${currentArDepthCm.toFixed(1)} cm`}
-                            />
-                            <ObjectSettingChip
-                              label="Back Label"
-                              value={currentArBackLabelEnabled ? "On" : "Off"}
+                            <ToggleField
+                              label="archived"
+                              checked={selectedForm.archived === true}
+                              onChange={(checked) => updateSelectedField("archived", checked)}
+                              description="보관 처리 시 공개 목록에서 제외됩니다."
                             />
                           </div>
-                        </div>
-                      ) : null}
-                    </div>
+                          <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)] md:items-end">
+                            <label className="block">
+                              <span className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">Display Order</span>
+                              <input
+                                type="number"
+                                step="1"
+                                value={selectedForm.displayOrder ?? ""}
+                                onChange={(event) => updateSelectedField("displayOrder", parseOptionalNumberInput(event.target.value))}
+                                placeholder="빈 값 가능"
+                                className="mt-2 h-13 w-full rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20"
+                              />
+                            </label>
+                            <div className="rounded-[1.25rem] border border-black/10 bg-[#f7f6f2] px-4 py-4">
+                              <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">노출 순서</p>
+                              <p className="mt-2 text-sm leading-6 text-neutral-600">숫자가 낮을수록 작가 페이지에서 먼저 표시됩니다.</p>
+                            </div>
+                          </div>
+                        </SectionCard>
 
-                    <div className="min-w-0 space-y-6">
-                      <ArDirectionControls
-                        rotationDeg={currentArTextureRotationDeg}
-                        flipX={currentArTextureFlipX}
-                        flipY={currentArTextureFlipY}
-                        onRotateLeft={() =>
-                          updateSelectedField(
-                            "arTextureRotationDeg",
-                            normalizeArTextureRotationDeg(
-                              currentArTextureRotationDeg - 90
-                            )
-                          )
-                        }
-                        onRotateRight={() =>
-                          updateSelectedField(
-                            "arTextureRotationDeg",
-                            normalizeArTextureRotationDeg(
-                              currentArTextureRotationDeg + 90
-                            )
-                          )
-                        }
-                        onRotate180={() =>
-                          updateSelectedField(
-                            "arTextureRotationDeg",
-                            normalizeArTextureRotationDeg(
-                              currentArTextureRotationDeg + 180
-                            )
-                          )
-                        }
-                        onFlipX={() =>
-                          updateSelectedField(
-                            "arTextureFlipX",
-                            !currentArTextureFlipX
-                          )
-                        }
-                        onFlipY={() =>
-                          updateSelectedField(
-                            "arTextureFlipY",
-                            !currentArTextureFlipY
-                          )
-                        }
-                        onReset={() => {
-                          updateSelectedField("arTextureRotationDeg", 0);
-                          updateSelectedField("arTextureFlipX", false);
-                          updateSelectedField("arTextureFlipY", false);
+                        <SectionCard title="Publication Links" description="공개 작품과 AR 페이지 링크를 확인합니다.">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <PreviewLinkCard
+                              label="Artwork Page"
+                              href={publicWorkHref}
+                              pathLabel={`/works/${selectedWorkSlug || "work-slug"}`}
+                              buttonLabel="View Artwork"
+                              disabledMessage="Save to unlock"
+                            />
+                            <PreviewLinkCard
+                              label="AR Preview Page"
+                              href={arHref}
+                              pathLabel={`/ar/${selectedWorkSlug || "work-slug"}`}
+                              buttonLabel="View AR Preview"
+                              disabledMessage="Save to unlock"
+                            />
+                          </div>
+                          <p className="mt-4 text-sm leading-6 text-neutral-500">
+                            AR 공개 링크는 현재 legacy route를 사용합니다.
+                          </p>
+                        </SectionCard>
+                      </>
+                    ) : null}
+
+                    {activeDetailTab === "ar-v2" ? (
+                      <AdminArtworkArV2Builder
+                        key={selectedWork.id}
+                        work={selectedWork}
+                        coverImageUrl={selectedForm.coverImageUrl || selectedWork.coverImageUrl || ""}
+                        onUploaded={async () => {
+                          const refreshed = await getAllWorksForAdmin();
+                          setWorks(refreshed);
+                          setSaveMessage("AR v2 model saved.");
                         }}
                       />
+                    ) : null}
 
-                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    {activeDetailTab === "docent" ? (
+                      <SectionCard title="Docent Audio" description="작품별 AR 페이지 하단에 도슨트 오디오를 표시합니다.">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              Edge / Depth Settings
-                            </p>
-                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/58">
-                              Adjust the edge finish and depth before generating AR files.
+                            <p className="text-sm leading-7 text-neutral-600">
+                              {hasDocentAudioInForm(selectedForm) ? "Enabled" : "Hidden"}
                             </p>
                           </div>
-                          <ArPill tone="neutral">
-                            {currentArDepthCm.toFixed(1)} cm
-                          </ArPill>
+                          <Badge tone={hasDocentAudioInForm(selectedForm) ? "published" : "neutral"}>
+                            {hasDocentAudioInForm(selectedForm) ? "On" : "Off"}
+                          </Badge>
                         </div>
-
-                        <div className="mt-4 space-y-4">
-                          <div className="grid gap-2 sm:grid-cols-3">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateSelectedField("arSideColor", "#111111")
-                              }
-                              className={`min-h-[88px] rounded-[1rem] border px-4 py-3 text-left transition ${
-                                currentArSideColor.toLowerCase() === "#111111"
-                                  ? "border-white/25 bg-white/[0.08]"
-                                  : "border-white/10 bg-white/[0.03] hover:border-white/20"
-                              }`}
-                            >
-                              <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-                                Preset
-                              </span>
-                              <span className="mt-2 block whitespace-nowrap text-sm text-[#F7F1E8]">
-                                Matte Black
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateSelectedField("arSideColor", "#d6cec0")
-                              }
-                              className={`min-h-[88px] rounded-[1rem] border px-4 py-3 text-left transition ${
-                                currentArSideColor.toLowerCase() === "#d6cec0"
-                                  ? "border-white/25 bg-white/[0.08]"
-                                  : "border-white/10 bg-white/[0.03] hover:border-white/20"
-                              }`}
-                            >
-                              <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-                                Preset
-                              </span>
-                              <span className="mt-2 block whitespace-nowrap text-sm text-[#F7F1E8]">
-                                Warm Ivory
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateSelectedField("arSideColor", "#444444")
-                              }
-                              className={`min-h-[88px] rounded-[1rem] border px-4 py-3 text-left transition ${
-                                currentArSideColor.toLowerCase() === "#444444"
-                                  ? "border-white/25 bg-white/[0.08]"
-                                  : "border-white/10 bg-white/[0.03] hover:border-white/20"
-                              }`}
-                            >
-                              <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-                                Preset
-                              </span>
-                              <span className="mt-2 block whitespace-nowrap text-sm text-[#F7F1E8]">
-                                Neutral Gray
-                              </span>
-                            </button>
-                          </div>
-
-                          <label className="block">
-                            <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              Side Color
-                            </span>
-                            <input
-                              type="color"
-                              value={normalizeArSideColor(selectedForm.arSideColor)}
-                              onChange={(event) =>
-                                updateSelectedField(
-                                  "arSideColor",
-                                  event.target.value
-                                )
-                              }
-                              className="mt-2 h-12 w-full rounded-[1.1rem] border border-white/10 bg-white/[0.04] p-1"
-                            />
-                          </label>
-
-                          <label className="block">
-                            <span className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              AR Depth (cm)
-                            </span>
-                            <input
-                              type="number"
-                              min="3"
-                              step="0.5"
-                              value={selectedForm.arDepthCm}
-                              onChange={(event) =>
-                                updateSelectedField(
-                                  "arDepthCm",
-                                  event.target.value
-                                )
-                              }
-                              className="mt-2 h-13 w-full rounded-[1.15rem] border border-white/10 bg-white/[0.04] px-4 text-sm text-[#F7F1E8] outline-none transition placeholder:text-white/24 focus:border-white/20 focus:bg-white/[0.06]"
-                            />
-                            <p className="mt-2 text-[11px] leading-5 text-white/48">
-                              Current depth: {currentArDepthCm.toFixed(1)} cm. 3 cm 이상을 권장합니다.
-                            </p>
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              Back Label
-                            </p>
-                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/58">
-                              Toggle the back label that will be used on the exported canvas model.
-                            </p>
-                          </div>
-                          <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70">
-                            <input
-                              type="checkbox"
-                              checked={currentArBackLabelEnabled}
-                              onChange={(event) =>
-                                updateSelectedField(
-                                  "arBackLabelEnabled",
-                                  event.target.checked
-                                )
-                              }
-                              className="h-4 w-4 rounded border-white/20 bg-transparent"
-                            />
-                            Show Back Label
-                          </label>
-                        </div>
-                        <p className="mt-4 text-sm leading-7 text-white/58">
-                          {currentArBackLabelEnabled
-                            ? "Back label is enabled, so the exported model will use an ivory label face with artwork information."
-                            : "Back label disabled. The back face will use a solid ivory finish."}
-                        </p>
-                      </div>
-
-                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              Status
-                            </p>
-                            <h4 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#F7F1E8]">
-                              {isIphonePlacementReady
-                                ? "iPhone AR Placement Ready"
-                                : isWebPreviewReady
-                                  ? "Web / Android Preview Ready"
-                                  : "AR Preview Preparing"}
-                            </h4>
-                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/66">
-                              {isIphonePlacementReady
-                                ? "USDZ is connected, so iPhone Quick Look placement is ready. GLB still powers the web and Android preview."
-                                : isWebPreviewReady
-                                  ? "GLB is connected, so web and Android previews are ready. Add a USDZ URL to restore iPhone placement."
-                                  : "Connect a GLB or USDZ URL, or generate a test AR file set, to enable the preview flow."}
-                            </p>
-                          </div>
-                          <ArPill
-                            tone={
-                              isIphonePlacementReady
-                                ? "ready"
-                                : isWebPreviewReady
-                                  ? "preparing"
-                                  : "missing"
-                            }
-                          >
-                            {isIphonePlacementReady
-                              ? "iPhone Ready"
-                              : isWebPreviewReady
-                                ? "Web Ready"
-                                : "Waiting"}
-                          </ArPill>
-                        </div>
-                        <p className="mt-4 text-[11px] uppercase tracking-[0.22em] text-white/40">
-                          USDZ unlocks Quick Look placement
-                        </p>
-                      </div>
-
-                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              Readiness checklist
-                            </p>
-                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
-                              Check the items below before generating or linking AR files.
-                            </p>
-                          </div>
-                          <ArPill tone="neutral">6 checks</ArPill>
-                        </div>
-
-                        <div className="mt-4 grid gap-3 md:grid-cols-2">
-                          {arChecklistItems.map((item) => (
-                            <ArChecklistItem
-                              key={item.label}
-                              label={item.label}
-                              detail={item.detail}
-                              tone={item.tone}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                          Preview Links
-                        </p>
-                        <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
-                          After saving, check how this artwork appears on the public artwork and AR preview pages.
-                        </p>
-
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                          <PreviewLinkCard
-                            label="Artwork Page"
-                            href={publicWorkHref}
-                            pathLabel={`/works/${selectedWorkSlug || "work-slug"}`}
-                            buttonLabel="View Artwork"
-                            disabledMessage="Save to unlock"
-                          />
-                          <PreviewLinkCard
-                            label="AR Preview Page"
-                            href={arHref}
-                            pathLabel={`/ar/${selectedWorkSlug || "work-slug"}`}
-                            buttonLabel="View AR Preview"
-                            disabledMessage="Save to unlock"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              Manual AR File URLs
-                            </p>
-                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
-                              If the automatic generator is not enough, connect GLB and USDZ URLs directly here.
-                            </p>
-                          </div>
-                          <ArPill tone="neutral">Optional</ArPill>
-                        </div>
-
-                        <div className="mt-4 grid gap-4 md:grid-cols-2">
-                          <ArTextField
-                            label="generatedGlbUrl"
-                            value={selectedForm.generatedGlbUrl || ""}
-                            onChange={(value) =>
-                              updateSelectedField("generatedGlbUrl", value)
-                            }
-                            placeholder="https://..."
-                            helpText="Generated GLB URL. This powers web and Android preview."
-                          />
-                          <ArTextField
-                            label="generatedUsdzUrl"
-                            value={selectedForm.generatedUsdzUrl || ""}
-                            onChange={(value) =>
-                              updateSelectedField("generatedUsdzUrl", value)
-                            }
-                            placeholder="https://..."
-                            helpText="Generated USDZ URL. This restores iPhone Quick Look placement."
-                          />
-                          <ArTextField
-                            label="modelGlb"
-                            value={selectedForm.modelGlb || ""}
-                            onChange={(value) =>
-                              updateSelectedField("modelGlb", value)
-                            }
-                            placeholder="https://..."
-                            helpText="Manual GLB URL if you already prepared one."
-                          />
-                          <ArTextField
-                            label="modelUsdz"
-                            value={selectedForm.modelUsdz || ""}
-                            onChange={(value) =>
-                              updateSelectedField("modelUsdz", value)
-                            }
-                            placeholder="https://..."
-                            helpText="Manual USDZ URL for iPhone AR placement."
-                          />
-                        </div>
-                      </div>
-
-                      <div className="rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,#161616_0%,#121212_100%)] p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                              Docent Audio
-                            </p>
-                            <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">
-                              작품별 AR 페이지 하단에 도슨트 오디오 설명을 표시할 수 있습니다.
-                            </p>
-                          </div>
-                          <ArPill tone={hasDocentAudioInForm(selectedForm) ? "ready" : "neutral"}>
-                            {hasDocentAudioInForm(selectedForm) ? "Enabled" : "Hidden"}
-                          </ArPill>
-                        </div>
-
-                        <label className="mt-4 flex items-start gap-3 rounded-[1.25rem] border border-white/10 bg-white/[0.03] px-4 py-4">
+                        <label className="mt-4 flex items-start gap-3 rounded-[1.25rem] border border-black/8 bg-[#fcfbf8] px-4 py-4">
                           <input
                             type="checkbox"
                             checked={selectedForm.docentAudioEnabled === true}
-                            onChange={(event) =>
-                              updateSelectedField(
-                                "docentAudioEnabled",
-                                event.target.checked
-                              )
-                            }
-                            className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent"
+                            onChange={(event) => updateSelectedField("docentAudioEnabled", event.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-black/20 bg-transparent"
                           />
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-white/90">
-                              Enable Docent Audio
-                            </p>
-                            <p className="mt-1 text-sm leading-6 text-white/55">
-                              공개 AR 페이지에서 오디오 플레이어를 표시합니다.
-                            </p>
+                            <p className="text-sm font-medium text-neutral-900">Enable Docent Audio</p>
+                            <p className="mt-1 text-sm leading-6 text-neutral-600">공개 AR 페이지에서 오디오 플레이어를 표시합니다.</p>
                           </div>
                         </label>
-
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
                           <ArTextField
                             label="docentAudioTitle"
                             value={selectedForm.docentAudioTitle || ""}
-                            onChange={(value) =>
-                              updateSelectedField("docentAudioTitle", value)
-                            }
+                            onChange={(value) => updateSelectedField("docentAudioTitle", value)}
                             placeholder="Docent Audio Guide"
                             helpText="오디오 플레이어 제목입니다."
                           />
                           <ArTextField
                             label="docentAudioUrl"
                             value={selectedForm.docentAudioUrl || ""}
-                            onChange={(value) =>
-                              updateSelectedField("docentAudioUrl", value)
-                            }
+                            onChange={(value) => updateSelectedField("docentAudioUrl", value)}
                             placeholder="https://..."
                             helpText="MP3, WAV, OGG 등 공개 URL을 입력하세요."
                           />
                         </div>
-
                         <div className="mt-4">
                           <ArTextField
                             label="docentAudioDescription"
                             value={selectedForm.docentAudioDescription || ""}
-                            onChange={(value) =>
-                              updateSelectedField("docentAudioDescription", value)
-                            }
+                            onChange={(value) => updateSelectedField("docentAudioDescription", value)}
                             placeholder="짧은 설명을 입력하세요."
                             helpText="선택사항입니다. 공개 페이지에서는 보조 문구로만 노출됩니다."
                           />
                         </div>
-                      </div>
+                      </SectionCard>
+                    ) : null}
 
-                      <div className="rounded-[1.6rem] border border-[#F37021]/20 bg-[#F37021]/8 p-5">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">
-                          Generate AR Files
-                        </p>
-                        <p className="mt-2 max-w-2xl text-sm leading-7 text-white/66">
-                          Preview settings affect the next generated GLB/USDZ files.
-                        </p>
-                        <p className="mt-2 max-w-2xl text-sm leading-7 text-white/58">
-                          Check the front direction and back label before generating AR files.
-                        </p>
-                        <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-black/20 px-4 py-4">
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/40">
-                            Before generating
+                    {activeDetailTab === "legacy" ? (
+                      <>
+                        <details className="rounded-[1.75rem] border border-black/8 bg-white p-6 shadow-sm md:p-7" open>
+                          <summary className="cursor-pointer list-none text-[11px] font-medium tracking-[0.24em] text-neutral-400">
+                            LEGACY AR V1 ASSETS
+                          </summary>
+                          <p className="mt-3 max-w-2xl text-sm leading-7 text-neutral-600">
+                            Used by the current public AR route until Phase 4 migration.
                           </p>
-                          <ul className="mt-3 space-y-2 text-sm leading-6 text-white/58">
-                            <li>Artwork image is required.</li>
-                            <li>Width and height are required.</li>
-                            <li>Web / Android Preview uses GLB.</li>
-                            <li>iPhone Quick Look uses USDZ.</li>
-                            <li>Save Changes after generating to persist the URLs.</li>
-                          </ul>
-                        </div>
+                          <div className="mt-5 space-y-6">
+                            <SectionCard title="Legacy AR Settings" description="Current public AR route settings and manual URLs.">
+                              <ArDirectionControls
+                                rotationDeg={currentArTextureRotationDeg}
+                                flipX={currentArTextureFlipX}
+                                flipY={currentArTextureFlipY}
+                                onRotateLeft={() =>
+                                  updateSelectedField(
+                                    "arTextureRotationDeg",
+                                    normalizeArTextureRotationDeg(
+                                      currentArTextureRotationDeg - 90
+                                    )
+                                  )
+                                }
+                                onRotateRight={() =>
+                                  updateSelectedField(
+                                    "arTextureRotationDeg",
+                                    normalizeArTextureRotationDeg(
+                                      currentArTextureRotationDeg + 90
+                                    )
+                                  )
+                                }
+                                onRotate180={() =>
+                                  updateSelectedField(
+                                    "arTextureRotationDeg",
+                                    normalizeArTextureRotationDeg(
+                                      currentArTextureRotationDeg + 180
+                                    )
+                                  )
+                                }
+                                onFlipX={() =>
+                                  updateSelectedField(
+                                    "arTextureFlipX",
+                                    !currentArTextureFlipX
+                                  )
+                                }
+                                onFlipY={() =>
+                                  updateSelectedField(
+                                    "arTextureFlipY",
+                                    !currentArTextureFlipY
+                                  )
+                                }
+                                onReset={() => {
+                                  updateSelectedField("arTextureRotationDeg", 0);
+                                  updateSelectedField("arTextureFlipX", false);
+                                  updateSelectedField("arTextureFlipY", false);
+                                }}
+                              />
 
+                              <AdminArModelPreview
+                                imageUrl={selectedArtworkImageUrl}
+                                sideColor={currentArSideColor}
+                                depthCm={currentArDepthCm}
+                                backLabelEnabled={currentArBackLabelEnabled}
+                                backLabelRows={arBackLabelPreviewRows}
+                                previewMode={arCanvasPreviewMode}
+                                onPreviewModeChange={setArCanvasPreviewMode}
+                              />
+                              <ArBackLabelPreview enabled={currentArBackLabelEnabled} rows={arBackLabelPreviewRows} />
+
+                              {hasObjectSettings ? (
+                                <div className="rounded-[1.6rem] border border-black/8 bg-[#fcfbf8] p-5">
+                                  <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">Stored AR Settings</p>
+                                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                    <ObjectSettingChip label="Rotation" value={`${currentArTextureRotationDeg}°`} />
+                                    <ObjectSettingChip label="Flip X" value={currentArTextureFlipX ? "On" : "Off"} />
+                                    <ObjectSettingChip label="Flip Y" value={currentArTextureFlipY ? "On" : "Off"} />
+                                    <ObjectSettingChip label="Edge Color" value={currentArSideColor.toUpperCase()} />
+                                    <ObjectSettingChip label="Depth" value={`${currentArDepthCm.toFixed(1)} cm`} />
+                                    <ObjectSettingChip label="Back Label" value={currentArBackLabelEnabled ? "On" : "Off"} />
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                  <div className="min-w-0">
+                                    <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">Readiness checklist</p>
+                                    <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">Check the items below before generating or linking AR files.</p>
+                                  </div>
+                                  <ArPill tone="neutral">6 checks</ArPill>
+                                </div>
+                                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                  {arChecklistItems.map((item) => (
+                                    <ArChecklistItem key={item.label} label={item.label} detail={item.detail} tone={item.tone} />
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                  <div className="min-w-0">
+                                    <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">Manual AR File URLs</p>
+                                    <p className="mt-2 max-w-2xl text-sm leading-7 text-white/60">If the automatic generator is not enough, connect GLB and USDZ URLs directly here.</p>
+                                  </div>
+                                  <ArPill tone="neutral">Optional</ArPill>
+                                </div>
+                                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                  <ArTextField label="generatedGlbUrl" value={selectedForm.generatedGlbUrl || ""} onChange={(value) => updateSelectedField("generatedGlbUrl", value)} placeholder="https://..." helpText="Generated GLB URL. This powers web and Android preview." />
+                                  <ArTextField label="generatedUsdzUrl" value={selectedForm.generatedUsdzUrl || ""} onChange={(value) => updateSelectedField("generatedUsdzUrl", value)} placeholder="https://..." helpText="Generated USDZ URL. This restores iPhone Quick Look placement." />
+                                  <ArTextField label="modelGlb" value={selectedForm.modelGlb || ""} onChange={(value) => updateSelectedField("modelGlb", value)} placeholder="https://..." helpText="Manual GLB URL if you already prepared one." />
+                                  <ArTextField label="modelUsdz" value={selectedForm.modelUsdz || ""} onChange={(value) => updateSelectedField("modelUsdz", value)} placeholder="https://..." helpText="Manual USDZ URL for iPhone AR placement." />
+                                </div>
+                              </div>
+
+                              <div className="rounded-[1.6rem] border border-[#F37021]/20 bg-[#F37021]/8 p-5">
+                                <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">Generate AR Files</p>
+                                <p className="mt-2 max-w-2xl text-sm leading-7 text-white/66">Legacy file generation stays disabled; use the AR V2 tab for the current approval flow.</p>
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm font-medium whitespace-nowrap text-[#F7F1E8] opacity-50"
+                                >
+                                  Legacy Generate AR Files (Disabled)
+                                </button>
+                              </div>
+                            </SectionCard>
+
+                            <SectionCard title="Danger Zone" description="작품 삭제와 같은 위험 작업을 분리합니다.">
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteSelectedWork()}
+                                disabled={!selectedWork || isSaving || isDeletingSelectedWork}
+                                className="inline-flex h-12 items-center justify-center rounded-full border border-red-300 bg-white px-6 text-sm text-red-700 transition hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isDeletingSelectedWork ? "삭제 중..." : "Delete Artwork"}
+                              </button>
+                            </SectionCard>
+                          </div>
+                        </details>
+                      </>
+                    ) : null}
+                  </div>
+
+                  <div className="sticky bottom-4 z-20 rounded-[1.5rem] border border-black/8 bg-white/95 p-4 shadow-[0_14px_40px_rgba(15,15,15,0.08)] backdrop-blur">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm leading-6 text-neutral-500">
+                        Save changes for review, publication, docent, or legacy fields. AR V2 uses its own approval flow.
+                      </p>
+                      <div className="flex flex-wrap gap-3">
                         <button
                           type="button"
-                          onClick={() => void handleGenerateArTestFile()}
-                          disabled={isGeneratingArTestFile}
-                          className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021]/10 px-5 text-sm font-medium whitespace-nowrap text-[#F7F1E8] transition hover:border-[#F37021]/55 hover:bg-[#F37021]/16 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => void handleSaveSelected()}
+                          disabled={!selectedWork || isSaving || isDeletingSelectedWork}
+                          className="inline-flex h-12 items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {isGeneratingArTestFile
-                            ? "Generating AR Files..."
-                            : "Generate AR Files"}
+                          {isSaving ? "저장 중..." : "변경사항 저장"}
                         </button>
-
-                        {arTestFileMessage ? (
-                          <p
-                            role="status"
-                            aria-live="polite"
-                            className="mt-3 rounded-[1.15rem] border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-100"
+                        {artistHref ? (
+                          <Link
+                            href={artistHref}
+                            className="inline-flex h-12 items-center justify-center rounded-full border border-black/10 bg-white px-6 text-sm text-neutral-900 transition hover:border-black/20"
                           >
-                            {arTestFileMessage}
-                          </p>
-                        ) : null}
-
-                        {arTestFileErrorMessage ? (
-                          <p
-                            role="alert"
-                            aria-live="assertive"
-                            className="mt-3 rounded-[1.15rem] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100"
-                          >
-                            {arTestFileErrorMessage}
-                          </p>
+                            작가 페이지 열기
+                          </Link>
                         ) : null}
                       </div>
                     </div>
                   </div>
-
-                </SectionCard>
-                  </div>
-                </details>
-
-                <SectionCard
-                  title="5. Actions"
-                  description="Save the current publication and AR link changes."
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveSelected()}
-                      disabled={!selectedWork || isSaving || isDeletingSelectedWork}
-                      className="inline-flex h-12 items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                    >
-                      {isSaving ? "저장 중..." : "변경사항 저장"}
-                    </button>
-
-                    {artistHref ? (
-                      <Link
-                        href={artistHref}
-                        className="inline-flex h-12 items-center justify-center rounded-full border border-black/10 bg-white px-6 text-sm text-neutral-900 transition hover:border-black/20 sm:w-auto"
-                      >
-                        작가 페이지 열기
-                      </Link>
-                    ) : null}
-
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteSelectedWork()}
-                      disabled={!selectedWork || isSaving || isDeletingSelectedWork}
-                      className="inline-flex h-12 items-center justify-center rounded-full border border-red-300 bg-white px-6 text-sm text-red-700 transition hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                    >
-                      {isDeletingSelectedWork ? "삭제 중..." : "Delete Artwork"}
-                    </button>
-                  </div>
-
-                  <p className="text-sm leading-6 text-neutral-500">
-                    작품 상태가 저장된 뒤 공개 페이지와 AR Preview 페이지에서 이어서 확인할 수 있습니다.
-                  </p>
-                </SectionCard>
+                </div>
               </>
             ) : (
               <SectionCard

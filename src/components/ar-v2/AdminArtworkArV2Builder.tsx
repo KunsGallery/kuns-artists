@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArtworkModelViewer } from "./ArtworkModelViewer";
 import { ArV2Diagnostics } from "./ArV2Diagnostics";
 import { AdminArV2Status, getWorkArV2Summary } from "./AdminArV2Status";
+import { ArV2SourceImageStatus, type ImageLoadStatus } from "./ArV2SourceImageStatus";
 import {
   buildArtworkGlb,
   createArV2SourceSignature,
@@ -11,6 +12,7 @@ import {
   type ArV2Diagnostic,
   type ArtworkOrientation,
   type ArtworkProductionMetadata,
+  ArtworkSourceLoadError,
   type WorkArV2Asset,
   type WorkArV2Config,
 } from "@/lib/ar-v2";
@@ -177,8 +179,11 @@ export function AdminArtworkArV2Builder({
   const [successMessage, setSuccessMessage] = useState("");
   const [isBuilding, setIsBuilding] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [imageLoadStatus, setImageLoadStatus] = useState<ImageLoadStatus>("idle");
+  const [imageLoadAttempt, setImageLoadAttempt] = useState(0);
   const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
-  const [imageError, setImageError] = useState("");
+  const [imageLoadError, setImageLoadError] = useState<ArtworkSourceLoadError | null>(null);
+  const [siteOrigin, setSiteOrigin] = useState("");
   const imageRevokeRef = useRef<(() => void) | null>(null);
   const previewObjectUrlRef = useRef<string | null>(null);
 
@@ -214,6 +219,28 @@ export function AdminArtworkArV2Builder({
     return { imageAspect, physicalAspect, differenceRatio, status } as const;
   }, [loadedImage, rotationDeg, work.heightCm, work.widthCm]);
 
+  const requiredFieldsReady = Boolean(
+    coverImageUrl &&
+      work.title?.trim() &&
+      work.artistName?.trim() &&
+      work.widthCm &&
+      work.heightCm &&
+      Number.isFinite(depthCm) &&
+      depthCm > 0,
+  );
+
+  const buildDisabledReason = useMemo(() => {
+    if (!coverImageUrl) return "Missing artwork image";
+    if (!work.title?.trim()) return "Missing artwork title";
+    if (!work.artistName?.trim()) return "Missing artist name";
+    if (!work.widthCm || !work.heightCm) return "Missing width / height";
+    if (!Number.isFinite(depthCm) || depthCm <= 0) return "Invalid depth";
+    if (imageLoadStatus === "loading") return "Artwork source is loading";
+    if (imageLoadStatus === "error") return "Artwork source is blocked by CORS";
+    if (imageLoadStatus !== "ready" || !loadedImage) return "Missing artwork source";
+    return "";
+  }, [coverImageUrl, depthCm, imageLoadStatus, loadedImage, work.artistName, work.heightCm, work.title, work.widthCm]);
+
   const missingChecks = [
     { label: "Artwork image", done: Boolean(coverImageUrl), detail: coverImageUrl || "Missing coverImageUrl" },
     { label: "Title", done: Boolean(work.title?.trim()), detail: work.title || "Missing title" },
@@ -226,14 +253,11 @@ export function AdminArtworkArV2Builder({
   const hasDiagnosticsFailure = previewDiagnostics.some((item) => item.severity === "FAIL");
   const previewOutdated = Boolean(previewBlob && previewSignature !== currentSignature);
   const canBuild = Boolean(
-    coverImageUrl &&
-      work.title?.trim() &&
-      work.artistName?.trim() &&
-      work.widthCm &&
-      work.heightCm &&
+    requiredFieldsReady &&
+      imageLoadStatus === "ready" &&
+      loadedImage &&
       !isBuilding &&
-      !isUploading &&
-      !imageError,
+      !isUploading,
   );
   const canApprove = Boolean(
     previewBlob &&
@@ -261,7 +285,10 @@ export function AdminArtworkArV2Builder({
     setPreviewSummary("");
     setErrorMessage("");
     setSuccessMessage("");
-    setImageError("");
+    setImageLoadStatus("idle");
+    setImageLoadError(null);
+    setImageLoadAttempt(0);
+    setLoadedImage(null);
     if (previewObjectUrlRef.current) {
       URL.revokeObjectURL(previewObjectUrlRef.current);
       previewObjectUrlRef.current = null;
@@ -273,14 +300,16 @@ export function AdminArtworkArV2Builder({
     let cancelled = false;
     const previousRevoke = imageRevokeRef.current;
     imageRevokeRef.current = null;
-    setImageError("");
+    setImageLoadError(null);
     setLoadedImage(null);
     previousRevoke?.();
 
     if (!coverImageUrl) {
-      setImageError("작품 이미지를 불러올 수 없습니다. R2 이미지 CORS 설정을 확인해주세요.");
+      setImageLoadStatus("idle");
       return () => undefined;
     }
+
+    setImageLoadStatus("loading");
 
     void (async () => {
       try {
@@ -291,9 +320,11 @@ export function AdminArtworkArV2Builder({
         }
         imageRevokeRef.current = loaded.revoke;
         setLoadedImage(loaded.image);
+        setImageLoadStatus("ready");
       } catch (error) {
         if (!cancelled) {
-          setImageError(error instanceof Error ? error.message : "작품 이미지를 불러올 수 없습니다. R2 이미지 CORS 설정을 확인해주세요.");
+          setImageLoadStatus("error");
+          setImageLoadError(error instanceof ArtworkSourceLoadError ? error : null);
         }
       }
     })();
@@ -303,7 +334,7 @@ export function AdminArtworkArV2Builder({
       imageRevokeRef.current?.();
       imageRevokeRef.current = null;
     };
-  }, [coverImageUrl]);
+  }, [coverImageUrl, imageLoadAttempt]);
 
   useEffect(() => () => {
     if (previewObjectUrlRef.current) {
@@ -312,6 +343,10 @@ export function AdminArtworkArV2Builder({
     }
     imageRevokeRef.current?.();
     imageRevokeRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    setSiteOrigin(window.location.origin);
   }, []);
 
   const handleBuild = async () => {
@@ -328,16 +363,7 @@ export function AdminArtworkArV2Builder({
       if (!work.widthCm || !work.heightCm) {
         throw new Error("작품의 가로/세로 크기가 필요합니다.");
       }
-      let image = loadedImage;
-      if (!image) {
-        const loaded = await loadArtworkImageForArV2(coverImageUrl);
-        imageRevokeRef.current?.();
-        imageRevokeRef.current = loaded.revoke;
-        image = loaded.image;
-        setLoadedImage(loaded.image);
-      }
-
-      if (!image) {
+      if (!loadedImage || imageLoadStatus !== "ready") {
         throw new Error("작품 이미지의 픽셀 크기를 읽을 수 없습니다.");
       }
 
@@ -347,7 +373,7 @@ export function AdminArtworkArV2Builder({
         depthCm,
         buildMode: "production",
         sourceMode: "local-image",
-        image,
+        image: loadedImage,
         orientation,
         sideColor,
         showBackLabel: backLabelEnabled,
@@ -377,6 +403,15 @@ export function AdminArtworkArV2Builder({
     } finally {
       setIsBuilding(false);
     }
+  };
+
+  const handleRetryArtworkImage = () => {
+    imageRevokeRef.current?.();
+    imageRevokeRef.current = null;
+    setLoadedImage(null);
+    setImageLoadError(null);
+    setImageLoadStatus(coverImageUrl ? "loading" : "idle");
+    setImageLoadAttempt((value) => value + 1);
   };
 
   const handleApprove = async () => {
@@ -428,7 +463,6 @@ export function AdminArtworkArV2Builder({
     }
   };
 
-  const sourceStatusText = imageError || (imageRatio ? `Image ratio: ${formatRatio(imageRatio.differenceRatio)} (${imageRatio.status.toUpperCase()})` : "Loading artwork image...");
   const storedAsset = getWorkArV2Summary(work);
 
   return (
@@ -478,6 +512,17 @@ export function AdminArtworkArV2Builder({
                   done={item.done}
                 />
               ))}
+            </div>
+
+            <div className="mt-4">
+              <ArV2SourceImageStatus
+                status={imageLoadStatus}
+                coverImageUrl={coverImageUrl}
+                image={loadedImage}
+                error={imageLoadError}
+                siteOrigin={siteOrigin}
+                onRetry={handleRetryArtworkImage}
+              />
             </div>
           </div>
 
@@ -584,7 +629,13 @@ export function AdminArtworkArV2Builder({
             ) : null}
 
             <p className="mt-4 text-[11px] uppercase tracking-[0.24em] text-neutral-400">
-              {sourceStatusText}
+              {imageLoadStatus === "ready" && loadedImage
+                ? `Image ready: ${loadedImage.naturalWidth} × ${loadedImage.naturalHeight}px`
+                : imageLoadStatus === "loading"
+                  ? "Loading artwork source…"
+                  : imageLoadStatus === "error"
+                    ? "Artwork source could not be loaded"
+                    : "No artwork image URL"}
             </p>
           </div>
 
@@ -619,6 +670,12 @@ export function AdminArtworkArV2Builder({
                 {isUploading ? "Uploading…" : "Approve & Upload AR V2"}
               </button>
             </div>
+
+            {!canBuild && buildDisabledReason ? (
+              <p className="mt-4 rounded-[1.15rem] border border-black/8 bg-white px-4 py-3 text-sm leading-6 text-neutral-600">
+                {buildDisabledReason}
+              </p>
+            ) : null}
 
             {previewOutdated ? (
               <p className="mt-4 rounded-[1.15rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
