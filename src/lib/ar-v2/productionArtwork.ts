@@ -134,16 +134,21 @@ export function drawProductionBackLabel(
   context.restore();
 }
 
-export function drawContainedArtworkImage(
+function getArtworkImageDimensions(image: CanvasImageSource) {
+  const naturalWidth = "naturalWidth" in image ? image.naturalWidth : "width" in image && typeof image.width === "number" ? image.width : 0;
+  const naturalHeight = "naturalHeight" in image ? image.naturalHeight : "height" in image && typeof image.height === "number" ? image.height : 0;
+  if (!naturalWidth || !naturalHeight) throw new Error("Selected image has no readable dimensions.");
+  return { naturalWidth, naturalHeight };
+}
+
+export function drawContainedArtworkThumbnail(
   context: CanvasRenderingContext2D,
   image: CanvasImageSource,
   rect: CanvasRect,
   orientation: ArtworkOrientation,
   background: string = PRODUCTION_COLORS.atlasBackground,
 ) {
-  const naturalWidth = "naturalWidth" in image ? image.naturalWidth : "width" in image && typeof image.width === "number" ? image.width : 0;
-  const naturalHeight = "naturalHeight" in image ? image.naturalHeight : "height" in image && typeof image.height === "number" ? image.height : 0;
-  if (!naturalWidth || !naturalHeight) throw new Error("Selected image has no readable dimensions.");
+  const { naturalWidth, naturalHeight } = getArtworkImageDimensions(image);
   const drawWidth = rect.width - rect.padding * 2;
   const drawHeight = rect.height - rect.padding * 2;
   const rotated = orientation.rotationDeg === 90 || orientation.rotationDeg === 270;
@@ -163,6 +168,31 @@ export function drawContainedArtworkImage(
   context.restore();
 }
 
+export function drawArtworkImageToFrontAtlas(
+  context: CanvasRenderingContext2D,
+  image: CanvasImageSource,
+  rect: CanvasRect,
+  orientation: ArtworkOrientation,
+) {
+  getArtworkImageDimensions(image);
+  const x = rect.x + rect.padding;
+  const y = rect.y + rect.padding;
+  const width = rect.width - rect.padding * 2;
+  const height = rect.height - rect.padding * 2;
+  const rotated = orientation.rotationDeg === 90 || orientation.rotationDeg === 270;
+  const drawWidth = rotated ? height : width;
+  const drawHeight = rotated ? width : height;
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+
+  context.save();
+  context.translate(centerX, centerY);
+  context.rotate((orientation.rotationDeg * Math.PI) / 180);
+  context.scale(orientation.flipX ? -1 : 1, orientation.flipY ? -1 : 1);
+  context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  context.restore();
+}
+
 export function drawArtworkSourceThumbnail(
   context: CanvasRenderingContext2D,
   image: CanvasImageSource,
@@ -170,5 +200,5 @@ export function drawArtworkSourceThumbnail(
   height: number,
   orientation: ArtworkOrientation,
 ) {
-  drawContainedArtworkImage(context, image, { x: 0, y: 0, width, height, padding: Math.max(8, Math.round(Math.min(width, height) * 0.04)) }, orientation);
+  drawContainedArtworkThumbnail(context, image, { x: 0, y: 0, width, height, padding: Math.max(8, Math.round(Math.min(width, height) * 0.04)) }, orientation);
 }

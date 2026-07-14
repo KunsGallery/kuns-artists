@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import {
-  drawArtworkSourceThumbnail,
+  drawContainedArtworkThumbnail,
   drawProductionBackLabel,
   formatDimensions,
   formatRatioPercent,
@@ -28,7 +28,7 @@ export function ArtworkSourcePreview({ image, dimensions, orientation }: SourceP
     canvas.width = 360;
     canvas.height = 240;
     const context = canvas.getContext("2d");
-    if (context) drawArtworkSourceThumbnail(context, image, canvas.width, canvas.height, orientation);
+    if (context) drawContainedArtworkThumbnail(context, image, { x: 0, y: 0, width: canvas.width, height: canvas.height, padding: Math.max(8, Math.round(Math.min(canvas.width, canvas.height) * 0.04)) }, orientation);
   }, [image, orientation]);
 
   return (

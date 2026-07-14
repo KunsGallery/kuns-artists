@@ -6,7 +6,7 @@ import {
   SRGBColorSpace,
 } from "three";
 import { createOrientationFixture } from "./createOrientationFixture";
-import { drawContainedArtworkImage, drawProductionBackLabel } from "./productionArtwork";
+import { drawArtworkImageToFrontAtlas, drawProductionBackLabel } from "./productionArtwork";
 import type {
   ArtworkAtlas,
   ArtworkBuildConfig,
@@ -59,7 +59,7 @@ export function buildTextureAtlas(config: ArtworkBuildConfig): ArtworkAtlas {
   const front = config.sourceMode === "local-image" && config.image ? config.image : fixtures.front;
 
   if (config.sourceMode === "local-image" && config.image) {
-    drawContainedArtworkImage(context, front, ATLAS_RECTS.front, config.orientation, config.sideColor);
+    drawArtworkImageToFrontAtlas(context, front, ATLAS_RECTS.front, config.orientation);
   } else {
     context.drawImage(fixtures.front, ATLAS_RECTS.front.x, ATLAS_RECTS.front.y);
   }
