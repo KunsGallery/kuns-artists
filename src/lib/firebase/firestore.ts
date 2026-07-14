@@ -27,6 +27,11 @@ import type {
   ExhibitionSavePayload,
 } from "@/types/exhibition";
 import { sortExhibitionsByStartDateDesc } from "@/types/exhibition";
+import type {
+  WorkArV2Asset,
+  WorkArV2AssetStatus,
+  WorkArV2Config,
+} from "@/lib/ar-v2";
 
 export type ArtistRole = "admin" | "artist";
 export type ArtistType = "represented" | "project";
@@ -133,6 +138,8 @@ export type ArtistWorkDoc = {
   modelUsdz?: string;
   generatedGlbUrl?: string;
   generatedUsdzUrl?: string;
+  arV2Config?: WorkArV2Config;
+  arV2Asset?: WorkArV2Asset;
   displayOrder?: number;
   isPublished?: boolean;
   archived?: boolean;
@@ -200,6 +207,11 @@ export type ArtistWorkAdminUpdatePayload = {
   docentAudioDescription?: string;
 };
 
+export type ArtistWorkArV2SavePayload = {
+  config: WorkArV2Config;
+  asset: Omit<WorkArV2Asset, "generatedAt">;
+};
+
 function toOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -236,6 +248,84 @@ function toOptionalBoolean(value: unknown) {
 
 function toOptionalSideMode(value: unknown) {
   return value === "canvas" || value === "image" ? value : undefined;
+}
+
+function toOptionalHexColor(value: unknown) {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value.trim())
+    ? value.trim()
+    : undefined;
+}
+
+function toOptionalArV2Config(value: unknown): WorkArV2Config | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  if (raw.version !== 2) {
+    return undefined;
+  }
+
+  const rotationDeg = toOptionalNumber(raw.rotationDeg);
+  const depthCm = toOptionalFiniteNumber(raw.depthCm);
+  const config: WorkArV2Config = {
+    version: 2,
+    rotationDeg:
+      rotationDeg === 90 || rotationDeg === 180 || rotationDeg === 270
+        ? rotationDeg
+        : 0,
+    flipX: toOptionalBoolean(raw.flipX) ?? false,
+    flipY: toOptionalBoolean(raw.flipY) ?? false,
+    sideColor: toOptionalHexColor(raw.sideColor) ?? "#111111",
+    depthCm: depthCm && depthCm > 0 ? depthCm : 3.5,
+    backLabelEnabled: toOptionalBoolean(raw.backLabelEnabled) ?? true,
+  };
+
+  const allowRatioMismatch = toOptionalBoolean(raw.allowRatioMismatch);
+  if (allowRatioMismatch !== undefined) {
+    config.allowRatioMismatch = allowRatioMismatch;
+  }
+
+  return config;
+}
+
+function toOptionalArV2AssetStatus(value: unknown): WorkArV2AssetStatus | undefined {
+  return value === "none" || value === "preview" || value === "ready" || value === "error"
+    ? value
+    : undefined;
+}
+
+function toOptionalArV2Asset(value: unknown): WorkArV2Asset | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const status = toOptionalArV2AssetStatus(raw.status);
+  if (!status) {
+    return undefined;
+  }
+
+  const asset: WorkArV2Asset = {
+    status,
+    generatorVersion:
+      toOptionalString(raw.generatorVersion) ?? "ar-v2.1",
+  };
+
+  const glbUrl = toOptionalString(raw.glbUrl);
+  if (glbUrl) asset.glbUrl = glbUrl;
+
+  const sourceSignature = toOptionalString(raw.sourceSignature);
+  if (sourceSignature) asset.sourceSignature = sourceSignature;
+
+  const byteSize = toOptionalFiniteNumber(raw.byteSize);
+  if (byteSize !== undefined) asset.byteSize = byteSize;
+
+  const errorMessage = toOptionalString(raw.errorMessage);
+  if (errorMessage) asset.errorMessage = errorMessage;
+
+  asset.generatedAt = raw.generatedAt;
+  return asset;
 }
 
 function toSafeSlugPart(value: string) {
@@ -485,6 +575,8 @@ function toArtistWorkDoc(id: string, rawData: Record<string, unknown>): ArtistWo
     modelUsdz: toOptionalString(rawData.modelUsdz),
     generatedGlbUrl: toOptionalString(rawData.generatedGlbUrl),
     generatedUsdzUrl: toOptionalString(rawData.generatedUsdzUrl),
+    arV2Config: toOptionalArV2Config(rawData.arV2Config),
+    arV2Asset: toOptionalArV2Asset(rawData.arV2Asset),
     displayOrder: toOptionalFiniteNumber(rawData.displayOrder),
     isPublished: toOptionalBoolean(rawData.isPublished),
     archived: toOptionalBoolean(rawData.archived),
@@ -1384,6 +1476,20 @@ export async function updateWorkForAdmin(
   }
 
   await updateDoc(doc(db, "works", workId), updatePayload);
+}
+
+export async function saveWorkArV2ForAdmin(
+  workId: string,
+  payload: ArtistWorkArV2SavePayload
+) {
+  await updateDoc(doc(db, "works", workId), {
+    arV2Config: payload.config,
+    arV2Asset: {
+      ...payload.asset,
+      generatedAt: serverTimestamp(),
+    },
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function deleteArtistWork(workId: string, artistId: string) {

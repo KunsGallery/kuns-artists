@@ -23,6 +23,7 @@ import {
 } from "@/lib/r2/client";
 import { hasArAsset } from "@/lib/workDisplay";
 import { createCanvasArFiles, createSafeGlbFilename } from "@/lib/ar/createCanvasGlb";
+import { AdminArtworkArV2Builder } from "@/components/ar-v2/AdminArtworkArV2Builder";
 
 const DEFAULT_AR_SIDE_COLOR = "#111111";
 const DEFAULT_AR_DEPTH_CM = 3.5;
@@ -177,6 +178,18 @@ function getWorkDisplayOrderLabel(work: ArtistWorkDoc) {
   return Number.isFinite(work.displayOrder as number)
     ? `Order ${work.displayOrder}`
     : "No order";
+}
+
+function getWorkArStatus(work: ArtistWorkDoc) {
+  if (work.arV2Asset?.status === "ready" && work.arV2Asset.glbUrl?.trim()) {
+    return { label: "AR V2 Ready", tone: "green" as const };
+  }
+
+  if (hasArAsset(work)) {
+    return { label: "Legacy AR Only", tone: "amber" as const };
+  }
+
+  return { label: "No AR", tone: "gray" as const };
 }
 
 function parseOptionalNumberInput(value: string) {
@@ -465,6 +478,7 @@ function WorkListCard({
   onSelect: () => void;
 }) {
   const status = getWorkStatus(work);
+  const arStatus = getWorkArStatus(work);
   const coverImageUrl = work.coverImageUrl || "";
 
   return (
@@ -527,8 +541,8 @@ function WorkListCard({
             />
             <MiniStatus
               label="AR status"
-              value={hasArAsset(work) ? "AR Ready" : "Missing AR Files"}
-              tone={hasArAsset(work) ? "green" : "gray"}
+              value={arStatus.label}
+              tone={arStatus.tone}
             />
           </div>
         </div>
@@ -1826,6 +1840,16 @@ function AdminWorksPageContent() {
           <div className="space-y-6">
             {selectedWork ? (
               <>
+                <AdminArtworkArV2Builder
+                  work={selectedWork}
+                  coverImageUrl={selectedForm.coverImageUrl || selectedWork.coverImageUrl || ""}
+                  onUploaded={async () => {
+                    const refreshed = await getAllWorksForAdmin();
+                    setWorks(refreshed);
+                    setSaveMessage("AR v2 model saved.");
+                  }}
+                />
+
                 <SectionCard
                   title="Quick check"
                   description="공개 가능 여부를 빠르게 판단할 수 있도록 핵심 항목을 먼저 확인합니다."
@@ -2003,6 +2027,15 @@ function AdminWorksPageContent() {
                     </div>
                   </div>
                 </SectionCard>
+
+                <details className="rounded-[1.75rem] border border-black/8 bg-white p-6 shadow-sm md:p-7">
+                  <summary className="cursor-pointer list-none text-[11px] font-medium tracking-[0.24em] text-neutral-400">
+                    LEGACY AR V1 ASSETS
+                  </summary>
+                  <p className="mt-3 max-w-2xl text-sm leading-7 text-neutral-600">
+                    Used by the current public AR route until Phase 4 migration.
+                  </p>
+                  <div className="mt-5">
 
                 <SectionCard
                   title="4. AR Preview Builder"
@@ -2607,6 +2640,8 @@ function AdminWorksPageContent() {
                   </div>
 
                 </SectionCard>
+                  </div>
+                </details>
 
                 <SectionCard
                   title="5. Actions"

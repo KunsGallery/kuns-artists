@@ -4,19 +4,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import {
-  buildArtworkScene,
-  exportArtworkGlb,
+  buildArtworkGlb,
   formatRatioPercent,
   getArtworkImageRatio,
   revokeArtworkObjectUrl,
-  validateArtworkBlob,
-  validateArtworkScene,
   type ArV2BuildMode,
   type ArV2Diagnostic,
   type ArV2Event,
   type ArtworkOrientation,
   type ArtworkProductionMetadata,
-  type ArtworkScene,
   type ArtworkSourceMode,
   type PhysicalDimensions,
 } from "@/lib/ar-v2";
@@ -47,14 +43,6 @@ function parsePositive(value: string, label: string, minimum = 0) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= minimum) throw new Error(`${label} must be greater than ${minimum}.`);
   return number;
-}
-
-function disposeArtworkScene(artwork: ArtworkScene | null) {
-  if (!artwork) return;
-  artwork.mesh.geometry.dispose();
-  const material = artwork.mesh.material;
-  if (!Array.isArray(material)) material.dispose();
-  artwork.atlas.texture.dispose();
 }
 
 function slugify(value: string) {
@@ -102,7 +90,6 @@ export function ArV2Lab() {
   const [isBuilding, setIsBuilding] = useState(false);
   const [builtMode, setBuiltMode] = useState<ArV2BuildMode | null>(null);
   const [arStatus, setArStatus] = useState("idle");
-  const currentArtwork = useRef<ArtworkScene | null>(null);
   const previousObjectUrl = useRef<string | null>(null);
   const eventId = useRef(0);
 
@@ -118,7 +105,6 @@ export function ArV2Lab() {
 
   useEffect(() => () => {
     revokeArtworkObjectUrl(previousObjectUrl.current);
-    disposeArtworkScene(currentArtwork.current);
   }, []);
 
   useEffect(() => () => {
@@ -185,7 +171,7 @@ export function ArV2Lab() {
       if (sourceMode === "local-image" && !image) throw new Error("Select a local image or switch back to Diagnostic Fixture.");
       if (productionSource && !metadataValid) throw new Error("Production Artwork requires Artwork Title and Artist Name.");
       if (ratioBlocked) throw new Error("Image ratio differs by more than 5%. Confirm the intentional mismatch before building.");
-      const artwork = buildArtworkScene({
+      const result = await buildArtworkGlb({
         widthCm,
         heightCm,
         depthCm,
@@ -198,19 +184,14 @@ export function ArV2Lab() {
         metadata: productionMode ? metadata : undefined,
         allowRatioMismatch,
       });
-      const sceneValidation = validateArtworkScene(artwork);
-      const exportResult = await exportArtworkGlb(artwork.scene, sceneValidation.diagnostics);
-      const nextDiagnostics = [...sceneValidation.diagnostics, validateArtworkBlob(exportResult.blob)];
-      disposeArtworkScene(currentArtwork.current);
-      currentArtwork.current = artwork;
       revokeArtworkObjectUrl(previousObjectUrl.current);
-      previousObjectUrl.current = exportResult.objectUrl;
-      setObjectUrl(exportResult.objectUrl);
-      setDownloadBlob(exportResult.blob);
-      setDiagnostics(nextDiagnostics);
+      previousObjectUrl.current = result.objectUrl;
+      setObjectUrl(result.objectUrl);
+      setDownloadBlob(result.blob);
+      setDiagnostics(result.diagnostics);
       setBuiltMode(buildMode);
       setArStatus("idle");
-      addEvent("build", `GLB ready (${Math.round(exportResult.byteSize / 1024)} KB)`);
+      addEvent("build", `GLB ready (${Math.round(result.byteSize / 1024)} KB)`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not build the AR v2 model.";
       setErrorMessage(message);
@@ -227,7 +208,7 @@ export function ArV2Lab() {
     const url = URL.createObjectURL(downloadBlob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = getGlbFileName(currentArtwork.current?.buildConfig.buildMode ?? buildMode, currentArtwork.current?.buildConfig.metadata);
+    anchor.download = getGlbFileName(builtMode ?? buildMode, productionMode ? metadata : undefined);
     anchor.click();
     URL.revokeObjectURL(url);
     addEvent("download", `GLB download started: ${anchor.download}`);
@@ -255,8 +236,6 @@ export function ArV2Lab() {
     setDiagnostics([]);
     setBuiltMode(null);
     setArStatus("idle");
-    disposeArtworkScene(currentArtwork.current);
-    currentArtwork.current = null;
     revokeArtworkObjectUrl(previousObjectUrl.current);
     previousObjectUrl.current = null;
     addEvent("reset", "Lab reset");

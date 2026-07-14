@@ -1,3 +1,8 @@
+import type {
+  WorkArV2Asset,
+  WorkArV2Config,
+} from "@/lib/ar-v2";
+
 export type Work = {
   slug: string;
   artistSlug: string;
@@ -28,6 +33,8 @@ export type Work = {
   generatedGlbUrl?: string;
   generatedUsdzUrl?: string;
   generatedAt?: unknown;
+  arV2Config?: WorkArV2Config;
+  arV2Asset?: WorkArV2Asset;
   displayOrder?: number;
   isPublished?: boolean;
   archived?: boolean;

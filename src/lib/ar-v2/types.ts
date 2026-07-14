@@ -24,6 +24,47 @@ export type ArtworkProductionMetadata = {
   inventoryNumber?: string;
 };
 
+export type WorkArV2Config = {
+  version: 2;
+  rotationDeg: OrientationRotation;
+  flipX: boolean;
+  flipY: boolean;
+  sideColor: string;
+  depthCm: number;
+  backLabelEnabled: boolean;
+  allowRatioMismatch?: boolean;
+};
+
+export type WorkArV2AssetStatus = "none" | "preview" | "ready" | "error";
+
+export type WorkArV2Asset = {
+  status: WorkArV2AssetStatus;
+  glbUrl?: string;
+  generatorVersion: string;
+  sourceSignature?: string;
+  generatedAt?: unknown;
+  byteSize?: number;
+  errorMessage?: string;
+};
+
+export type ArV2SourceSignatureInput = {
+  workId: string;
+  coverImageUrl: string;
+  title: string;
+  artistName: string;
+  year: string;
+  medium: string;
+  widthCm: number;
+  heightCm: number;
+  depthCm: number;
+  rotationDeg: OrientationRotation;
+  flipX: boolean;
+  flipY: boolean;
+  sideColor: string;
+  backLabelEnabled: boolean;
+  allowRatioMismatch?: boolean;
+};
+
 export type ArtworkImageFit = "contain";
 
 export type ArtworkRatioStatus = "pass" | "warning" | "fail";
@@ -72,6 +113,33 @@ export type ArtworkScene = {
   atlas: ArtworkAtlas;
   dimensions: PhysicalDimensions;
   buildConfig: ArtworkBuildConfig;
+};
+
+export type LoadedArtworkImage = {
+  image: HTMLImageElement;
+  revoke: () => void;
+};
+
+export type BuildArtworkGlbInput = {
+  widthCm: number;
+  heightCm: number;
+  depthCm: number;
+  buildMode: ArV2BuildMode;
+  sourceMode: ArtworkSourceMode;
+  image?: HTMLImageElement;
+  orientation: ArtworkOrientation;
+  sideColor: string;
+  showBackLabel: boolean;
+  metadata?: ArtworkProductionMetadata;
+  allowRatioMismatch?: boolean;
+};
+
+export type BuildArtworkGlbResult = {
+  blob: Blob;
+  objectUrl: string;
+  byteSize: number;
+  diagnostics: ArV2Diagnostic[];
+  hasFailure: boolean;
 };
 
 export type DiagnosticSeverity = "PASS" | "WARNING" | "FAIL";
