@@ -200,6 +200,7 @@ export function AdminArtworkArV2Builder({
   const [siteOrigin, setSiteOrigin] = useState("");
   const imageRevokeRef = useRef<(() => void) | null>(null);
   const previewObjectUrlRef = useRef<string | null>(null);
+  const latestWorkRef = useRef(work);
 
   const coverImageUrl = getCurrentCoverImageUrl(work, coverImageUrlOverride);
   const orientation = useMemo(
@@ -232,6 +233,10 @@ export function AdminArtworkArV2Builder({
     const status = differenceRatio <= 0.02 ? "pass" : differenceRatio <= 0.05 ? "warning" : "fail";
     return { imageAspect, physicalAspect, differenceRatio, status } as const;
   }, [loadedImage, rotationDeg, work.heightCm, work.widthCm]);
+
+  useEffect(() => {
+    latestWorkRef.current = work;
+  }, [work]);
 
   const requiredFieldsReady = Boolean(
     coverImageUrl &&
@@ -323,13 +328,15 @@ export function AdminArtworkArV2Builder({
   }, [hasDiagnosticsFailure, isUploading, previewBlob, previewOutdated, previewWorkId, viewerLoadStatus, work.id]);
 
   useEffect(() => {
-    setRotationDeg(getInitialOrientation(work).rotationDeg);
-    setFlipX(getInitialOrientation(work).flipX);
-    setFlipY(getInitialOrientation(work).flipY);
-    setSideColor(getInitialSideColor(work));
-    setDepthCm(getInitialDepthCm(work));
-    setBackLabelEnabled(getInitialBackLabelEnabled(work));
-    setAllowRatioMismatch(getInitialAllowRatioMismatch(work));
+    const currentWork = latestWorkRef.current;
+
+    setRotationDeg(getInitialOrientation(currentWork).rotationDeg);
+    setFlipX(getInitialOrientation(currentWork).flipX);
+    setFlipY(getInitialOrientation(currentWork).flipY);
+    setSideColor(getInitialSideColor(currentWork));
+    setDepthCm(getInitialDepthCm(currentWork));
+    setBackLabelEnabled(getInitialBackLabelEnabled(currentWork));
+    setAllowRatioMismatch(getInitialAllowRatioMismatch(currentWork));
     setPreviewBlob(null);
     setPreviewSignature("");
     setPreviewWorkId("");
@@ -350,7 +357,7 @@ export function AdminArtworkArV2Builder({
       previewObjectUrlRef.current = null;
     }
     setPreviewObjectUrl(null);
-  }, [work]);
+  }, [work.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -744,10 +751,33 @@ export function AdminArtworkArV2Builder({
                   Build
                 </p>
                 <p className="mt-2 max-w-2xl text-sm leading-7 text-neutral-600">
-                  Build the preview, inspect the exact GLB, then approve the same Blob for upload.
+                  1. 미리보기 만들기  2. 실제 GLB 확인  3. 승인 및 업로드
                 </p>
               </div>
-              <Pill tone={previewBlob ? "green" : "gray"}>{previewBlob ? "Preview Ready" : "Not Built"}</Pill>
+              <Pill tone={previewBlob ? "green" : "gray"}>
+                {previewBlob ? "임시 미리보기 · 아직 저장되지 않음" : "Not Built"}
+              </Pill>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-[1.15rem] border border-black/8 bg-white px-4 py-3">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">1. 미리보기 만들기</p>
+                <p className="mt-2 text-sm leading-6 text-neutral-600">
+                  브라우저에서 확인할 임시 GLB를 생성합니다. 아직 저장되지 않습니다.
+                </p>
+              </div>
+              <div className="rounded-[1.15rem] border border-black/8 bg-white px-4 py-3">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">2. 실제 GLB 확인</p>
+                <p className="mt-2 text-sm leading-6 text-neutral-600">
+                  같은 Blob이 로딩되는지 viewer에서 꼭 확인합니다.
+                </p>
+              </div>
+              <div className="rounded-[1.15rem] border border-black/8 bg-white px-4 py-3">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">3. 승인 및 업로드</p>
+                <p className="mt-2 text-sm leading-6 text-neutral-600">
+                  확인한 동일 GLB를 R2에 업로드하고 작품 문서에 저장합니다.
+                </p>
+              </div>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-3">
@@ -768,6 +798,10 @@ export function AdminArtworkArV2Builder({
                 {isUploading ? "Uploading…" : "Approve & Upload AR V2"}
               </button>
             </div>
+
+            <p className="mt-3 text-[11px] leading-5 text-neutral-500">
+              Build AR V2 Preview는 임시 미리보기 생성만 수행합니다. 최종 저장은 Approve & Upload AR V2에서만 진행됩니다.
+            </p>
 
             {!canBuild && buildDisabledReason ? (
               <p className="mt-4 rounded-[1.15rem] border border-black/8 bg-white px-4 py-3 text-sm leading-6 text-neutral-600">

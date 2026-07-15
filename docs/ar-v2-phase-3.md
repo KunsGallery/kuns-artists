@@ -118,6 +118,8 @@ On approval, the GLB is uploaded to R2 first, then the Firestore work document i
 
 If upload fails after the file has already reached R2, the workflow attempts to clean up the uploaded object so the work record does not point at a half-finished artifact.
 
+The builder keeps its preview state stable when the selected work record refreshes with the same `work.id`, so a normal admin save does not erase the preview Blob or force the viewer back to an idle state. Only a different work selection clears the preview.
+
 The builder now exposes an explicit image load state:
 
 - `idle` when no artwork URL exists;
@@ -126,6 +128,8 @@ The builder now exposes an explicit image load state:
 - `error` when CORS, decode, or response validation fails.
 
 The build button stays disabled until the image is ready, and the UI shows the concrete reason when a required field is missing, the source is loading, or the source is blocked by CORS.
+
+On `/admin/works`, the sticky general save action is hidden on the AR V2 tab so the approval flow stays explicit. AR V2 approval happens only through the dedicated `Approve & Upload AR V2` action.
 
 ## 8. What did not change
 
@@ -151,6 +155,12 @@ The `/admin/works` detail area is now split into five tabs:
 - AR V2
 - 도슨트
 - 레거시·관리
+
+The AR V2 tab also explains the three-step workflow in Korean:
+
+1. 미리보기 만들기
+2. 실제 GLB 확인
+3. 승인 및 업로드
 
 The AR V2 builder is mounted only when the AR V2 tab is active, so remote image fetching and model-viewer setup do not run until the admin opens that tab.
 

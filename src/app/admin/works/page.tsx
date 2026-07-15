@@ -1408,10 +1408,15 @@ function AdminWorksPageContent() {
     setSaveErrorMessage("");
 
     try {
+      const resolvedCoverImageUrl =
+        selectedForm.coverImageUrl.trim() ||
+        selectedWork.coverImageUrl?.trim() ||
+        "";
+
       await updateWorkForAdmin(selectedWork.id, {
         isPublished: selectedForm.isPublished,
         archived: selectedForm.archived,
-        coverImageUrl: selectedForm.coverImageUrl,
+        coverImageUrl: resolvedCoverImageUrl,
         modelGlb: selectedForm.modelGlb,
         modelUsdz: selectedForm.modelUsdz,
         generatedGlbUrl: selectedForm.generatedGlbUrl,
@@ -1431,6 +1436,10 @@ function AdminWorksPageContent() {
         docentAudioTitle: selectedForm.docentAudioTitle,
         docentAudioDescription: selectedForm.docentAudioDescription,
       });
+      setSelectedForm((current) => ({
+        ...current,
+        coverImageUrl: resolvedCoverImageUrl,
+      }));
       setSaveMessage("작품 상태가 저장되었습니다.");
       const refreshed = await getAllWorksForAdmin();
       setWorks(refreshed);
@@ -1490,6 +1499,7 @@ function AdminWorksPageContent() {
 
   const hasWorks = works.length > 0;
   const hasFilteredWorks = filteredWorks.length > 0;
+  const showGeneralSaveAction = activeDetailTab !== "ar-v2";
 
   return (
     <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950">
@@ -2111,17 +2121,25 @@ function AdminWorksPageContent() {
                   <div className="sticky bottom-4 z-20 rounded-[1.5rem] border border-black/8 bg-white/95 p-4 shadow-[0_14px_40px_rgba(15,15,15,0.08)] backdrop-blur">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm leading-6 text-neutral-500">
-                        Save changes for review, publication, docent, or legacy fields. AR V2 uses its own approval flow.
+                        {showGeneralSaveAction
+                          ? "Save changes for review, publication, docent, or legacy fields."
+                          : "AR V2 저장은 이 탭의 Approve & Upload AR V2 버튼으로 진행합니다."}
                       </p>
                       <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          onClick={() => void handleSaveSelected()}
-                          disabled={!selectedWork || isSaving || isDeletingSelectedWork}
-                          className="inline-flex h-12 items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isSaving ? "저장 중..." : "변경사항 저장"}
-                        </button>
+                        {showGeneralSaveAction ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveSelected()}
+                            disabled={!selectedWork || isSaving || isDeletingSelectedWork}
+                            className="inline-flex h-12 items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isSaving ? "저장 중..." : "변경사항 저장"}
+                          </button>
+                        ) : (
+                          <div className="inline-flex h-12 items-center rounded-full border border-[#F37021]/20 bg-[#fff7f1] px-4 text-sm text-[#b85d18]">
+                            AR V2는 일반 저장을 사용하지 않습니다.
+                          </div>
+                        )}
                         {artistHref ? (
                           <Link
                             href={artistHref}
