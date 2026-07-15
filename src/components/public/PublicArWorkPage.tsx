@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import DocentAudioPlayer from "@/components/ar/DocentAudioPlayer";
 import DeviceRedirect from "@/components/ar/DeviceRedirect";
+import { ArtworkModelViewer } from "@/components/ar-v2/ArtworkModelViewer";
 import { getArtistBySlug } from "@/data/artists";
 import { getWorkBySlug as getStaticWorkBySlug } from "@/data/works";
 import {
@@ -11,12 +12,21 @@ import {
   resolveArtistWorkSlug,
   type ArtistWorkDoc,
 } from "@/lib/firebase/firestore";
-import { hasArAsset } from "@/lib/workDisplay";
+import {
+  getLegacyArGlbUrl,
+  getLegacyArUsdzUrl,
+  getReadyArV2GlbUrl,
+  hasArAsset,
+  hasLegacyArAsset,
+  hasReadyArV2Asset,
+} from "@/lib/workDisplay";
 import type { Work } from "@/types/work";
 
 type PublicWork = Work & {
   id?: string;
 };
+
+const noop = () => undefined;
 
 function mapPublicWork(
   firestoreWork?: ArtistWorkDoc | null,
@@ -58,6 +68,10 @@ function mapPublicWork(
       firestoreWork?.generatedGlbUrl ?? fallbackWork?.generatedGlbUrl,
     generatedUsdzUrl:
       firestoreWork?.generatedUsdzUrl ?? fallbackWork?.generatedUsdzUrl,
+    arV2Config:
+      firestoreWork?.arV2Config ?? fallbackWork?.arV2Config,
+    arV2Asset:
+      firestoreWork?.arV2Asset ?? fallbackWork?.arV2Asset,
     docentAudioEnabled:
       firestoreWork?.docentAudioEnabled ?? fallbackWork?.docentAudioEnabled,
     docentAudioUrl:
@@ -292,7 +306,22 @@ function PublicWorkContent({
 }) {
   const artist = getArtistBySlug(work.artistSlug);
   const showDebugNote = process.env.NODE_ENV === "development";
+  const readyArV2GlbUrl = getReadyArV2GlbUrl(work);
+  const legacyArGlbUrl = getLegacyArGlbUrl(work);
+  const legacyArUsdzUrl = getLegacyArUsdzUrl(work);
+  const hasReadyArV2 = hasReadyArV2Asset(work);
+  const hasLegacyAr = hasLegacyArAsset(work);
   const arReady = hasArAsset(work);
+  const arStatusLabel = hasReadyArV2
+    ? "AR v2 Ready"
+    : hasLegacyAr
+      ? "Legacy AR Ready"
+      : "AR Preview Preparing";
+  const arHeroCopy = hasReadyArV2
+    ? "View the approved AR v2 model in the public viewer, then continue with the docent audio guide below."
+    : arReady
+      ? "View the artwork in AR, then continue with the docent audio guide below."
+      : "An AR preview for this artwork is being prepared.";
   const workHref = getWorkHref(work);
   const artistHref = getArtistHref(work);
   const artistPageHref = work.artistSlug ? artistHref : "";
@@ -302,6 +331,14 @@ function PublicWorkContent({
   const docentAudioTitle =
     work.docentAudioTitle?.trim() || "Docent Audio Guide";
   const docentAudioDescription = work.docentAudioDescription?.trim() || "";
+  const legacyFallbackWork = useMemo(
+    () => ({
+      ...work,
+      arV2Config: undefined,
+      arV2Asset: undefined,
+    }),
+    [work]
+  );
 
   const infoRows = [
     { label: "Title", value: work.title },
@@ -361,7 +398,7 @@ function PublicWorkContent({
                     : "border-amber-200/20 bg-amber-50/10 text-amber-200"
                 }`}
               >
-                {arReady ? "AR Preview Available" : "AR Preview Preparing"}
+                {arStatusLabel}
               </span>
             </div>
 
@@ -388,9 +425,7 @@ function PublicWorkContent({
             </div>
 
             <p className="mt-5 max-w-2xl text-sm leading-7 text-white/68 md:text-[15px]">
-              {arReady
-                ? "View the artwork in AR, then continue with the docent audio guide below."
-                : "An AR preview for this artwork is being prepared."}
+              {arHeroCopy}
             </p>
 
             <div className="mt-6 flex flex-wrap gap-2">
@@ -442,7 +477,93 @@ function PublicWorkContent({
         </div>
 
         <section id="ar-access" className="mx-auto max-w-7xl px-5 pt-6 md:px-8 md:pt-8">
-          <DeviceRedirect work={work} />
+          {hasReadyArV2 ? (
+            <div className="space-y-6">
+              <div className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#161616] shadow-[0_30px_120px_rgba(0,0,0,0.35)]">
+                <div className="grid gap-0 lg:grid-cols-[0.94fr_1.06fr] lg:items-stretch">
+                  <div className="relative border-b border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012)),radial-gradient(circle_at_18%_18%,rgba(243,112,33,0.16),transparent_28%),#141414] p-5 md:p-6 lg:border-b-0 lg:border-r lg:p-8">
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(243,112,33,0.1),transparent_35%)]" />
+                    <div className="relative flex h-full flex-col justify-between gap-6">
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-white/50">
+                            AR v2
+                          </span>
+                          <span className="inline-flex rounded-full border border-emerald-200/20 bg-emerald-50/10 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-emerald-200">
+                            Ready
+                          </span>
+                          {hasLegacyAr ? (
+                            <span className="inline-flex rounded-full border border-[#F37021]/25 bg-[#F37021]/10 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-[#ffad76]">
+                              Legacy fallback available
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="max-w-2xl space-y-3">
+                          <h2 className="text-3xl font-semibold tracking-[-0.05em] text-[#F7F1E8] md:text-4xl">
+                            Open the canonical GLB in the public viewer.
+                          </h2>
+                          <p className="text-sm leading-7 text-white/68 md:text-[15px]">
+                            The same approved AR v2 model is shown here on desktop, while mobile devices can open the built-in AR experience from the viewer.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/62">
+                          Desktop 3D preview
+                        </div>
+                        <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/62">
+                          iPhone Quick Look
+                        </div>
+                        <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/62">
+                          Android Scene Viewer
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4 text-sm leading-7 text-white/62">
+                        {legacyArGlbUrl ? (
+                          <p>
+                            Legacy GLB is also archived for this work.
+                            {legacyArUsdzUrl ? " USDZ fallback is available as well." : ""}
+                          </p>
+                        ) : (
+                          <p>
+                            This is the primary public AR v2 model for the work.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 md:p-6 lg:p-8">
+                    <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#141414] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+                      <ArtworkModelViewer
+                        objectUrl={readyArV2GlbUrl}
+                        arDisabled={!readyArV2GlbUrl}
+                        onEvent={noop}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {hasLegacyAr ? (
+                <div className="overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#161616] shadow-[0_30px_120px_rgba(0,0,0,0.28)]">
+                  <DeviceRedirect work={legacyFallbackWork} />
+                </div>
+              ) : null}
+            </div>
+          ) : hasLegacyAr ? (
+            <DeviceRedirect work={legacyFallbackWork} />
+          ) : (
+            <ArNoticeScreen
+              title="AR preview is being prepared."
+              description="This artwork is published, but the AR v2 model is not ready yet."
+              meta={debugMessage || undefined}
+              debugMessage={debugMessage || undefined}
+            />
+          )}
         </section>
 
         <section className="mx-auto max-w-7xl px-5 pt-6 md:px-8 md:pt-8">

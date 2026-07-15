@@ -3,6 +3,10 @@ type WorkWithDisplayOrder = {
 };
 
 type WorkWithArAssets = {
+  arV2Asset?: {
+    status?: string;
+    glbUrl?: string;
+  };
   generatedGlbUrl?: string;
   modelGlb?: string;
   generatedUsdzUrl?: string;
@@ -41,16 +45,36 @@ function getTrimmedUrl(value?: string) {
   return trimmed || "";
 }
 
+export function getReadyArV2GlbUrl(work: WorkWithArAssets) {
+  if (work.arV2Asset?.status !== "ready") {
+    return "";
+  }
+
+  return getTrimmedUrl(work.arV2Asset.glbUrl);
+}
+
+export function getLegacyArGlbUrl(work: WorkWithArAssets) {
+  return getTrimmedUrl(work.generatedGlbUrl) || getTrimmedUrl(work.modelGlb);
+}
+
+export function getLegacyArUsdzUrl(work: WorkWithArAssets) {
+  return getTrimmedUrl(work.generatedUsdzUrl) || getTrimmedUrl(work.modelUsdz);
+}
+
 export function getArGlbUrl(work: WorkWithArAssets) {
-  return (
-    getTrimmedUrl(work.generatedGlbUrl) || getTrimmedUrl(work.modelGlb)
-  );
+  return getReadyArV2GlbUrl(work) || getLegacyArGlbUrl(work);
 }
 
 export function getArUsdzUrl(work: WorkWithArAssets) {
-  return (
-    getTrimmedUrl(work.generatedUsdzUrl) || getTrimmedUrl(work.modelUsdz)
-  );
+  return getLegacyArUsdzUrl(work);
+}
+
+export function hasReadyArV2Asset(work: WorkWithArAssets) {
+  return Boolean(getReadyArV2GlbUrl(work));
+}
+
+export function hasLegacyArAsset(work: WorkWithArAssets) {
+  return Boolean(getLegacyArGlbUrl(work) || getLegacyArUsdzUrl(work));
 }
 
 export function hasArAsset(work: WorkWithArAssets) {

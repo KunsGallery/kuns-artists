@@ -248,6 +248,10 @@ function mergePublicWork(
       firestoreWork?.generatedGlbUrl ?? fallbackWork?.generatedGlbUrl,
     generatedUsdzUrl:
       firestoreWork?.generatedUsdzUrl ?? fallbackWork?.generatedUsdzUrl,
+    arV2Config:
+      firestoreWork?.arV2Config ?? fallbackWork?.arV2Config,
+    arV2Asset:
+      firestoreWork?.arV2Asset ?? fallbackWork?.arV2Asset,
     displayOrder: firestoreWork?.displayOrder ?? fallbackWork?.displayOrder,
     widthCm: firestoreWork?.widthCm ?? fallbackWork?.widthCm,
     heightCm: firestoreWork?.heightCm ?? fallbackWork?.heightCm,
