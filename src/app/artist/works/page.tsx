@@ -13,6 +13,7 @@ import {
 } from "@/lib/firebase/firestore";
 import { deleteR2ObjectsByPublicUrls } from "@/lib/r2/client";
 import { hasArAsset } from "@/lib/workDisplay";
+import { getArV2WorkflowStatus } from "@/lib/ar-v2";
 
 type WorkStatusFilter = "all" | "pending" | "published" | "archived";
 
@@ -89,6 +90,57 @@ function getCardAccentClass(status: Exclude<WorkStatusFilter, "all">) {
   }
 
   return "hover:border-white/15";
+}
+
+function getArWorkflowLabel(work: ArtistWorkDoc) {
+  const status = getArV2WorkflowStatus(work);
+
+  if (status === "approved") return "AR 준비 완료";
+  if (status === "changes-requested") return "수정 요청";
+  if (status === "outdated") return "재요청 필요";
+  if (status === "requested") return "AR 요청됨";
+  if (status === "cancelled") return "요청 취소됨";
+  return "AR 요청 전";
+}
+
+function getArWorkflowTone(work: ArtistWorkDoc) {
+  const status = getArV2WorkflowStatus(work);
+
+  if (status === "approved") return "published" as const;
+  if (status === "changes-requested" || status === "outdated") return "pending" as const;
+  if (status === "requested") return "published" as const;
+  if (status === "cancelled") return "archived" as const;
+  return "pending" as const;
+}
+
+function getArWorkflowHint(work: ArtistWorkDoc) {
+  const status = getArV2WorkflowStatus(work);
+
+  if (status === "approved") {
+    return work.isPublished === true
+      ? "승인된 AR 모델을 공개 페이지에서 볼 수 있습니다."
+      : "승인된 AR 모델이 준비되었습니다. 작품 공개 후 AR 링크가 활성화됩니다.";
+  }
+
+  if (status === "changes-requested") {
+    return work.arV2Review?.message?.trim()
+      ? `수정 요청: ${work.arV2Review.message.trim()}`
+      : "갤러리에서 수정 요청을 보냈습니다.";
+  }
+
+  if (status === "outdated") {
+    return "작품 정보가 변경되어 AR 제작을 다시 요청해야 합니다.";
+  }
+
+  if (status === "requested") {
+    return "갤러리에서 AR 제작 요청을 검수 중입니다.";
+  }
+
+  if (status === "cancelled") {
+    return "이전 요청이 취소되었습니다. 필요하면 다시 요청할 수 있습니다.";
+  }
+
+  return "작품 정보와 크기를 확인한 뒤 AR 제작을 요청할 수 있습니다.";
 }
 
 function StatusBadge({
@@ -301,7 +353,12 @@ export default function ArtistWorksPage() {
       const deletedWork = await deleteArtistWork(work.id, uid);
 
       void deleteR2ObjectsByPublicUrls(
-        [deletedWork.coverImageUrl, deletedWork.generatedGlbUrl, deletedWork.generatedUsdzUrl].filter(
+        [
+          deletedWork.coverImageUrl,
+          deletedWork.generatedGlbUrl,
+          deletedWork.generatedUsdzUrl,
+          deletedWork.arV2Asset?.glbUrl,
+        ].filter(
           (value): value is string => Boolean(value && value.trim())
         )
       ).catch(() => undefined);
@@ -481,7 +538,11 @@ export default function ArtistWorksPage() {
             const publicWorkSlug = getPublicWorkSlug(work);
             const publicWorkHref = publicWorkSlug ? `/works/${publicWorkSlug}` : "";
             const arSlug = getPublicWorkSlug(work);
-            const arHref = status === "published" ? `/ar/${arSlug}` : "";
+            const arWorkflowStatus = getArV2WorkflowStatus(work);
+            const arRequestHref = `/artist/works/${work.id}/ar`;
+            const publicArHref = work.isPublished === true && arWorkflowStatus === "approved" && arSlug
+              ? `/ar/${arSlug}`
+              : "";
 
             return (
               <article
@@ -543,6 +604,25 @@ export default function ArtistWorksPage() {
                         />
                       </div>
 
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.04] px-4 py-3">
+                          <p className="text-[10px] uppercase tracking-[0.22em] text-white/38">
+                            AR Workflow
+                          </p>
+                          <p className="mt-2 text-sm font-medium text-white/88">
+                            {getArWorkflowLabel(work)}
+                          </p>
+                        </div>
+                        <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.04] px-4 py-3">
+                          <p className="text-[10px] uppercase tracking-[0.22em] text-white/38">
+                            AR Hint
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-white/70">
+                            {getArWorkflowHint(work)}
+                          </p>
+                        </div>
+                      </div>
+
                       <p className="text-sm leading-7 text-white/62">
                         {getStatusMessage(status)}
                       </p>
@@ -564,21 +644,34 @@ export default function ArtistWorksPage() {
                           공유 카드 만들기
                         </Link>
 
-                        {status === "published" ? (
+                        <Link
+                          href={arRequestHref}
+                          className={`inline-flex h-11 items-center justify-center rounded-full px-5 text-sm transition sm:w-auto ${
+                            getArWorkflowTone(work) === "published"
+                              ? "border border-[#F37021]/35 bg-[#F37021]/10 text-[#f6b07f] hover:border-[#F37021]/50 hover:bg-[#F37021]/14"
+                              : getArWorkflowTone(work) === "archived"
+                                ? "border border-white/10 bg-white/[0.04] text-white/72 hover:border-white/20 hover:bg-white/[0.08]"
+                                : "border border-white/10 bg-white/[0.04] text-white/80 hover:border-white/20 hover:bg-white/[0.08]"
+                          }`}
+                        >
+                          {getArWorkflowLabel(work)}
+                        </Link>
+
+                        {publicArHref ? (
                           <Link
-                            href={publicWorkHref}
+                            href={publicArHref}
                             className="inline-flex h-11 items-center justify-center rounded-full border border-[#F37021]/35 bg-[#F37021] px-5 text-sm font-medium text-[#171717] transition hover:bg-[#ff7a2f] sm:w-auto"
                           >
-                            작품 상세 보기
+                            공개 AR 보기
                           </Link>
                         ) : null}
 
-                        {arHref ? (
+                        {status === "published" ? (
                           <Link
-                            href={arHref}
+                            href={publicWorkHref}
                             className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-5 text-sm text-white/80 transition hover:border-white/20 hover:bg-white/[0.08] sm:w-auto"
                           >
-                            {hasArAsset(work) ? "AR 사용 가능" : "AR 준비 중"}
+                            작품 상세 보기
                           </Link>
                         ) : null}
 

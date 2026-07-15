@@ -223,6 +223,7 @@ function AdminNewWorkPageContent() {
             onSave={handleSave}
             saveButtonLabel="작품 저장"
             artistSlug={selectedArtist.slug}
+            showLegacyArPreparation
           />
         ) : (
           <section className="rounded-[2rem] border border-black/8 bg-white px-6 py-8 text-sm leading-7 text-neutral-600">

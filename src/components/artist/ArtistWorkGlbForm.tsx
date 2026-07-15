@@ -24,6 +24,7 @@ type ArtistWorkGlbFormProps = {
   artistSlug?: string;
   workSlug?: string;
   publicationState?: ArtistWorkPublicationState;
+  showLegacyArPreparation?: boolean;
 };
 
 type BadgeTone = "required" | "recommended" | "optional" | "auto";
@@ -179,6 +180,7 @@ export default function ArtistWorkGlbForm({
   artistSlug,
   workSlug,
   publicationState = "pending",
+  showLegacyArPreparation = false,
 }: ArtistWorkGlbFormProps) {
   const [form, setForm] = useState<WorkFormValues>(() =>
     mergeInitialValues(initialValues)
@@ -412,18 +414,14 @@ export default function ArtistWorkGlbForm({
             </FormSection>
 
             <FormSection
-              label="3. Optional Details / AR Preparation"
-              description="AR 관련 항목은 선택 사항입니다. 필요한 경우 갤러리와 함께 조정할 수 있습니다."
+              label="3. Physical Dimensions"
+              description="AR 제작과 작품 기록에 사용되는 실제 크기입니다."
             >
-              <p className="inline-flex rounded-full border border-[#cdbfa7] bg-[#eee5d7] px-3 py-1 text-[10px] font-medium tracking-[0.22em] text-[#5f5140]">
-                선택 사항
-              </p>
-
               <div className="grid gap-4 md:grid-cols-3">
                 <InputField
-                  label="가로 (cm)"
-                  badge="선택"
-                  badgeTone="optional"
+                  label="가로 cm"
+                  badge="필수"
+                  badgeTone="required"
                   value={form.widthCm}
                   onChange={(value) => updateField("widthCm", value)}
                   placeholder="116.8"
@@ -435,9 +433,9 @@ export default function ArtistWorkGlbForm({
                 />
 
                 <InputField
-                  label="세로 (cm)"
-                  badge="선택"
-                  badgeTone="optional"
+                  label="세로 cm"
+                  badge="필수"
+                  badgeTone="required"
                   value={form.heightCm}
                   onChange={(value) => updateField("heightCm", value)}
                   placeholder="91"
@@ -449,9 +447,9 @@ export default function ArtistWorkGlbForm({
                 />
 
                 <InputField
-                  label="깊이 (cm)"
-                  badge="선택"
-                  badgeTone="optional"
+                  label="깊이 cm"
+                  badge="필수"
+                  badgeTone="required"
                   value={form.depthCm}
                   onChange={(value) => updateField("depthCm", value)}
                   placeholder={String(DEFAULT_DEPTH_CM)}
@@ -462,69 +460,76 @@ export default function ArtistWorkGlbForm({
                   disabled={isGenerating || isSaving}
                 />
               </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <SelectField
-                  label="앞면 기울기 X"
-                  badge="선택"
-                  badgeTone="optional"
-                  value={form.frontRotationXDeg}
-                  onChange={(value) => updateField("frontRotationXDeg", value)}
-                  disabled={isGenerating || isSaving}
-                >
-                  {FRONT_ROTATION_X_OPTIONS.map((rotation) => (
-                    <option key={rotation} value={rotation}>
-                      {rotation}°
-                    </option>
-                  ))}
-                </SelectField>
-
-                <SelectField
-                  label="앞면 기울기 Y"
-                  badge="선택"
-                  badgeTone="optional"
-                  value={form.frontRotationYDeg}
-                  onChange={(value) => updateField("frontRotationYDeg", value)}
-                  disabled={isGenerating || isSaving}
-                >
-                  {FRONT_ROTATION_Y_OPTIONS.map((rotation) => (
-                    <option key={rotation} value={rotation}>
-                      {rotation}°
-                    </option>
-                  ))}
-                </SelectField>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <SelectField
-                  label="측면 표현"
-                  badge="선택"
-                  badgeTone="optional"
-                  value={form.sideMode}
-                  onChange={(value) =>
-                    updateField("sideMode", value as WorkFormValues["sideMode"])
-                  }
-                  disabled={isGenerating || isSaving}
-                >
-                  <option value="canvas">캔버스형</option>
-                  <option value="image">이미지형</option>
-                </SelectField>
-
-                <ToggleField
-                  label="뒷면 라벨"
-                  badge="선택"
-                  badgeTone="optional"
-                  checked={form.showBackLabel}
-                  onChange={(checked) => updateField("showBackLabel", checked)}
-                  disabled={isGenerating || isSaving}
-                />
-              </div>
-
-              <p className="text-sm leading-6 text-neutral-500">
-                AR 준비용 파일은 필요할 때만 내려받을 수 있습니다. 저장에는 영향을
-                주지 않습니다.
-              </p>
             </FormSection>
+
+            {showLegacyArPreparation ? (
+              <FormSection
+                label="4. Legacy AR Preparation"
+                description="관리자용 기존 AR V1 준비 영역입니다. 작가 화면에서는 표시되지 않습니다."
+              >
+                <div className="grid gap-4 md:grid-cols-2">
+                  <SelectField
+                    label="앞면 기울기 X"
+                    badge="선택"
+                    badgeTone="optional"
+                    value={form.frontRotationXDeg}
+                    onChange={(value) => updateField("frontRotationXDeg", value)}
+                    disabled={isGenerating || isSaving}
+                  >
+                    {FRONT_ROTATION_X_OPTIONS.map((rotation) => (
+                      <option key={rotation} value={rotation}>
+                        {rotation}°
+                      </option>
+                    ))}
+                  </SelectField>
+
+                  <SelectField
+                    label="앞면 기울기 Y"
+                    badge="선택"
+                    badgeTone="optional"
+                    value={form.frontRotationYDeg}
+                    onChange={(value) => updateField("frontRotationYDeg", value)}
+                    disabled={isGenerating || isSaving}
+                  >
+                    {FRONT_ROTATION_Y_OPTIONS.map((rotation) => (
+                      <option key={rotation} value={rotation}>
+                        {rotation}°
+                      </option>
+                    ))}
+                  </SelectField>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <SelectField
+                    label="측면 표현"
+                    badge="선택"
+                    badgeTone="optional"
+                    value={form.sideMode}
+                    onChange={(value) =>
+                      updateField("sideMode", value as WorkFormValues["sideMode"])
+                    }
+                    disabled={isGenerating || isSaving}
+                  >
+                    <option value="canvas">캔버스형</option>
+                    <option value="image">이미지형</option>
+                  </SelectField>
+
+                  <ToggleField
+                    label="뒷면 라벨"
+                    badge="선택"
+                    badgeTone="optional"
+                    checked={form.showBackLabel}
+                    onChange={(checked) => updateField("showBackLabel", checked)}
+                    disabled={isGenerating || isSaving}
+                  />
+                </div>
+
+                <p className="text-sm leading-6 text-neutral-500">
+                  AR 준비용 파일은 필요할 때만 내려받을 수 있습니다. 저장에는 영향을
+                  주지 않습니다.
+                </p>
+              </FormSection>
+            ) : null}
 
             <div className="space-y-3 pt-2">
               <div className="flex flex-col gap-3 sm:flex-row">
@@ -536,14 +541,16 @@ export default function ArtistWorkGlbForm({
                   {isSaving ? "저장 중..." : saveActionLabel}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => void handleGenerateGlb()}
-                  disabled={isGenerating || isSaving}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-full border border-black/10 bg-white px-6 text-sm font-medium text-neutral-900 transition hover:border-black/20 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                >
-                  {isGenerating ? "준비 중..." : "AR 준비용 파일 다운로드"}
-                </button>
+                {showLegacyArPreparation ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateGlb()}
+                    disabled={isGenerating || isSaving}
+                    className="inline-flex h-12 w-full items-center justify-center rounded-full border border-black/10 bg-white px-6 text-sm font-medium text-neutral-900 transition hover:border-black/20 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                  >
+                    {isGenerating ? "준비 중..." : "AR 준비용 파일 다운로드"}
+                  </button>
+                ) : null}
               </div>
 
               {saveSuccessMessage ? (
@@ -566,7 +573,7 @@ export default function ArtistWorkGlbForm({
                 </div>
               ) : null}
 
-              {glbSuccessMessage ? (
+              {showLegacyArPreparation && glbSuccessMessage ? (
                 <div
                   role="status"
                   aria-live="polite"
@@ -576,7 +583,7 @@ export default function ArtistWorkGlbForm({
                 </div>
               ) : null}
 
-              {glbErrorMessage ? (
+              {showLegacyArPreparation && glbErrorMessage ? (
                 <div
                   role="alert"
                   aria-live="assertive"

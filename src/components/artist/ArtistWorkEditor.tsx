@@ -65,12 +65,6 @@ function buildSavePayload(values: WorkFormValues): ArtistWorkSavePayload {
   const widthCm = values.widthCm.trim() ? Number(values.widthCm) : undefined;
   const heightCm = values.heightCm.trim() ? Number(values.heightCm) : undefined;
   const depthCm = values.depthCm.trim() ? Number(values.depthCm) : undefined;
-  const frontRotationXDeg = values.frontRotationXDeg.trim()
-    ? Number(values.frontRotationXDeg)
-    : undefined;
-  const frontRotationYDeg = values.frontRotationYDeg.trim()
-    ? Number(values.frontRotationYDeg)
-    : undefined;
 
   return {
     title: values.title.trim(),
@@ -82,10 +76,6 @@ function buildSavePayload(values: WorkFormValues): ArtistWorkSavePayload {
     widthCm,
     heightCm,
     depthCm,
-    frontRotationXDeg,
-    frontRotationYDeg,
-    sideMode: values.sideMode,
-    showBackLabel: values.showBackLabel,
   };
 }
 
@@ -192,9 +182,9 @@ export default function ArtistWorkEditor({
 
     const payload = buildSavePayload(values);
 
-    if (mode === "new") {
-      await createWorkForArtist(uid, artist, payload);
-      router.push("/artist/works?saved=1");
+  if (mode === "new") {
+      const createdWorkId = await createWorkForArtist(uid, artist, payload);
+      router.push(`/artist/works/${createdWorkId}/ar?created=1`);
       return "작품이 저장되었습니다.";
     }
 
@@ -244,6 +234,7 @@ export default function ArtistWorkEditor({
       artistSlug={artist?.slug}
       workSlug={work?.slug}
       publicationState={getPublicationState(work)}
+      showLegacyArPreparation={false}
     />
   );
 }

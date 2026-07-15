@@ -47,6 +47,27 @@ export type WorkArV2Asset = {
   errorMessage?: string;
 };
 
+export type WorkArV2RequestStatus = "requested" | "cancelled";
+
+export type WorkArV2ReviewStatus = "changes-requested" | "approved";
+
+export type WorkArV2Request = {
+  status: WorkArV2RequestStatus;
+  config: WorkArV2Config;
+  sourceSignature: string;
+  message?: string;
+  requestedAt?: unknown;
+  requestedBy: string;
+};
+
+export type WorkArV2Review = {
+  status: WorkArV2ReviewStatus;
+  sourceSignature: string;
+  message?: string;
+  reviewedAt?: unknown;
+  reviewedBy?: string;
+};
+
 export type ModelViewerDefinitionStatus = "loading" | "ready" | "error";
 
 export type ModelViewerLoadStatus = "idle" | "preparing" | "loading" | "ready" | "error";

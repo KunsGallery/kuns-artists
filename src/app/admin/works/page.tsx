@@ -20,6 +20,7 @@ import {
   deleteR2ObjectsByPublicUrls,
 } from "@/lib/r2/client";
 import { hasArAsset } from "@/lib/workDisplay";
+import { getArV2WorkflowStatus } from "@/lib/ar-v2";
 import { AdminArtworkArV2Builder } from "@/components/ar-v2/AdminArtworkArV2Builder";
 import { getWorkArV2Summary } from "@/components/ar-v2/AdminArV2Status";
 import { WorkDetailTabs, type WorkDetailTab } from "@/components/admin/works/WorkDetailTabs";
@@ -55,6 +56,7 @@ type WorkFormValues = {
 };
 type StatusFilter = "all" | "pending" | "published" | "archived";
 type ArtistFilter = "all" | "represented" | "project";
+type ArWorkflowFilter = "all" | "requests" | "changes-requested" | "approved" | "not-requested";
 
 const EMPTY_FORM: WorkFormValues = {
   isPublished: false,
@@ -87,6 +89,14 @@ const ARTIST_FILTER_OPTIONS: Array<{ value: ArtistFilter; label: string }> = [
   { value: "all", label: "All Artists" },
   { value: "represented", label: "전속 작가" },
   { value: "project", label: "Project Artists" },
+];
+
+const AR_WORKFLOW_FILTER_OPTIONS: Array<{ value: ArWorkflowFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "requests", label: "AR Requests" },
+  { value: "changes-requested", label: "Changes Requested" },
+  { value: "approved", label: "AR Ready" },
+  { value: "not-requested", label: "Not Requested" },
 ];
 
 const REPRESENTED_ARTIST_SLUGS = new Set(
@@ -189,6 +199,48 @@ function getWorkArStatus(work: ArtistWorkDoc) {
   }
 
   return { label: "No AR", tone: "gray" as const };
+}
+
+function getArWorkflowLabel(work: ArtistWorkDoc) {
+  const status = getArV2WorkflowStatus(work);
+
+  if (status === "requested") return "AR Requested";
+  if (status === "changes-requested") return "Changes Requested";
+  if (status === "approved") return "AR V2 Ready";
+  if (status === "outdated") return "AR Outdated";
+  if (status === "cancelled") return "Cancelled";
+  return "Not Requested";
+}
+
+function getArWorkflowTone(work: ArtistWorkDoc) {
+  const status = getArV2WorkflowStatus(work);
+
+  if (status === "approved") return "green" as const;
+  if (status === "changes-requested" || status === "outdated") return "amber" as const;
+  if (status === "requested") return "orange" as const;
+  return "gray" as const;
+}
+
+function getArWorkflowPriority(work: ArtistWorkDoc) {
+  const status = getArV2WorkflowStatus(work);
+
+  if (status === "requested") return 0;
+  if (status === "changes-requested") return 1;
+  if (status === "outdated") return 2;
+  if (status === "approved") return 3;
+  if (status === "not-requested") return 4;
+  return 5;
+}
+
+function getArWorkflowMatches(work: ArtistWorkDoc, filter: ArWorkflowFilter) {
+  const status = getArV2WorkflowStatus(work);
+
+  if (filter === "all") return true;
+  if (filter === "requests") {
+    return status === "requested" || status === "outdated" || status === "cancelled";
+  }
+
+  return status === filter;
 }
 
 function parseOptionalNumberInput(value: string) {
@@ -433,12 +485,13 @@ function MiniStatus({
 }: {
   label: string;
   value: string;
-  tone: "green" | "amber" | "gray";
+  tone: "green" | "amber" | "gray" | "orange";
 }) {
   const toneClass = {
     green: "border-emerald-300/40 bg-emerald-500/20 text-white",
     amber: "border-amber-200 bg-amber-50 text-amber-900",
     gray: "border-black/10 bg-[#f7f6f2] text-neutral-500",
+    orange: "border-[#F37021]/35 bg-[#F37021]/10 text-[#b85d18]",
   }[tone];
 
   return (
@@ -526,6 +579,11 @@ function WorkListCard({
               label="AR status"
               value={arStatus.label}
               tone={arStatus.tone}
+            />
+            <MiniStatus
+              label="Workflow"
+              value={getArWorkflowLabel(work)}
+              tone={getArWorkflowTone(work)}
             />
           </div>
         </div>
@@ -1124,7 +1182,7 @@ function WorksEmptyState() {
 function AdminWorksPageContent() {
   const searchParams = useSearchParams();
   const requestedArtist = searchParams.get("artist")?.trim() || "";
-  const { errorMessage } = useProtectedArtist({
+  const { uid, errorMessage } = useProtectedArtist({
     requireAdmin: true,
     fallbackErrorMessage: "관리자 정보를 불러오는 중 오류가 발생했습니다.",
   });
@@ -1142,6 +1200,7 @@ function AdminWorksPageContent() {
     useState<ArCanvasPreviewMode>("angle");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [artistFilter, setArtistFilter] = useState<ArtistFilter>("all");
+  const [arWorkflowFilter, setArWorkflowFilter] = useState<ArWorkflowFilter>("all");
   const [artistQueryFilter, setArtistQueryFilter] = useState("");
 
   useEffect(() => {
@@ -1225,7 +1284,8 @@ function AdminWorksPageContent() {
   }, [works]);
 
   const filteredWorks = useMemo(() => {
-    return works.filter((work) => {
+    return works
+      .filter((work) => {
       const matchesStatus =
         statusFilter === "all" || getWorkStatus(work) === statusFilter;
       const matchesArtist = getArtistFilterMatches(work, artistFilter);
@@ -1233,10 +1293,27 @@ function AdminWorksPageContent() {
         work,
         artistQueryFilter
       );
+      const matchesWorkflow = getArWorkflowMatches(work, arWorkflowFilter);
 
-      return matchesStatus && matchesArtist && matchesRequestedArtist;
-    });
-  }, [artistFilter, artistQueryFilter, statusFilter, works]);
+      return matchesStatus && matchesArtist && matchesRequestedArtist && matchesWorkflow;
+      })
+      .sort((left, right) => {
+        const workflowDiff = getArWorkflowPriority(left) - getArWorkflowPriority(right);
+        if (workflowDiff !== 0) {
+          return workflowDiff;
+        }
+
+        const artistCompare = (left.artistName ?? "").localeCompare(
+          right.artistName ?? "",
+          "en"
+        );
+        if (artistCompare !== 0) {
+          return artistCompare;
+        }
+
+        return (left.title ?? "").localeCompare(right.title ?? "", "en");
+      });
+  }, [arWorkflowFilter, artistFilter, artistQueryFilter, statusFilter, works]);
 
   const selectedWork = useMemo(
     () =>
@@ -1640,6 +1717,23 @@ function AdminWorksPageContent() {
                 </div>
               </div>
 
+              <div className="mt-4 border-t border-black/5 pt-4">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                  AR Workflow
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {AR_WORKFLOW_FILTER_OPTIONS.map((option) => (
+                    <FilterPill
+                      key={option.value}
+                      active={arWorkflowFilter === option.value}
+                      onClick={() => setArWorkflowFilter(option.value)}
+                    >
+                      {option.label}
+                    </FilterPill>
+                  ))}
+                </div>
+              </div>
+
               <p className="mt-4 text-sm leading-6 text-neutral-500">
                 {filteredWorks.length} / {works.length} works
               </p>
@@ -1915,6 +2009,7 @@ function AdminWorksPageContent() {
                         key={selectedWork.id}
                         work={selectedWork}
                         coverImageUrl={selectedForm.coverImageUrl || selectedWork.coverImageUrl || ""}
+                        adminUid={uid ?? undefined}
                         onUploaded={async () => {
                           const refreshed = await getAllWorksForAdmin();
                           setWorks(refreshed);

@@ -8,4 +8,5 @@ export * from "./createOrientationFixture";
 export * from "./exportArtworkGlb";
 export * from "./loadArtworkImage";
 export * from "./productionArtwork";
+export * from "./workflowStatus";
 export * from "./validateArtworkModel";

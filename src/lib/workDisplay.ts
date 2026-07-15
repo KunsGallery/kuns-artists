@@ -1,16 +1,39 @@
+import { getCurrentArV2SourceSignature, type WorkArV2AssetStatus } from "@/lib/ar-v2";
+
 type WorkWithDisplayOrder = {
   displayOrder?: number;
 };
 
 type WorkWithArAssets = {
   arV2Asset?: {
-    status?: string;
+    status?: WorkArV2AssetStatus;
     glbUrl?: string;
+    sourceSignature?: string;
+    generatorVersion?: string;
   };
   generatedGlbUrl?: string;
   modelGlb?: string;
   generatedUsdzUrl?: string;
   modelUsdz?: string;
+  arV2Config?: {
+    version: 2;
+    rotationDeg: 0 | 90 | 180 | 270;
+    flipX: boolean;
+    flipY: boolean;
+    sideColor: string;
+    depthCm: number;
+    backLabelEnabled: boolean;
+    allowRatioMismatch?: boolean;
+  };
+  id?: string;
+  coverImageUrl?: string;
+  title?: string;
+  artistName?: string;
+  year?: string;
+  medium?: string;
+  widthCm?: number;
+  heightCm?: number;
+  depthCm?: number;
 };
 
 function hasValidDisplayOrder(work: WorkWithDisplayOrder) {
@@ -50,7 +73,21 @@ export function getReadyArV2GlbUrl(work: WorkWithArAssets) {
     return "";
   }
 
-  return getTrimmedUrl(work.arV2Asset.glbUrl);
+  const glbUrl = getTrimmedUrl(work.arV2Asset.glbUrl);
+  if (!glbUrl) {
+    return "";
+  }
+
+  const currentSignature = getCurrentArV2SourceSignature(work);
+
+  if (
+    work.arV2Asset.sourceSignature &&
+    currentSignature !== work.arV2Asset.sourceSignature
+  ) {
+    return "";
+  }
+
+  return glbUrl;
 }
 
 export function getLegacyArGlbUrl(work: WorkWithArAssets) {

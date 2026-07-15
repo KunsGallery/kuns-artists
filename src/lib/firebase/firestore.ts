@@ -31,6 +31,8 @@ import type {
   WorkArV2Asset,
   WorkArV2AssetStatus,
   WorkArV2Config,
+  WorkArV2Request,
+  WorkArV2Review,
 } from "@/lib/ar-v2";
 
 export type ArtistRole = "admin" | "artist";
@@ -140,6 +142,8 @@ export type ArtistWorkDoc = {
   generatedUsdzUrl?: string;
   arV2Config?: WorkArV2Config;
   arV2Asset?: WorkArV2Asset;
+  arV2Request?: WorkArV2Request;
+  arV2Review?: WorkArV2Review;
   displayOrder?: number;
   isPublished?: boolean;
   archived?: boolean;
@@ -210,6 +214,20 @@ export type ArtistWorkAdminUpdatePayload = {
 export type ArtistWorkArV2SavePayload = {
   config: WorkArV2Config;
   asset: Omit<WorkArV2Asset, "generatedAt">;
+  review?: Omit<WorkArV2Review, "reviewedAt">;
+};
+
+export type ArtistWorkArV2RequestPayload = {
+  config: WorkArV2Config;
+  sourceSignature: string;
+  message?: string;
+};
+
+export type ArtistWorkArV2ReviewPayload = {
+  status: WorkArV2Review["status"];
+  sourceSignature: string;
+  message?: string;
+  reviewedBy?: string;
 };
 
 function toOptionalString(value: unknown) {
@@ -326,6 +344,77 @@ function toOptionalArV2Asset(value: unknown): WorkArV2Asset | undefined {
 
   asset.generatedAt = raw.generatedAt;
   return asset;
+}
+
+function toOptionalArV2RequestStatus(
+  value: unknown
+): WorkArV2Request["status"] | undefined {
+  return value === "requested" || value === "cancelled" ? value : undefined;
+}
+
+function toOptionalArV2ReviewStatus(
+  value: unknown
+): WorkArV2Review["status"] | undefined {
+  return value === "changes-requested" || value === "approved"
+    ? value
+    : undefined;
+}
+
+function toOptionalArV2Request(value: unknown): WorkArV2Request | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const status = toOptionalArV2RequestStatus(raw.status);
+  const config = toOptionalArV2Config(raw.config);
+  const sourceSignature = toOptionalString(raw.sourceSignature);
+  const requestedBy = toOptionalString(raw.requestedBy);
+
+  if (!status || !config || !sourceSignature || !requestedBy) {
+    return undefined;
+  }
+
+  const request: WorkArV2Request = {
+    status,
+    config,
+    sourceSignature,
+    requestedBy,
+  };
+
+  const message = toOptionalString(raw.message);
+  if (message) request.message = message;
+
+  request.requestedAt = raw.requestedAt;
+  return request;
+}
+
+function toOptionalArV2Review(value: unknown): WorkArV2Review | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const status = toOptionalArV2ReviewStatus(raw.status);
+  const sourceSignature = toOptionalString(raw.sourceSignature);
+
+  if (!status || !sourceSignature) {
+    return undefined;
+  }
+
+  const review: WorkArV2Review = {
+    status,
+    sourceSignature,
+  };
+
+  const message = toOptionalString(raw.message);
+  if (message) review.message = message;
+
+  const reviewedBy = toOptionalString(raw.reviewedBy);
+  if (reviewedBy) review.reviewedBy = reviewedBy;
+
+  review.reviewedAt = raw.reviewedAt;
+  return review;
 }
 
 function toSafeSlugPart(value: string) {
@@ -577,6 +666,8 @@ function toArtistWorkDoc(id: string, rawData: Record<string, unknown>): ArtistWo
     generatedUsdzUrl: toOptionalString(rawData.generatedUsdzUrl),
     arV2Config: toOptionalArV2Config(rawData.arV2Config),
     arV2Asset: toOptionalArV2Asset(rawData.arV2Asset),
+    arV2Request: toOptionalArV2Request(rawData.arV2Request),
+    arV2Review: toOptionalArV2Review(rawData.arV2Review),
     displayOrder: toOptionalFiniteNumber(rawData.displayOrder),
     isPublished: toOptionalBoolean(rawData.isPublished),
     archived: toOptionalBoolean(rawData.archived),
@@ -1478,15 +1569,120 @@ export async function updateWorkForAdmin(
   await updateDoc(doc(db, "works", workId), updatePayload);
 }
 
+function buildArV2ReviewUpdate(
+  payload: ArtistWorkArV2ReviewPayload
+): Record<string, unknown> {
+  const review: Record<string, unknown> = {
+    status: payload.status,
+    sourceSignature: payload.sourceSignature.trim(),
+    reviewedAt: serverTimestamp(),
+  };
+
+  const message = payload.message?.trim();
+  if (message !== undefined) {
+    review.message = message;
+  }
+
+  const reviewedBy = payload.reviewedBy?.trim();
+  if (reviewedBy !== undefined) {
+    review.reviewedBy = reviewedBy;
+  }
+
+  return review;
+}
+
+export async function saveWorkArV2ReviewForAdmin(
+  workId: string,
+  payload: ArtistWorkArV2ReviewPayload
+) {
+  await updateDoc(doc(db, "works", workId), {
+    arV2Review: buildArV2ReviewUpdate(payload),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function saveWorkArV2ForAdmin(
   workId: string,
   payload: ArtistWorkArV2SavePayload
 ) {
-  await updateDoc(doc(db, "works", workId), {
+  const updatePayload: Record<string, unknown> = {
     arV2Config: payload.config,
     arV2Asset: {
       ...payload.asset,
       generatedAt: serverTimestamp(),
+    },
+    updatedAt: serverTimestamp(),
+  };
+
+  if (payload.review) {
+    updatePayload.arV2Review = buildArV2ReviewUpdate(payload.review);
+  }
+
+  await updateDoc(doc(db, "works", workId), updatePayload);
+}
+
+export async function requestWorkArV2ForArtist(
+  workId: string,
+  artistId: string,
+  request: ArtistWorkArV2RequestPayload
+) {
+  const workRef = doc(db, "works", workId);
+  const snapshot = await getDoc(workRef);
+
+  if (!snapshot.exists()) {
+    throw new Error("작품 정보를 불러오지 못했습니다.");
+  }
+
+  const work = toArtistWorkDoc(
+    snapshot.id,
+    snapshot.data() as Record<string, unknown>
+  );
+
+  if ((work.artistId ?? "") !== artistId) {
+    throw new Error("본인 작품만 AR 제작을 요청할 수 있습니다.");
+  }
+
+  await updateDoc(workRef, {
+    arV2Request: {
+      status: "requested",
+      config: request.config,
+      sourceSignature: request.sourceSignature.trim(),
+      message: request.message?.trim() ?? "",
+      requestedBy: artistId,
+      requestedAt: serverTimestamp(),
+    },
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function cancelWorkArV2RequestForArtist(
+  workId: string,
+  artistId: string
+) {
+  const workRef = doc(db, "works", workId);
+  const snapshot = await getDoc(workRef);
+
+  if (!snapshot.exists()) {
+    throw new Error("작품 정보를 불러오지 못했습니다.");
+  }
+
+  const work = toArtistWorkDoc(
+    snapshot.id,
+    snapshot.data() as Record<string, unknown>
+  );
+
+  if ((work.artistId ?? "") !== artistId) {
+    throw new Error("본인 작품만 AR 제작 요청을 취소할 수 있습니다.");
+  }
+
+  if (!work.arV2Request) {
+    return;
+  }
+
+  await updateDoc(workRef, {
+    arV2Request: {
+      ...work.arV2Request,
+      status: "cancelled",
     },
     updatedAt: serverTimestamp(),
   });

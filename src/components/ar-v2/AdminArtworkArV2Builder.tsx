@@ -8,6 +8,7 @@ import { ArV2SourceImageStatus, type ImageLoadStatus } from "./ArV2SourceImageSt
 import {
   buildArtworkGlb,
   createArV2SourceSignature,
+  getArV2WorkflowStatus,
   loadArtworkImageForArV2,
   type ModelViewerLoadStatus,
   type ArV2Diagnostic,
@@ -17,7 +18,11 @@ import {
   type WorkArV2Asset,
   type WorkArV2Config,
 } from "@/lib/ar-v2";
-import { saveWorkArV2ForAdmin, type ArtistWorkDoc } from "@/lib/firebase/firestore";
+import {
+  saveWorkArV2ForAdmin,
+  saveWorkArV2ReviewForAdmin,
+  type ArtistWorkDoc,
+} from "@/lib/firebase/firestore";
 import { deleteR2ObjectsByPublicUrls, uploadGlbFileToR2 } from "@/lib/r2/client";
 
 const ORIENTATION_CHOICES = [0, 90, 180, 270] as const;
@@ -71,27 +76,63 @@ function formatRatio(value?: number) {
 }
 
 function getInitialOrientation(work: ArtistWorkDoc): ArtworkOrientation {
+  const config = getActiveConfig(work);
   return {
-    rotationDeg: normalizeRotationDeg(work.arV2Config?.rotationDeg ?? work.arTextureRotationDeg),
-    flipX: work.arV2Config?.flipX ?? work.arTextureFlipX ?? false,
-    flipY: work.arV2Config?.flipY ?? work.arTextureFlipY ?? false,
+    rotationDeg: normalizeRotationDeg(config.rotationDeg ?? work.arTextureRotationDeg),
+    flipX: config.flipX ?? work.arTextureFlipX ?? false,
+    flipY: config.flipY ?? work.arTextureFlipY ?? false,
   };
 }
 
 function getInitialSideColor(work: ArtistWorkDoc) {
-  return normalizeHexColor(work.arV2Config?.sideColor ?? work.arSideColor);
+  return normalizeHexColor(getActiveConfig(work).sideColor ?? work.arSideColor);
 }
 
 function getInitialDepthCm(work: ArtistWorkDoc) {
-  return normalizeDepthCm(work.arV2Config?.depthCm ?? work.depthCm ?? work.arDepthCm);
+  return normalizeDepthCm(getActiveConfig(work).depthCm ?? work.depthCm ?? work.arDepthCm);
 }
 
 function getInitialBackLabelEnabled(work: ArtistWorkDoc) {
-  return work.arV2Config?.backLabelEnabled ?? work.arBackLabelEnabled ?? work.showBackLabel ?? true;
+  return getActiveConfig(work).backLabelEnabled ?? work.arBackLabelEnabled ?? work.showBackLabel ?? true;
 }
 
 function getInitialAllowRatioMismatch(work: ArtistWorkDoc) {
-  return work.arV2Config?.allowRatioMismatch ?? false;
+  return getActiveConfig(work).allowRatioMismatch ?? false;
+}
+
+function getActiveConfig(work: ArtistWorkDoc) {
+  const request = work.arV2Request;
+
+  if (request?.status === "requested") {
+    const currentSignature = getCurrentSignature(
+      work,
+      getCurrentCoverImageUrl(work),
+      {
+        rotationDeg: request.config.rotationDeg,
+        flipX: request.config.flipX,
+        flipY: request.config.flipY,
+      },
+      request.config.sideColor,
+      request.config.depthCm,
+      request.config.backLabelEnabled,
+      request.config.allowRatioMismatch ?? false
+    );
+
+    if (currentSignature === request.sourceSignature) {
+      return request.config;
+    }
+  }
+
+  return work.arV2Config ?? {
+    version: 2,
+    rotationDeg: 0,
+    flipX: false,
+    flipY: false,
+    sideColor: DEFAULT_SIDE_COLOR,
+    depthCm: DEFAULT_DEPTH_CM,
+    backLabelEnabled: true,
+    allowRatioMismatch: false,
+  };
 }
 
 function getCurrentCoverImageUrl(work: ArtistWorkDoc, override?: string) {
@@ -163,14 +204,51 @@ function buildMessageFromDiagnostics(diagnostics: ArV2Diagnostic[]) {
   return "Preview ready.";
 }
 
+function formatGeneratedAt(value: unknown) {
+  if (!value) {
+    return "—";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (
+    typeof value === "object" &&
+    value &&
+    "toDate" in value &&
+    typeof (value as { toDate?: unknown }).toDate === "function"
+  ) {
+    try {
+      const date = (value as { toDate: () => Date }).toDate();
+      return date.toLocaleString();
+    } catch {
+      return "—";
+    }
+  }
+
+  if (
+    typeof value === "object" &&
+    value &&
+    "seconds" in value &&
+    typeof (value as { seconds?: unknown }).seconds === "number"
+  ) {
+    return new Date(((value as { seconds: number }).seconds ?? 0) * 1000).toLocaleString();
+  }
+
+  return "—";
+}
+
 export function AdminArtworkArV2Builder({
   work,
   coverImageUrl: coverImageUrlOverride,
   onUploaded,
+  adminUid,
 }: {
   work: ArtistWorkDoc;
   coverImageUrl?: string;
   onUploaded?: (config: WorkArV2Config, asset: WorkArV2Asset) => void;
+  adminUid?: string;
 }) {
   const [rotationDeg, setRotationDeg] = useState<ArtworkOrientation["rotationDeg"]>(0);
   const [flipX, setFlipX] = useState(false);
@@ -193,6 +271,9 @@ export function AdminArtworkArV2Builder({
   const [viewerMessage, setViewerMessage] = useState("");
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>("idle");
   const [approvalMessage, setApprovalMessage] = useState("");
+  const [reviewDraftMessage, setReviewDraftMessage] = useState("");
+  const [reviewActionStatus, setReviewActionStatus] = useState<ApprovalStatus>("idle");
+  const [reviewActionMessage, setReviewActionMessage] = useState("");
   const [imageLoadStatus, setImageLoadStatus] = useState<ImageLoadStatus>("idle");
   const [imageLoadAttempt, setImageLoadAttempt] = useState(0);
   const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
@@ -312,6 +393,13 @@ export function AdminArtworkArV2Builder({
       !isBuilding &&
       !isUploading,
   );
+  const workflowStatus = getArV2WorkflowStatus(work);
+  const activeRequest = work.arV2Request;
+  const activeReview = work.arV2Review;
+  const activeRequestMatchesCurrent = Boolean(
+    activeRequest?.status === "requested" &&
+      activeRequest.sourceSignature === currentSignature
+  );
   const approvalDisabledReason = useMemo(() => {
     if (!previewBlob) return "Build AR V2 Preview first.";
     if (viewerLoadStatus === "preparing" || viewerLoadStatus === "loading") {
@@ -323,9 +411,15 @@ export function AdminArtworkArV2Builder({
     if (hasDiagnosticsFailure) return "Resolve the failed diagnostics before approval.";
     if (previewOutdated) return "Preview is outdated. Build it again.";
     if (previewWorkId !== work.id) return "The preview belongs to another artwork.";
+    if (workflowStatus === "changes-requested") {
+      return "Request changes are pending. The artist needs to resubmit before approval.";
+    }
+    if (activeRequest?.status === "requested" && !activeRequestMatchesCurrent) {
+      return "Request is outdated. The artist needs to resubmit before approval.";
+    }
     if (isUploading) return "AR V2 upload is in progress.";
     return "";
-  }, [hasDiagnosticsFailure, isUploading, previewBlob, previewOutdated, previewWorkId, viewerLoadStatus, work.id]);
+  }, [activeRequest, activeRequestMatchesCurrent, hasDiagnosticsFailure, isUploading, previewBlob, previewOutdated, previewWorkId, viewerLoadStatus, work.id, workflowStatus]);
 
   useEffect(() => {
     const currentWork = latestWorkRef.current;
@@ -348,6 +442,13 @@ export function AdminArtworkArV2Builder({
     setViewerMessage("");
     setApprovalStatus("idle");
     setApprovalMessage("");
+    setReviewDraftMessage(
+      currentWork.arV2Review?.message?.trim() ||
+        currentWork.arV2Request?.message?.trim() ||
+        ""
+    );
+    setReviewActionStatus("idle");
+    setReviewActionMessage("");
     setImageLoadStatus("idle");
     setImageLoadError(null);
     setImageLoadAttempt(0);
@@ -357,7 +458,7 @@ export function AdminArtworkArV2Builder({
       previewObjectUrlRef.current = null;
     }
     setPreviewObjectUrl(null);
-  }, [work.id]);
+  }, [work.id, work.updatedAt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -523,7 +624,16 @@ export function AdminArtworkArV2Builder({
       asset.glbUrl = uploadResult.publicUrl;
       setApprovalStatus("saving-firestore");
       setApprovalMessage("Saving the AR v2 config and asset to Firestore…");
-      await saveWorkArV2ForAdmin(work.id, { config, asset });
+      await saveWorkArV2ForAdmin(work.id, {
+        config,
+        asset,
+        review: {
+          status: "approved",
+          sourceSignature: previewSignature,
+          message: "",
+          reviewedBy: adminUid,
+        },
+      });
       onUploaded?.(config, asset);
       setApprovalStatus("cleaning-old-asset");
       setApprovalMessage("Removing the previous stored asset if it changed…");
@@ -543,6 +653,46 @@ export function AdminArtworkArV2Builder({
       setErrorMessage(error instanceof Error ? error.message : "AR v2 upload failed.");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleRequestChanges = async () => {
+    const message = reviewDraftMessage.trim();
+
+    if (!activeRequest) {
+      setReviewActionStatus("error");
+      setReviewActionMessage("No AR request is attached to this work.");
+      return;
+    }
+
+    if (message.length < 2) {
+      setReviewActionStatus("error");
+      setReviewActionMessage("Please enter a review message with at least 2 characters.");
+      return;
+    }
+
+    setReviewActionStatus("confirming");
+    setReviewActionMessage("Saving the review request to Firestore…");
+
+    try {
+      await saveWorkArV2ReviewForAdmin(work.id, {
+        status: "changes-requested",
+        sourceSignature: activeRequest.sourceSignature,
+        message,
+        reviewedBy: adminUid,
+      });
+      setReviewActionStatus("complete");
+      setReviewActionMessage("작가에게 수정 요청 상태가 저장되었습니다.");
+      setSuccessMessage("작가에게 수정 요청 상태가 저장되었습니다.");
+      setReviewDraftMessage(message);
+    } catch (error) {
+      setReviewActionStatus("error");
+      setReviewActionMessage(
+        error instanceof Error ? error.message : "Failed to save the change request."
+      );
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to save the change request."
+      );
     }
   };
 
@@ -583,6 +733,120 @@ export function AdminArtworkArV2Builder({
 
       <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(380px,0.8fr)]">
         <div className="space-y-6">
+          <div className="rounded-[1.6rem] border border-black/8 bg-white p-5 shadow-sm md:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                  Request Queue
+                </p>
+                <p className="mt-2 max-w-2xl text-sm leading-7 text-neutral-600">
+                  Artist requests appear here first. Review the request config, confirm the current source signature, and save a review message before approval or changes.
+                </p>
+              </div>
+              <Pill>
+                {workflowStatus === "approved"
+                  ? "approved"
+                  : workflowStatus === "changes-requested"
+                    ? "changes-requested"
+                    : workflowStatus === "outdated"
+                      ? "outdated"
+                      : workflowStatus === "requested"
+                        ? "requested"
+                        : workflowStatus}
+              </Pill>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <Field
+                label="Request Status"
+                value={workflowStatus}
+                wide
+              />
+              <Field
+                label="Requested At"
+                value={formatGeneratedAt(activeRequest?.requestedAt)}
+              />
+              <Field
+                label="Request Message"
+                value={activeRequest?.message?.trim() || "—"}
+                wide
+              />
+              <Field
+                label="Review Status"
+                value={activeReview?.status || "—"}
+              />
+              <Field
+                label="Review Message"
+                value={activeReview?.message?.trim() || "—"}
+                wide
+              />
+              <Field
+                label="Request Source"
+                value={
+                  activeRequest
+                    ? activeRequestMatchesCurrent
+                      ? "Current"
+                      : "Outdated"
+                    : "—"
+                }
+              />
+              <Field
+                label="Requested Config"
+                value={
+                  activeRequest
+                    ? `Rotation ${activeRequest.config.rotationDeg}°, X ${activeRequest.config.flipX ? "ON" : "OFF"}, Y ${activeRequest.config.flipY ? "ON" : "OFF"}, Side ${activeRequest.config.sideColor}, Depth ${activeRequest.config.depthCm.toFixed(1)} cm, Back label ${activeRequest.config.backLabelEnabled ? "ON" : "OFF"}`
+                    : "—"
+                }
+                wide
+              />
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <span className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                  Request Changes
+                </span>
+                <textarea
+                  value={reviewDraftMessage}
+                  onChange={(event) => setReviewDraftMessage(event.target.value)}
+                  rows={4}
+                  className="mt-2 w-full rounded-[1.25rem] border border-black/10 bg-white px-4 py-4 text-sm leading-7 text-neutral-900 outline-none transition focus:border-black/20"
+                  placeholder="수정 요청 메시지를 입력하세요."
+                  disabled={reviewActionStatus === "confirming" || isUploading || isBuilding}
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleRequestChanges()}
+                  disabled={!activeRequest || reviewDraftMessage.trim().length < 2 || reviewActionStatus === "confirming" || isUploading}
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-neutral-950 px-5 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
+                >
+                  {reviewActionStatus === "confirming" ? "저장 중..." : "Request Changes"}
+                </button>
+
+                {reviewActionStatus === "complete" ? (
+                  <span className="inline-flex h-11 items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm text-emerald-800">
+                    {reviewActionMessage}
+                  </span>
+                ) : null}
+              </div>
+
+              {reviewActionStatus === "error" ? (
+                <p className="text-sm leading-7 text-red-600">{reviewActionMessage}</p>
+              ) : reviewActionMessage ? (
+                <p className="text-sm leading-7 text-neutral-600">{reviewActionMessage}</p>
+              ) : null}
+
+              {activeRequest && !activeRequestMatchesCurrent ? (
+                <p className="text-sm leading-7 text-amber-700">
+                  Request is outdated. The artist must resubmit before approval.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
           <div className="rounded-[1.6rem] border border-black/8 bg-[#fcfbf8] p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">

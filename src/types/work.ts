@@ -1,6 +1,8 @@
 import type {
   WorkArV2Asset,
   WorkArV2Config,
+  WorkArV2Request,
+  WorkArV2Review,
 } from "@/lib/ar-v2";
 
 export type Work = {
@@ -35,6 +37,8 @@ export type Work = {
   generatedAt?: unknown;
   arV2Config?: WorkArV2Config;
   arV2Asset?: WorkArV2Asset;
+  arV2Request?: WorkArV2Request;
+  arV2Review?: WorkArV2Review;
   displayOrder?: number;
   isPublished?: boolean;
   archived?: boolean;

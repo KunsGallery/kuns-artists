@@ -97,6 +97,61 @@ service cloud.firestore {
       return value == "canvas" || value == "image";
     }
 
+    function isValidArV2Rotation(value) {
+      return value == 0 || value == 90 || value == 180 || value == 270;
+    }
+
+    function isValidHexColor(value) {
+      return value is string && value.matches('^#[0-9a-fA-F]{6}$');
+    }
+
+    function validArtistArV2Config(config) {
+      return config is map
+        && config.keys().hasOnly([
+          "version",
+          "rotationDeg",
+          "flipX",
+          "flipY",
+          "sideColor",
+          "depthCm",
+          "backLabelEnabled",
+          "allowRatioMismatch"
+        ])
+        && config.version == 2
+        && isValidArV2Rotation(config.rotationDeg)
+        && config.flipX is bool
+        && config.flipY is bool
+        && isValidHexColor(config.sideColor)
+        && config.depthCm is number
+        && config.depthCm > 0
+        && config.backLabelEnabled is bool
+        && config.allowRatioMismatch == false;
+    }
+
+    function validArtistArV2Request(request) {
+      return request is map
+        && request.keys().hasOnly([
+          "status",
+          "config",
+          "sourceSignature",
+          "message",
+          "requestedAt",
+          "requestedBy"
+        ])
+        && (
+          request.status == "requested"
+          || request.status == "cancelled"
+        )
+        && validArtistArV2Config(request.config)
+        && request.sourceSignature is string
+        && request.sourceSignature.size() > 0
+        && request.sourceSignature.size() < 10000
+        && request.requestedBy == authUid()
+        && request.message is string
+        && request.message.size() <= 1000
+        && request.requestedAt is timestamp;
+    }
+
     function artistCreateKeys() {
       return [
         "email",
@@ -238,11 +293,11 @@ service cloud.firestore {
         "widthCm",
         "heightCm",
         "depthCm",
+        "arV2Request",
         "frontRotationXDeg",
         "frontRotationYDeg",
         "sideMode",
         "showBackLabel",
-        "archived",
         "updatedAt"
       ];
     }
@@ -308,11 +363,19 @@ service cloud.firestore {
         && request.resource.data.artistId == resource.data.artistId
         && request.resource.data.artistSlug == resource.data.artistSlug
         && request.resource.data.artistName == resource.data.artistName
+        && (request.resource.data.arV2Config == resource.data.arV2Config
+          || request.resource.data.arV2Config == null)
+        && (request.resource.data.arV2Asset == resource.data.arV2Asset
+          || request.resource.data.arV2Asset == null)
+        && (request.resource.data.arV2Review == resource.data.arV2Review
+          || request.resource.data.arV2Review == null)
         && request.resource.data.modelGlb == resource.data.modelGlb
         && request.resource.data.modelUsdz == resource.data.modelUsdz
         && request.resource.data.generatedGlbUrl == resource.data.generatedGlbUrl
         && request.resource.data.generatedUsdzUrl == resource.data.generatedUsdzUrl
         && request.resource.data.isPublished == resource.data.isPublished
+        && (request.resource.data.arV2Request == resource.data.arV2Request
+          || validArtistArV2Request(request.resource.data.arV2Request))
         && request.resource.data.createdAt == resource.data.createdAt
         && validWorkFields();
     }
