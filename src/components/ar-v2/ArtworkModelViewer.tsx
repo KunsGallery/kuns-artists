@@ -225,7 +225,7 @@ export function ArtworkModelViewer({
             ar={!arDisabled}
             ar-modes="webxr scene-viewer quick-look"
             ar-placement="wall"
-            ar-scale="fixed"
+            ar-scale="auto"
             shadow-intensity="1"
             exposure="1"
             interaction-prompt="none"

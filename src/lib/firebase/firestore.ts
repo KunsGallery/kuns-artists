@@ -34,6 +34,10 @@ import type {
   WorkArV2Request,
   WorkArV2Review,
 } from "@/lib/ar-v2";
+import {
+  LEGACY_FRONT_BRIGHTNESS,
+  normalizeFrontBrightness,
+} from "@/lib/ar-v2/constants";
 
 export type ArtistRole = "admin" | "artist";
 export type ArtistType = "represented" | "project";
@@ -286,6 +290,9 @@ function toOptionalArV2Config(value: unknown): WorkArV2Config | undefined {
 
   const rotationDeg = toOptionalNumber(raw.rotationDeg);
   const depthCm = toOptionalFiniteNumber(raw.depthCm);
+  const hasPersistedBrightness =
+    typeof raw.frontBrightness === "number" &&
+    Number.isFinite(raw.frontBrightness);
   const config: WorkArV2Config = {
     version: 2,
     rotationDeg:
@@ -297,6 +304,12 @@ function toOptionalArV2Config(value: unknown): WorkArV2Config | undefined {
     sideColor: toOptionalHexColor(raw.sideColor) ?? "#111111",
     depthCm: depthCm && depthCm > 0 ? depthCm : 3.5,
     backLabelEnabled: toOptionalBoolean(raw.backLabelEnabled) ?? true,
+    frontBrightness: hasPersistedBrightness
+      ? normalizeFrontBrightness(
+          raw.frontBrightness,
+          LEGACY_FRONT_BRIGHTNESS,
+        )
+      : LEGACY_FRONT_BRIGHTNESS,
   };
 
   const allowRatioMismatch = toOptionalBoolean(raw.allowRatioMismatch);

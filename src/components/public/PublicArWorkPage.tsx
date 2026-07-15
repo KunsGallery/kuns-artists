@@ -428,6 +428,14 @@ function PublicWorkContent({
               {arHeroCopy}
             </p>
 
+            {arReady ? (
+              <div className="mt-5 rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4 text-sm leading-7 text-white/72">
+                <p>Center the desired wall height before placing the artwork.</p>
+                <p>The initial placement uses the artwork&apos;s actual dimensions.</p>
+                <p>Pinch with two fingers to resize after placement.</p>
+              </div>
+            ) : null}
+
             <div className="mt-6 flex flex-wrap gap-2">
               {arReady ? (
                 <ButtonLink href="#ar-access" accent>

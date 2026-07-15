@@ -1,4 +1,5 @@
 export * from "./types";
+export * from "./constants";
 export * from "./buildArtworkGeometry";
 export * from "./buildArtworkGlb";
 export * from "./buildArtworkScene";

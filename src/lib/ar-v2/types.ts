@@ -32,6 +32,7 @@ export type WorkArV2Config = {
   sideColor: string;
   depthCm: number;
   backLabelEnabled: boolean;
+  frontBrightness: number;
   allowRatioMismatch?: boolean;
 };
 
@@ -87,6 +88,7 @@ export type ArV2SourceSignatureInput = {
   flipY: boolean;
   sideColor: string;
   backLabelEnabled: boolean;
+  frontBrightness: number;
   allowRatioMismatch?: boolean;
 };
 
@@ -114,6 +116,7 @@ export type ArtworkBuildConfig = PhysicalDimensions & {
   image?: HTMLImageElement;
   sideColor: string;
   showBackLabel: boolean;
+  frontBrightness: number;
   metadata?: ArtworkProductionMetadata;
   allowRatioMismatch?: boolean;
 };
@@ -155,6 +158,7 @@ export type BuildArtworkGlbInput = {
   orientation: ArtworkOrientation;
   sideColor: string;
   showBackLabel: boolean;
+  frontBrightness: number;
   metadata?: ArtworkProductionMetadata;
   allowRatioMismatch?: boolean;
 };

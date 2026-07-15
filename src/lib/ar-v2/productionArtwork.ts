@@ -4,6 +4,10 @@ import type {
   ArtworkProductionMetadata,
   PhysicalDimensions,
 } from "./types";
+import {
+  DEFAULT_FRONT_BRIGHTNESS,
+  normalizeFrontBrightness,
+} from "./constants";
 
 export const PRODUCTION_COLORS = {
   atlasBackground: "#f5f2ec",
@@ -308,6 +312,7 @@ export function drawContainedArtworkThumbnail(
   image: CanvasImageSource,
   rect: CanvasRect,
   orientation: ArtworkOrientation,
+  frontBrightness: number = DEFAULT_FRONT_BRIGHTNESS,
   background: string = PRODUCTION_COLORS.atlasBackground,
 ) {
   const { naturalWidth, naturalHeight } = getArtworkImageDimensions(image);
@@ -326,6 +331,9 @@ export function drawContainedArtworkThumbnail(
   context.translate(centerX, centerY);
   context.rotate((orientation.rotationDeg * Math.PI) / 180);
   context.scale(orientation.flipX ? -1 : 1, orientation.flipY ? -1 : 1);
+  context.filter = `brightness(${Math.round(
+    normalizeFrontBrightness(frontBrightness) * 100,
+  )}%)`;
   context.drawImage(image, (-naturalWidth * scale) / 2, (-naturalHeight * scale) / 2, naturalWidth * scale, naturalHeight * scale);
   context.restore();
 }
@@ -335,6 +343,7 @@ export function drawArtworkImageToFrontAtlas(
   image: CanvasImageSource,
   rect: CanvasRect,
   orientation: ArtworkOrientation,
+  frontBrightness: number = DEFAULT_FRONT_BRIGHTNESS,
 ) {
   getArtworkImageDimensions(image);
   const x = rect.x + rect.padding;
@@ -351,6 +360,9 @@ export function drawArtworkImageToFrontAtlas(
   context.translate(centerX, centerY);
   context.rotate((orientation.rotationDeg * Math.PI) / 180);
   context.scale(orientation.flipX ? -1 : 1, orientation.flipY ? -1 : 1);
+  context.filter = `brightness(${Math.round(
+    normalizeFrontBrightness(frontBrightness) * 100,
+  )}%)`;
   context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
   context.restore();
 }
@@ -382,6 +394,19 @@ export function drawArtworkSourceThumbnail(
   width: number,
   height: number,
   orientation: ArtworkOrientation,
+  frontBrightness: number = DEFAULT_FRONT_BRIGHTNESS,
 ) {
-  drawContainedArtworkThumbnail(context, image, { x: 0, y: 0, width, height, padding: Math.max(8, Math.round(Math.min(width, height) * 0.04)) }, orientation);
+  drawContainedArtworkThumbnail(
+    context,
+    image,
+    {
+      x: 0,
+      y: 0,
+      width,
+      height,
+      padding: Math.max(8, Math.round(Math.min(width, height) * 0.04)),
+    },
+    orientation,
+    frontBrightness,
+  );
 }

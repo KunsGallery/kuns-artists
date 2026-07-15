@@ -18,9 +18,13 @@ import {
 } from "@/lib/firebase/firestore";
 import {
   getArtworkImageRatio,
-  getCurrentArV2SourceSignature,
+  createArV2SourceSignature,
+  DEFAULT_FRONT_BRIGHTNESS,
+  FRONT_BRIGHTNESS_PRESETS,
   getArV2WorkflowStatus,
   loadArtworkImageForArV2,
+  isArV2RequestSignatureCurrent,
+  LEGACY_FRONT_BRIGHTNESS,
   type ArtworkOrientation,
   type ArtworkProductionMetadata,
   type PhysicalDimensions,
@@ -62,6 +66,10 @@ function buildFallbackConfig(work?: ArtistWorkDoc | null): WorkArV2Config {
     sideColor: normalizeHexColor(work?.arV2Config?.sideColor ?? work?.arSideColor),
     depthCm: normalizeDepthCm(work?.arV2Config?.depthCm ?? work?.depthCm ?? work?.arDepthCm),
     backLabelEnabled: work?.arV2Config?.backLabelEnabled ?? work?.arBackLabelEnabled ?? work?.showBackLabel ?? true,
+    frontBrightness:
+      work?.arV2Asset?.generatorVersion === "ar-v2.1"
+        ? LEGACY_FRONT_BRIGHTNESS
+        : DEFAULT_FRONT_BRIGHTNESS,
     allowRatioMismatch: false,
   };
 }
@@ -82,6 +90,10 @@ function buildDimensions(work?: ArtistWorkDoc | null, depthCm = DEFAULT_DEPTH_CM
     heightCm: work?.heightCm || 0,
     depthCm,
   };
+}
+
+function getBrightnessLabel(value: number) {
+  return `${Math.round(value * 100)}%`;
 }
 
 function getRequestStatusLabel(status: ReturnType<typeof getArV2WorkflowStatus>) {
@@ -213,6 +225,7 @@ export default function ArtistArV2RequestPanel({
   const [sideColor, setSideColor] = useState(DEFAULT_SIDE_COLOR);
   const [depthCm, setDepthCm] = useState(DEFAULT_DEPTH_CM);
   const [backLabelEnabled, setBackLabelEnabled] = useState(true);
+  const [frontBrightness, setFrontBrightness] = useState(DEFAULT_FRONT_BRIGHTNESS);
   const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
   const [imageLoadStatus, setImageLoadStatus] = useState<ImageLoadStatus>("idle");
   const [imageLoadError, setImageLoadError] = useState<ArtworkSourceLoadError | null>(null);
@@ -277,25 +290,58 @@ export default function ArtistArV2RequestPanel({
     () => work?.arV2Request?.config ?? work?.arV2Config ?? buildFallbackConfig(work),
     [work]
   );
+  const currentPreviewConfig = useMemo(
+    () =>
+      ({
+        version: 2,
+        rotationDeg,
+        flipX,
+        flipY,
+        sideColor,
+        depthCm,
+        backLabelEnabled,
+        frontBrightness,
+        allowRatioMismatch: false,
+      } satisfies WorkArV2Config),
+    [backLabelEnabled, depthCm, flipX, flipY, frontBrightness, rotationDeg, sideColor],
+  );
   const currentSignature = useMemo(
     () =>
-      work
-        ? getCurrentArV2SourceSignature({
-            ...work,
-            arV2Request: undefined,
-            arV2Config: {
-              version: 2,
-              rotationDeg,
-              flipX,
-              flipY,
-              sideColor,
-              depthCm,
-              backLabelEnabled,
-              allowRatioMismatch: false,
-            },
+          work
+        ? createArV2SourceSignature({
+            workId: work.id,
+            coverImageUrl: work.coverImageUrl?.trim() || "",
+            title: work.title?.trim() || "",
+            artistName: work.artistName?.trim() || "",
+            year: work.year?.trim() || "",
+            medium: work.medium?.trim() || "",
+            widthCm: work.widthCm || 0,
+            heightCm: work.heightCm || 0,
+            depthCm: currentPreviewConfig.depthCm,
+            rotationDeg: currentPreviewConfig.rotationDeg,
+            flipX: currentPreviewConfig.flipX,
+            flipY: currentPreviewConfig.flipY,
+            sideColor: currentPreviewConfig.sideColor,
+            backLabelEnabled: currentPreviewConfig.backLabelEnabled,
+            frontBrightness: currentPreviewConfig.frontBrightness,
+            allowRatioMismatch: currentPreviewConfig.allowRatioMismatch,
           })
         : "",
-    [backLabelEnabled, depthCm, flipX, flipY, rotationDeg, sideColor, work]
+    [currentPreviewConfig, work]
+  );
+  const requestSourceMatchesCurrent = useMemo(
+    () =>
+      Boolean(
+        work?.arV2Request &&
+          isArV2RequestSignatureCurrent(
+            {
+              ...work,
+              arV2Config: currentPreviewConfig,
+            },
+            work.arV2Request.sourceSignature,
+          ),
+      ),
+    [currentPreviewConfig, work],
   );
   const workflowStatus = useMemo(
     () => (work ? getArV2WorkflowStatus(work) : "not-requested"),
@@ -371,6 +417,7 @@ export default function ArtistArV2RequestPanel({
     setSideColor(requestConfig.sideColor);
     setDepthCm(requestConfig.depthCm);
     setBackLabelEnabled(requestConfig.backLabelEnabled);
+    setFrontBrightness(requestConfig.frontBrightness);
     setRequestedAt(work.arV2Request?.requestedAt ?? null);
     setRequestMessage(work.arV2Request?.message?.trim() || "");
   }, [currentConfig, work]);
@@ -449,6 +496,7 @@ export default function ArtistArV2RequestPanel({
       sideColor,
       depthCm,
       backLabelEnabled,
+      frontBrightness,
       allowRatioMismatch: false,
     } satisfies WorkArV2Config;
 
@@ -584,14 +632,15 @@ export default function ArtistArV2RequestPanel({
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <Field label="Artist" value={artist.name || artist.slug || artist.id} />
-            <Field label="Source signature" value={currentSignature ? "Current source computed" : "—"} />
+            <Field label="Current source signature" value={currentSignature || "—"} />
             <Field label="Requested at" value={formatDate(requestedAt)} />
             <Field label="Review status" value={work.arV2Review?.status || "—"} />
+            <Field label="Request source" value={work.arV2Request ? (requestSourceMatchesCurrent ? "Current" : "Outdated") : "—"} />
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             <Field label="Requested config" value={`Rotation ${rotationDeg}°, X ${flipX ? "ON" : "OFF"}, Y ${flipY ? "ON" : "OFF"}`} />
-            <Field label="Finish" value={`Side ${sideColor} · Depth ${depthCm.toFixed(1)} cm · Back label ${backLabelEnabled ? "ON" : "OFF"}`} />
+            <Field label="Finish" value={`Side ${sideColor} · Depth ${depthCm.toFixed(1)} cm · Back label ${backLabelEnabled ? "ON" : "OFF"} · Brightness ${getBrightnessLabel(frontBrightness)}`} />
           </div>
 
           <div className="mt-5 space-y-4 rounded-[1.4rem] border border-black/8 bg-[#fcfbf8] px-4 py-4">
@@ -671,6 +720,38 @@ export default function ArtistArV2RequestPanel({
                     {backLabelEnabled ? "On" : "Off"}
                   </p>
                 </button>
+
+                <div className="rounded-[1.1rem] border border-black/8 bg-white px-4 py-4 md:col-span-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                        Front Brightness
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-neutral-600">
+                        AR 환경에서 작품이 다소 어둡게 보일 수 있어 앞면 이미지만 밝게 보정합니다.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-black/10 bg-[#f7f6f2] px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-neutral-600">
+                      {getBrightnessLabel(frontBrightness)}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {FRONT_BRIGHTNESS_PRESETS.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => setFrontBrightness(preset.value)}
+                        className={`inline-flex h-11 items-center justify-center rounded-full border px-4 text-sm transition ${
+                          frontBrightness === preset.value
+                            ? "border-[#F37021]/35 bg-[#F37021]/10 text-[#8f4600]"
+                            : "border-black/10 bg-white text-neutral-900 hover:border-black/20"
+                        }`}
+                      >
+                        {preset.label} · {preset.description}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -777,6 +858,7 @@ export default function ArtistArV2RequestPanel({
             image={loadedImage ?? undefined}
             dimensions={dimensions}
             orientation={{ rotationDeg, flipX, flipY }}
+            frontBrightness={frontBrightness}
           />
         </div>
 

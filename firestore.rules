@@ -115,6 +115,7 @@ service cloud.firestore {
           "sideColor",
           "depthCm",
           "backLabelEnabled",
+          "frontBrightness",
           "allowRatioMismatch"
         ])
         && config.version == 2
@@ -125,6 +126,9 @@ service cloud.firestore {
         && config.depthCm is number
         && config.depthCm > 0
         && config.backLabelEnabled is bool
+        && config.frontBrightness is number
+        && config.frontBrightness >= 0.8
+        && config.frontBrightness <= 1.25
         && config.allowRatioMismatch == false;
     }
 

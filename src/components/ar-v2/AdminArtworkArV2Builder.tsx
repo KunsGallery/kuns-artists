@@ -7,9 +7,13 @@ import { AdminArV2Status, getWorkArV2Summary } from "./AdminArV2Status";
 import { ArV2SourceImageStatus, type ImageLoadStatus } from "./ArV2SourceImageStatus";
 import {
   buildArtworkGlb,
+  DEFAULT_FRONT_BRIGHTNESS,
+  FRONT_BRIGHTNESS_PRESETS,
   createArV2SourceSignature,
   getArV2WorkflowStatus,
   loadArtworkImageForArV2,
+  isArV2RequestSignatureCurrent,
+  LEGACY_FRONT_BRIGHTNESS,
   type ModelViewerLoadStatus,
   type ArV2Diagnostic,
   type ArtworkOrientation,
@@ -25,10 +29,9 @@ import {
 } from "@/lib/firebase/firestore";
 import { deleteR2ObjectsByPublicUrls, uploadGlbFileToR2 } from "@/lib/r2/client";
 
-const ORIENTATION_CHOICES = [0, 90, 180, 270] as const;
 const DEFAULT_SIDE_COLOR = "#111111";
 const DEFAULT_DEPTH_CM = 3.5;
-const DEFAULT_GENERATOR_VERSION = "ar-v2.1";
+const DEFAULT_GENERATOR_VERSION = "ar-v2.2";
 
 type ApprovalStatus =
   | "idle"
@@ -38,22 +41,6 @@ type ApprovalStatus =
   | "cleaning-old-asset"
   | "complete"
   | "error";
-
-function normalizeRotationDeg(value?: number) {
-  const normalized = ((Math.round(value ?? 0) % 360) + 360) % 360;
-  return ORIENTATION_CHOICES.includes(normalized as (typeof ORIENTATION_CHOICES)[number])
-    ? (normalized as (typeof ORIENTATION_CHOICES)[number])
-    : 0;
-}
-
-function normalizeHexColor(value?: string) {
-  const trimmed = value?.trim();
-  return trimmed && /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : DEFAULT_SIDE_COLOR;
-}
-
-function normalizeDepthCm(value?: number) {
-  return Number.isFinite(value ?? NaN) && (value ?? 0) > 0 ? Number(value) : DEFAULT_DEPTH_CM;
-}
 
 function toSafeSlugPart(value: string) {
   return value
@@ -75,52 +62,14 @@ function formatRatio(value?: number) {
   return typeof value === "number" && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "—";
 }
 
-function getInitialOrientation(work: ArtistWorkDoc): ArtworkOrientation {
-  const config = getActiveConfig(work);
-  return {
-    rotationDeg: normalizeRotationDeg(config.rotationDeg ?? work.arTextureRotationDeg),
-    flipX: config.flipX ?? work.arTextureFlipX ?? false,
-    flipY: config.flipY ?? work.arTextureFlipY ?? false,
-  };
-}
-
-function getInitialSideColor(work: ArtistWorkDoc) {
-  return normalizeHexColor(getActiveConfig(work).sideColor ?? work.arSideColor);
-}
-
-function getInitialDepthCm(work: ArtistWorkDoc) {
-  return normalizeDepthCm(getActiveConfig(work).depthCm ?? work.depthCm ?? work.arDepthCm);
-}
-
-function getInitialBackLabelEnabled(work: ArtistWorkDoc) {
-  return getActiveConfig(work).backLabelEnabled ?? work.arBackLabelEnabled ?? work.showBackLabel ?? true;
-}
-
-function getInitialAllowRatioMismatch(work: ArtistWorkDoc) {
-  return getActiveConfig(work).allowRatioMismatch ?? false;
-}
-
 function getActiveConfig(work: ArtistWorkDoc) {
   const request = work.arV2Request;
 
-  if (request?.status === "requested") {
-    const currentSignature = getCurrentSignature(
-      work,
-      getCurrentCoverImageUrl(work),
-      {
-        rotationDeg: request.config.rotationDeg,
-        flipX: request.config.flipX,
-        flipY: request.config.flipY,
-      },
-      request.config.sideColor,
-      request.config.depthCm,
-      request.config.backLabelEnabled,
-      request.config.allowRatioMismatch ?? false
-    );
-
-    if (currentSignature === request.sourceSignature) {
-      return request.config;
-    }
+  if (
+    request?.status === "requested" &&
+    isArV2RequestSignatureCurrent(work, request.sourceSignature)
+  ) {
+    return request.config;
   }
 
   return work.arV2Config ?? {
@@ -131,6 +80,10 @@ function getActiveConfig(work: ArtistWorkDoc) {
     sideColor: DEFAULT_SIDE_COLOR,
     depthCm: DEFAULT_DEPTH_CM,
     backLabelEnabled: true,
+    frontBrightness:
+      work.arV2Asset?.generatorVersion === "ar-v2.1"
+        ? LEGACY_FRONT_BRIGHTNESS
+        : DEFAULT_FRONT_BRIGHTNESS,
     allowRatioMismatch: false,
   };
 }
@@ -146,6 +99,7 @@ function getCurrentSignature(
   sideColor: string,
   depthCm: number,
   backLabelEnabled: boolean,
+  frontBrightness: number,
   allowRatioMismatch: boolean,
 ) {
   return createArV2SourceSignature({
@@ -163,6 +117,7 @@ function getCurrentSignature(
     flipY: orientation.flipY,
     sideColor,
     backLabelEnabled,
+    frontBrightness,
     allowRatioMismatch,
   });
 }
@@ -172,6 +127,7 @@ function getArV2Config(
   sideColor: string,
   depthCm: number,
   backLabelEnabled: boolean,
+  frontBrightness: number,
   allowRatioMismatch: boolean,
 ): WorkArV2Config {
   return {
@@ -182,6 +138,7 @@ function getArV2Config(
     sideColor,
     depthCm,
     backLabelEnabled,
+    frontBrightness,
     allowRatioMismatch,
   };
 }
@@ -256,6 +213,7 @@ export function AdminArtworkArV2Builder({
   const [sideColor, setSideColor] = useState(DEFAULT_SIDE_COLOR);
   const [depthCm, setDepthCm] = useState(DEFAULT_DEPTH_CM);
   const [backLabelEnabled, setBackLabelEnabled] = useState(true);
+  const [frontBrightness, setFrontBrightness] = useState(DEFAULT_FRONT_BRIGHTNESS);
   const [allowRatioMismatch, setAllowRatioMismatch] = useState(false);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
@@ -288,6 +246,18 @@ export function AdminArtworkArV2Builder({
     () => ({ rotationDeg, flipX, flipY }),
     [rotationDeg, flipX, flipY],
   );
+  const previewConfig = useMemo(
+    () =>
+      getArV2Config(
+        orientation,
+        sideColor,
+        depthCm,
+        backLabelEnabled,
+        frontBrightness,
+        allowRatioMismatch,
+      ),
+    [allowRatioMismatch, backLabelEnabled, depthCm, frontBrightness, orientation, sideColor],
+  );
   const metadata = useMemo(() => buildMetadata(work), [work]);
   const currentSignature = useMemo(
     () =>
@@ -298,9 +268,10 @@ export function AdminArtworkArV2Builder({
         sideColor,
         depthCm,
         backLabelEnabled,
+        frontBrightness,
         allowRatioMismatch,
       ),
-    [allowRatioMismatch, backLabelEnabled, coverImageUrl, depthCm, orientation, sideColor, work],
+    [allowRatioMismatch, backLabelEnabled, coverImageUrl, depthCm, frontBrightness, orientation, sideColor, work],
   );
 
   const imageRatio = useMemo(() => {
@@ -398,7 +369,13 @@ export function AdminArtworkArV2Builder({
   const activeReview = work.arV2Review;
   const activeRequestMatchesCurrent = Boolean(
     activeRequest?.status === "requested" &&
-      activeRequest.sourceSignature === currentSignature
+      isArV2RequestSignatureCurrent(
+        {
+          ...work,
+          arV2Config: previewConfig,
+        },
+        activeRequest.sourceSignature,
+      )
   );
   const approvalDisabledReason = useMemo(() => {
     if (!previewBlob) return "Build AR V2 Preview first.";
@@ -423,14 +400,16 @@ export function AdminArtworkArV2Builder({
 
   useEffect(() => {
     const currentWork = latestWorkRef.current;
+    const currentConfig = getActiveConfig(currentWork);
 
-    setRotationDeg(getInitialOrientation(currentWork).rotationDeg);
-    setFlipX(getInitialOrientation(currentWork).flipX);
-    setFlipY(getInitialOrientation(currentWork).flipY);
-    setSideColor(getInitialSideColor(currentWork));
-    setDepthCm(getInitialDepthCm(currentWork));
-    setBackLabelEnabled(getInitialBackLabelEnabled(currentWork));
-    setAllowRatioMismatch(getInitialAllowRatioMismatch(currentWork));
+    setRotationDeg(currentConfig.rotationDeg);
+    setFlipX(currentConfig.flipX);
+    setFlipY(currentConfig.flipY);
+    setSideColor(currentConfig.sideColor);
+    setDepthCm(currentConfig.depthCm);
+    setBackLabelEnabled(currentConfig.backLabelEnabled);
+    setFrontBrightness(currentConfig.frontBrightness);
+    setAllowRatioMismatch(currentConfig.allowRatioMismatch ?? false);
     setPreviewBlob(null);
     setPreviewSignature("");
     setPreviewWorkId("");
@@ -545,6 +524,7 @@ export function AdminArtworkArV2Builder({
         orientation,
         sideColor,
         showBackLabel: backLabelEnabled,
+        frontBrightness,
         metadata,
         allowRatioMismatch,
       });
@@ -597,7 +577,14 @@ export function AdminArtworkArV2Builder({
     setApprovalStatus("confirming");
     setApprovalMessage("Confirming approval for the exact preview Blob.");
 
-    const config = getArV2Config(orientation, sideColor, depthCm, backLabelEnabled, allowRatioMismatch);
+    const config = getArV2Config(
+      orientation,
+      sideColor,
+      depthCm,
+      backLabelEnabled,
+      frontBrightness,
+      allowRatioMismatch,
+    );
     const previousGlbUrl = work.arV2Asset?.glbUrl?.trim() || "";
     const filename = buildArV2Filename(work.slug || work.id);
     const asset: WorkArV2Asset = {
@@ -794,9 +781,14 @@ export function AdminArtworkArV2Builder({
                 label="Requested Config"
                 value={
                   activeRequest
-                    ? `Rotation ${activeRequest.config.rotationDeg}°, X ${activeRequest.config.flipX ? "ON" : "OFF"}, Y ${activeRequest.config.flipY ? "ON" : "OFF"}, Side ${activeRequest.config.sideColor}, Depth ${activeRequest.config.depthCm.toFixed(1)} cm, Back label ${activeRequest.config.backLabelEnabled ? "ON" : "OFF"}`
+                    ? `Rotation ${activeRequest.config.rotationDeg}°, X ${activeRequest.config.flipX ? "ON" : "OFF"}, Y ${activeRequest.config.flipY ? "ON" : "OFF"}, Side ${activeRequest.config.sideColor}, Depth ${activeRequest.config.depthCm.toFixed(1)} cm, Back label ${activeRequest.config.backLabelEnabled ? "ON" : "OFF"}, Front brightness ${Math.round(activeRequest.config.frontBrightness * 100)}%`
                     : "—"
                 }
+                wide
+              />
+              <Field
+                label="Current Signature"
+                value={currentSignature || "—"}
                 wide
               />
             </div>
@@ -869,6 +861,7 @@ export function AdminArtworkArV2Builder({
               <Field label="Artist" value={work.artistName || "—"} />
               <Field label="Year" value={work.year || "—"} />
               <Field label="Medium" value={work.medium || "—"} />
+              <Field label="Front Brightness" value={Math.round(frontBrightness * 100) + "%"} />
               <Field label="Dimensions" value={work.widthCm && work.heightCm ? `${work.widthCm} × ${work.heightCm} × ${depthCm.toFixed(1)} cm` : work.dimensions || "—"} wide />
             </div>
 
@@ -962,6 +955,31 @@ export function AdminArtworkArV2Builder({
               <input type="checkbox" checked={backLabelEnabled} onChange={(event) => setBackLabelEnabled(event.target.checked)} />
               Back label on
             </label>
+
+            <div className="mt-4 rounded-[1.15rem] border border-black/8 bg-white px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-neutral-400">
+                    Front Brightness
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-neutral-600">
+                    Front-only brightness is baked into the texture atlas.
+                  </p>
+                </div>
+                <Pill>{Math.round(frontBrightness * 100)}%</Pill>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {FRONT_BRIGHTNESS_PRESETS.map((preset) => (
+                  <ActionButton
+                    key={preset.value}
+                    active={frontBrightness === preset.value}
+                    onClick={() => setFrontBrightness(preset.value)}
+                  >
+                    {preset.label} · {preset.description}
+                  </ActionButton>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="rounded-[1.6rem] border border-black/8 bg-[#fcfbf8] p-5">

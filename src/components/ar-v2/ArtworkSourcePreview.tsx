@@ -2,13 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import {
-  drawContainedArtworkThumbnail,
   createProductionBackLabelCanvas,
   drawCanvasContained,
+  drawArtworkSourceThumbnail,
   PRODUCTION_COLORS,
   formatDimensions,
   formatRatioPercent,
   getArtworkImageRatio,
+  normalizeFrontBrightness,
   type ArtworkOrientation,
   type ArtworkProductionMetadata,
   type PhysicalDimensions,
@@ -18,11 +19,18 @@ type SourceProps = {
   image?: HTMLImageElement;
   dimensions: PhysicalDimensions;
   orientation: ArtworkOrientation;
+  frontBrightness?: number;
 };
 
-export function ArtworkSourcePreview({ image, dimensions, orientation }: SourceProps) {
+export function ArtworkSourcePreview({
+  image,
+  dimensions,
+  orientation,
+  frontBrightness = 1,
+}: SourceProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ratio = getArtworkImageRatio(image, dimensions, orientation);
+  const normalizedBrightness = normalizeFrontBrightness(frontBrightness, 1);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -30,8 +38,10 @@ export function ArtworkSourcePreview({ image, dimensions, orientation }: SourceP
     canvas.width = 360;
     canvas.height = 240;
     const context = canvas.getContext("2d");
-    if (context) drawContainedArtworkThumbnail(context, image, { x: 0, y: 0, width: canvas.width, height: canvas.height, padding: Math.max(8, Math.round(Math.min(canvas.width, canvas.height) * 0.04)) }, orientation);
-  }, [image, orientation]);
+    if (context) {
+      drawArtworkSourceThumbnail(context, image, canvas.width, canvas.height, orientation, normalizedBrightness);
+    }
+  }, [image, normalizedBrightness, orientation]);
 
   return (
     <section className="arv2-panel" aria-labelledby="source-preview-title">
@@ -45,16 +55,24 @@ export function ArtworkSourcePreview({ image, dimensions, orientation }: SourceP
       {!image ? <p className="arv2-empty">Choose a local image to inspect its source ratio and orientation.</p> : (
         <div className="arv2-source-preview-grid">
           <div className="arv2-source-image-wrap">
+            <div className="arv2-source-image-label">Original Source</div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={image.src} alt="Selected artwork source" />
           </div>
-          <canvas ref={canvasRef} className="arv2-source-thumbnail" aria-label="Oriented artwork source thumbnail" />
+          <div className="arv2-source-image-wrap">
+            <div className="arv2-source-image-label">
+              AR Front Preview
+              <span className="arv2-value-chip">{Math.round(normalizedBrightness * 100)}%</span>
+            </div>
+            <canvas ref={canvasRef} className="arv2-source-thumbnail" aria-label="Oriented artwork source thumbnail" />
+          </div>
           <div className="arv2-source-facts">
             <span>Natural pixels <strong>{image.naturalWidth} × {image.naturalHeight}</strong></span>
             <span>Image aspect <strong>{ratio?.imageAspect.toFixed(3) ?? "—"}</strong></span>
             <span>Physical aspect <strong>{ratio?.physicalAspect.toFixed(3) ?? "—"}</strong></span>
             <span>Difference <strong>{formatRatioPercent(ratio)}</strong></span>
             <span>Orientation <strong>{orientation.rotationDeg}° / X {orientation.flipX ? "ON" : "OFF"} / Y {orientation.flipY ? "ON" : "OFF"}</strong></span>
+            <span>Front brightness <strong>{Math.round(normalizedBrightness * 100)}%</strong></span>
             <span>Fit <strong>contain / no crop / no stretch</strong></span>
           </div>
         </div>

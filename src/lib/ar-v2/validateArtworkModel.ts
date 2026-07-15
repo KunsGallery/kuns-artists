@@ -14,6 +14,11 @@ import {
   getArtworkImageRatio,
   getBackLabelCardMetrics,
 } from "./productionArtwork";
+import {
+  MAX_FRONT_BRIGHTNESS,
+  MIN_FRONT_BRIGHTNESS,
+  normalizeFrontBrightness,
+} from "./constants";
 import type { ArV2Diagnostic, ArtworkScene, ArtworkValidationResult } from "./types";
 
 const EPSILON = 0.001;
@@ -128,6 +133,40 @@ function hexToRgb(value: string) {
   };
 }
 
+function validateFrontBrightness(value: number | undefined) {
+  if (!Number.isFinite(value ?? NaN)) {
+    return fail(
+      "front-brightness",
+      "Front brightness",
+      "Front brightness must be a finite number.",
+    );
+  }
+
+  if ((value ?? 0) < MIN_FRONT_BRIGHTNESS || (value ?? 0) > MAX_FRONT_BRIGHTNESS) {
+    return fail(
+      "front-brightness",
+      "Front brightness",
+      `Front brightness must stay between ${Math.round(MIN_FRONT_BRIGHTNESS * 100)}% and ${Math.round(MAX_FRONT_BRIGHTNESS * 100)}%.`,
+    );
+  }
+
+  const normalized = normalizeFrontBrightness(value);
+
+  if (normalized > 1.15) {
+    return warning(
+      "front-brightness",
+      "Front brightness",
+      `Front brightness above 115% may clip bright artwork details.`,
+    );
+  }
+
+  return pass(
+    "front-brightness",
+    "Front brightness",
+    `Front brightness is ${Math.round(normalized * 100)}%.`,
+  );
+}
+
 function validateProductionArtwork(artwork: ArtworkScene) {
   const diagnostics: ArV2Diagnostic[] = [];
   const config = artwork.buildConfig;
@@ -152,6 +191,8 @@ function validateProductionArtwork(artwork: ArtworkScene) {
   } else {
     diagnostics.push(fail("artwork-ratio", "Image / physical ratio", `Ratio difference is ${(ratio.differenceRatio * 100).toFixed(1)}%, above 5%. Confirm the intentional mismatch before building.`));
   }
+
+  diagnostics.push(validateFrontBrightness(config.frontBrightness));
 
   const productionRects = [ATLAS_RECTS.front, ATLAS_RECTS.back, ATLAS_RECTS.left, ATLAS_RECTS.right, ATLAS_RECTS.top, ATLAS_RECTS.bottom];
   diagnostics.push(productionRects.every((rect) => rectIsOpaque(artwork.atlas.canvas, rect))

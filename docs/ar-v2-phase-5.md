@@ -105,3 +105,21 @@ npx tsc --noEmit
 npm run build
 git diff --check
 ```
+
+## Phase 5.1 - Scaling and Front Brightness
+
+This follow-up keeps the existing workflow intact while adding AR placement scaling and front-facing brightness control.
+
+1. `ArtworkModelViewer` now uses `ar-scale="auto"` while keeping `ar-placement="wall"`.
+2. Native AR placement can be resized with pinch gestures after the model is placed.
+3. No 100% snap, Y-axis lock, or custom AR manipulation was added.
+4. `WorkArV2Config` now includes `frontBrightness`.
+5. The default for new requests is `1.08`.
+6. Legacy `ar-v2.1` configs and approved assets continue to resolve with `1.0` brightness.
+7. Brightness is baked into the front texture only.
+8. Back labels and side faces are unchanged.
+9. The generator version for new assets is `ar-v2.2`.
+10. Source signatures now include `frontBrightness` for `ar-v2.2`, while legacy `ar-v2.1` signatures are preserved.
+11. Firestore rules allow artists to update `arV2Request` only, with `frontBrightness` validated in the request config.
+12. Public AR guidance now mentions wall-height placement and pinch resizing.
+13. Desktop routing quirks, QR URLs, slug routes, and DeviceRedirect behavior were left untouched.

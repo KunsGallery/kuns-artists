@@ -1,4 +1,7 @@
-import { getCurrentArV2SourceSignature, type WorkArV2AssetStatus } from "@/lib/ar-v2";
+import {
+  isArV2SourceSignatureCurrent,
+  type WorkArV2AssetStatus,
+} from "@/lib/ar-v2";
 
 type WorkWithDisplayOrder = {
   displayOrder?: number;
@@ -23,6 +26,7 @@ type WorkWithArAssets = {
     sideColor: string;
     depthCm: number;
     backLabelEnabled: boolean;
+    frontBrightness: number;
     allowRatioMismatch?: boolean;
   };
   id?: string;
@@ -78,11 +82,12 @@ export function getReadyArV2GlbUrl(work: WorkWithArAssets) {
     return "";
   }
 
-  const currentSignature = getCurrentArV2SourceSignature(work);
-
   if (
-    work.arV2Asset.sourceSignature &&
-    currentSignature !== work.arV2Asset.sourceSignature
+    !isArV2SourceSignatureCurrent(
+      work,
+      work.arV2Asset.sourceSignature,
+      work.arV2Asset.generatorVersion,
+    )
   ) {
     return "";
   }

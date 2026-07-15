@@ -11,6 +11,7 @@ import {
   drawArtworkImageToFrontAtlas,
   drawProductionBackLabelToAtlas,
 } from "./productionArtwork";
+import { LEGACY_FRONT_BRIGHTNESS } from "./constants";
 import type {
   ArtworkAtlas,
   ArtworkBuildConfig,
@@ -63,7 +64,15 @@ export function buildTextureAtlas(config: ArtworkBuildConfig): ArtworkAtlas {
   const front = config.sourceMode === "local-image" && config.image ? config.image : fixtures.front;
 
   if (config.sourceMode === "local-image" && config.image) {
-    drawArtworkImageToFrontAtlas(context, front, ATLAS_RECTS.front, config.orientation);
+    drawArtworkImageToFrontAtlas(
+      context,
+      front,
+      ATLAS_RECTS.front,
+      config.orientation,
+      config.buildMode === "production"
+        ? config.frontBrightness
+        : LEGACY_FRONT_BRIGHTNESS,
+    );
   } else {
     context.drawImage(fixtures.front, ATLAS_RECTS.front.x, ATLAS_RECTS.front.y);
   }

@@ -5,8 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import {
   buildArtworkGlb,
+  DEFAULT_FRONT_BRIGHTNESS,
+  FRONT_BRIGHTNESS_PRESETS,
   formatRatioPercent,
   getArtworkImageRatio,
+  LEGACY_FRONT_BRIGHTNESS,
   revokeArtworkObjectUrl,
   type ArV2BuildMode,
   type ArV2Diagnostic,
@@ -79,6 +82,7 @@ export function ArV2Lab() {
   const [metadata, setMetadata] = useState(DEFAULT_METADATA);
   const [sideColor, setSideColor] = useState("#111111");
   const [showBackLabel, setShowBackLabel] = useState(true);
+  const [frontBrightness, setFrontBrightness] = useState(DEFAULT_FRONT_BRIGHTNESS);
   const [allowRatioMismatch, setAllowRatioMismatch] = useState(false);
   const [image, setImage] = useState<HTMLImageElement | undefined>();
   const [imageName, setImageName] = useState("");
@@ -130,6 +134,7 @@ export function ArV2Lab() {
   const changeBuildMode = (nextMode: ArV2BuildMode) => {
     setBuildMode(nextMode);
     setSourceMode(nextMode === "production" ? "local-image" : "fixture");
+    setFrontBrightness(nextMode === "production" ? DEFAULT_FRONT_BRIGHTNESS : LEGACY_FRONT_BRIGHTNESS);
     setErrorMessage(null);
   };
 
@@ -181,6 +186,7 @@ export function ArV2Lab() {
         image,
         sideColor,
         showBackLabel,
+        frontBrightness: buildMode === "production" ? frontBrightness : LEGACY_FRONT_BRIGHTNESS,
         metadata: productionMode ? metadata : undefined,
         allowRatioMismatch,
       });
@@ -227,6 +233,7 @@ export function ArV2Lab() {
     setMetadata(DEFAULT_METADATA);
     setSideColor("#111111");
     setShowBackLabel(true);
+    setFrontBrightness(DEFAULT_FRONT_BRIGHTNESS);
     setAllowRatioMismatch(false);
     setErrorMessage(null);
     setImageName("");
@@ -282,12 +289,48 @@ export function ArV2Lab() {
             <section className="arv2-panel"><p className="arv2-kicker">C / Physical Dimensions</p><div className="arv2-field-grid"><Field label="Width cm" value={dimensions.widthCm} onChange={(value) => setDimensions((current) => ({ ...current, widthCm: value }))} /><Field label="Height cm" value={dimensions.heightCm} onChange={(value) => setDimensions((current) => ({ ...current, heightCm: value }))} /><Field label="Depth cm" value={dimensions.depthCm} onChange={(value) => setDimensions((current) => ({ ...current, depthCm: value }))} /></div><div className="arv2-preset-row"><span>Presets</span>{(Object.keys(PRESETS) as Array<keyof typeof PRESETS>).map((preset) => <button type="button" className="arv2-button arv2-button-quiet" key={preset} onClick={() => applyPreset(preset)}>{preset}</button>)}</div></section>
 
             {productionMode ? <ArtworkMetadataEditor metadata={metadata} onChange={setMetadata} /> : null}
-            {productionMode && sourceMode === "local-image" ? <ArtworkSourcePreview image={image} dimensions={numericDimensions} orientation={orientation} /> : null}
+            {productionMode && sourceMode === "local-image" ? <ArtworkSourcePreview image={image} dimensions={numericDimensions} orientation={orientation} frontBrightness={frontBrightness} /> : null}
             {productionMode ? <BackLabelSourcePreview metadata={metadata} dimensions={numericDimensions} showBackLabel={showBackLabel} /> : null}
 
             <ArtworkOrientationEditor orientation={orientation} onChange={setOrientation} />
 
-            <section className="arv2-control-section"><div className="arv2-section-heading"><div><p className="arv2-kicker">F / Finish</p><h2>Finish</h2></div></div><label className="arv2-color-field"><span>Side Color</span><input type="color" value={sideColor} onChange={(event) => setSideColor(event.target.value)} /></label><label className="arv2-toggle"><input type="checkbox" checked={showBackLabel} onChange={(event) => setShowBackLabel(event.target.checked)} /><span>Back Label On</span></label>{productionSource && ratio?.status === "fail" ? <label className="arv2-confirmation-toggle"><input type="checkbox" checked={allowRatioMismatch} onChange={(event) => setAllowRatioMismatch(event.target.checked)} /><span>I confirmed that the image ratio and physical dimensions intentionally differ.</span></label> : null}</section>
+            <section className="arv2-control-section">
+              <div className="arv2-section-heading">
+                <div>
+                  <p className="arv2-kicker">F / Finish</p>
+                  <h2>Finish</h2>
+                </div>
+              </div>
+              <label className="arv2-color-field"><span>Side Color</span><input type="color" value={sideColor} onChange={(event) => setSideColor(event.target.value)} /></label>
+              <label className="arv2-toggle"><input type="checkbox" checked={showBackLabel} onChange={(event) => setShowBackLabel(event.target.checked)} /><span>Back Label On</span></label>
+              {productionMode ? (
+                <div className="arv2-brightness-panel">
+                  <div className="arv2-section-heading">
+                    <div>
+                      <p className="arv2-kicker">Front Brightness</p>
+                      <h3>Artwork Front Tone</h3>
+                    </div>
+                    <span className="arv2-value-chip">{Math.round(frontBrightness * 100)}%</span>
+                  </div>
+                  <p className="arv2-helper-text">Front-only brightness is baked into the GLB texture so the viewer and native AR stay aligned.</p>
+                  <div className="arv2-preset-row">
+                    {FRONT_BRIGHTNESS_PRESETS.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        className={`arv2-button arv2-button-quiet${frontBrightness === preset.value ? " is-active" : ""}`}
+                        onClick={() => setFrontBrightness(preset.value)}
+                      >
+                        {preset.label} · {preset.description}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="arv2-helper-text">Diagnostic fixture keeps the front brightness at 100%.</p>
+              )}
+              {productionSource && ratio?.status === "fail" ? <label className="arv2-confirmation-toggle"><input type="checkbox" checked={allowRatioMismatch} onChange={(event) => setAllowRatioMismatch(event.target.checked)} /><span>I confirmed that the image ratio and physical dimensions intentionally differ.</span></label> : null}
+            </section>
 
             <section className="arv2-build-card"><p className="arv2-kicker">G / Generate</p><button type="button" className="arv2-build-button" onClick={() => void handleBuild()} disabled={!canBuild}>{isBuilding ? "Building…" : "Build Preview Model"}</button><button type="button" className="arv2-download-button" onClick={handleDownload} disabled={!downloadBlob || hasFailure}>Download GLB</button><button type="button" className="arv2-text-button" onClick={resetLab}>Reset Lab</button>{buildBlockReason ? <p className="arv2-build-block-reason">{buildBlockReason}</p> : null}</section>
 

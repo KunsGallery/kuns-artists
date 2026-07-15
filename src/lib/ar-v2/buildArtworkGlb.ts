@@ -33,6 +33,7 @@ export async function buildArtworkGlb(
     orientation: input.orientation,
     sideColor: input.sideColor,
     showBackLabel: input.showBackLabel,
+    frontBrightness: input.frontBrightness,
     metadata: input.metadata,
     allowRatioMismatch: input.allowRatioMismatch,
   });
