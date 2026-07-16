@@ -123,3 +123,16 @@ This follow-up keeps the existing workflow intact while adding AR placement scal
 11. Firestore rules allow artists to update `arV2Request` only, with `frontBrightness` validated in the request config.
 12. Public AR guidance now mentions wall-height placement and pinch resizing.
 13. Desktop routing quirks, QR URLs, slug routes, and DeviceRedirect behavior were left untouched.
+
+## Phase 5.2 - Public AR Mobile-first Redesign
+
+This follow-up refines the public `/ar/[slug]` page for visitors rather than internal workflow users.
+
+1. The public route keeps the single URL structure and no device-based redirect path is introduced.
+2. The page now switches between mobile and desktop layouts with a `matchMedia("(min-width: 1024px)")` viewport hook.
+3. Only one `model-viewer` instance mounts per viewport, and it is never mounted during the initial pending state.
+4. Mobile prioritizes the AR action and shows the viewer, placement guidance, and work/artist actions in a compact vertical flow.
+5. Desktop removes the AR button and uses a QR handoff so the same `/ar/[slug]` page can be opened on mobile.
+6. Public copy that exposed internal AR implementation details was removed from the visitor-facing page.
+7. The public page now keeps the Firestore/public-state logic in `PublicArWorkPage` and moves layout concerns into dedicated components.
+8. The QR code now targets the current public AR page rather than a direct GLB or USDZ asset URL.

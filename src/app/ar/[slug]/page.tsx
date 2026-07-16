@@ -13,21 +13,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   const work = getStaticWorkBySlug(slug);
   const artist = work ? getArtistBySlug(work.artistSlug) : undefined;
-  const title = work
-    ? `${work.title} | AR Preview`
-    : "AR Preview | KÜN’S Gallery";
+  const title = work ? `${work.title} | AR` : "AR | KÜN’S Gallery";
   const description =
-    (work ? `Preview ${work.title} by ${artist?.name ?? work.artistName} in AR.` : "") ||
+    (work ? `View ${work.title} by ${artist?.name ?? work.artistName} in the mobile AR viewing room.` : "") ||
     work?.description ||
     work?.medium ||
-    "Augmented reality preview for KÜN’S Gallery artwork.";
+    "Mobile-first AR viewing room for KÜN’S Gallery artwork.";
   const image = work?.coverImage ?? work?.coverImageUrl;
 
   return {
     title,
     description,
     alternates: {
-      canonical: work ? `/works/${work.slug}` : "/works",
+      canonical: work ? `/ar/${work.slug}` : "/ar",
     },
     robots: {
       index: false,

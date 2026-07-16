@@ -206,7 +206,7 @@ img {
   box-shadow: 0 0 0 3px var(--kuns-orange-soft);
 }
 
-/* Isolated AR v2 lab */
+/* Viewer styles */
 .arv2-page {
   min-height: 100vh;
   padding: 32px 24px 72px;
@@ -236,7 +236,6 @@ img {
 .arv2-value-chip { border-color: rgba(245,240,232,.16); color: rgba(245,240,232,.7); }
 .arv2-viewer-shell { overflow: hidden; border: 1px solid rgba(245,240,232,.14); border-radius: 22px; background: radial-gradient(circle at 50% 36%, rgba(243,112,33,.1), transparent 34%), #181818; }
 .arv2-viewer-stage { position: relative; min-height: 660px; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 56px 56px; }
-.arv2-viewer-stage::after { content: "+Z FRONT   /   -Z BACK   /   +Y TOP"; position: absolute; left: 24px; bottom: 20px; color: rgba(245,240,232,.32); font-size: 9px; letter-spacing: .18em; pointer-events: none; }
 model-viewer { display: block; width: 100%; height: 660px; --poster-color: transparent; --progress-bar-color: #f37021; }
 .arv2-viewer-placeholder { display: grid; min-height: 660px; place-items: center; align-content: center; gap: 12px; padding: 24px; color: rgba(245,240,232,.5); text-align: center; }
 .arv2-placeholder-mark { display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid rgba(243,112,33,.6); border-radius: 50%; color: #f37021; font-size: 30px; font-weight: 300; }

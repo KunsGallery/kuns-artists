@@ -9,8 +9,13 @@ import type {
 type Props = {
   objectUrl: string | null;
   arDisabled: boolean;
-  onEvent: (type: string, message: string) => void;
+  onEvent?: (type: string, message: string) => void;
   onLoadStatusChange?: (status: ModelViewerLoadStatus, message?: string) => void;
+  showArButton?: boolean;
+  arButtonLabel?: string;
+  showToolbar?: boolean;
+  stageClassName?: string;
+  viewerClassName?: string;
 };
 
 function getModelViewerErrorMessage(error: unknown) {
@@ -18,7 +23,7 @@ function getModelViewerErrorMessage(error: unknown) {
     return error.message;
   }
 
-  return "Could not load model-viewer.";
+  return "3D viewer could not be loaded.";
 }
 
 function getEventErrorMessage(event: Event) {
@@ -38,14 +43,19 @@ function getEventErrorMessage(event: Event) {
     return detail.error.message;
   }
 
-  return "Actual GLB preview failed.";
+  return "3D preview failed.";
 }
 
 export function ArtworkModelViewer({
   objectUrl,
   arDisabled,
-  onEvent,
+  onEvent = () => undefined,
   onLoadStatusChange,
+  showArButton = true,
+  arButtonLabel = "내 공간에 놓아보기",
+  showToolbar = true,
+  stageClassName,
+  viewerClassName,
 }: Props) {
   const viewerRef = useRef<HTMLModelViewerElement | null>(null);
   const listenerCleanupRef = useRef<(() => void) | null>(null);
@@ -61,7 +71,7 @@ export function ArtworkModelViewer({
         await customElements.whenDefined("model-viewer");
         if (!active) return;
         setDefinitionStatus("ready");
-        onEvent("component", "model-viewer is ready");
+        onEvent("component", "3D viewer is ready");
       } catch (error) {
         if (!active) return;
         setDefinitionStatus("error");
@@ -89,7 +99,7 @@ export function ArtworkModelViewer({
       return;
     }
 
-    onLoadStatusChange?.("loading", "Actual GLB preview is loading.");
+    onLoadStatusChange?.("loading", "3D preview is loading.");
   }, [definitionStatus, objectUrl, onLoadStatusChange]);
 
   const setViewerNode = useCallback(
@@ -108,8 +118,8 @@ export function ArtworkModelViewer({
         if (readyMarked) return;
         readyMarked = true;
 
-        onEvent("load", "Actual GLB loaded successfully.");
-        onLoadStatusChange?.("ready", "Actual GLB loaded successfully.");
+        onEvent("load", "3D preview loaded successfully.");
+        onLoadStatusChange?.("ready", "3D preview loaded successfully.");
         if (node.canActivateAR === false) {
           onEvent("ar-support", "AR unsupported on this browser or device");
         }
@@ -138,13 +148,13 @@ export function ArtworkModelViewer({
 
         onEvent(
           "progress",
-          progress === null ? "GLB loading" : `GLB loading ${progress}%`,
+          progress === null ? "3D loading" : `3D loading ${progress}%`,
         );
         onLoadStatusChange?.(
           "loading",
           progress === null
-            ? "Actual GLB preview is loading."
-            : `Actual GLB preview is loading (${progress}%).`,
+            ? "3D preview is loading."
+            : `3D preview is loading (${progress}%).`,
         );
       };
 
@@ -199,28 +209,28 @@ export function ArtworkModelViewer({
 
   return (
     <div className="arv2-viewer-shell">
-      <div className="arv2-viewer-stage">
+      <div className={`arv2-viewer-stage ${stageClassName ?? ""}`.trim()}>
         {!objectUrl ? (
           <div className="arv2-viewer-placeholder">
             <span className="arv2-placeholder-mark">+</span>
-            <p>Build the preview model to inspect the canonical GLB.</p>
+            <p>3D 모델이 준비되는 중입니다.</p>
           </div>
         ) : definitionStatus === "loading" ? (
           <div className="arv2-viewer-placeholder">
             <span className="arv2-placeholder-mark">…</span>
-            <p>Preparing 3D viewer…</p>
+            <p>3D 뷰어를 준비하는 중입니다.</p>
           </div>
         ) : definitionStatus === "error" ? (
           <div className="arv2-viewer-placeholder">
             <span className="arv2-placeholder-mark">!</span>
-            <p>The 3D viewer could not be loaded.</p>
+            <p>3D 모델을 불러오지 못했습니다.</p>
           </div>
         ) : (
           <model-viewer
             key={objectUrl}
             ref={setViewerNode}
             src={objectUrl}
-            alt="Actual GLB Preview of the AR v2 artwork model"
+            alt="3D preview of the artwork"
             camera-controls
             ar={!arDisabled}
             ar-modes="webxr scene-viewer quick-look"
@@ -230,52 +240,56 @@ export function ArtworkModelViewer({
             exposure="1"
             interaction-prompt="none"
             loading="eager"
+            className={viewerClassName}
           >
-            <button
-              slot="ar-button"
-              type="button"
-              className="arv2-ar-button"
-              disabled={arDisabled}
-            >
-              View in AR
-            </button>
+            {showArButton && !arDisabled ? (
+              <button
+                slot="ar-button"
+                type="button"
+                className="arv2-ar-button"
+              >
+                {arButtonLabel}
+              </button>
+            ) : null}
           </model-viewer>
         )}
       </div>
-      <div className="arv2-viewer-toolbar" aria-label="Viewer controls">
-        <button
-          type="button"
-          className="arv2-button arv2-button-quiet"
-          disabled={!objectUrl}
-          onClick={() => setOrbit("0deg 75deg auto")}
-        >
-          Reset Camera
-        </button>
-        <button
-          type="button"
-          className="arv2-button arv2-button-quiet"
-          disabled={!objectUrl}
-          onClick={() => setOrbit("0deg 90deg auto")}
-        >
-          Front
-        </button>
-        <button
-          type="button"
-          className="arv2-button arv2-button-quiet"
-          disabled={!objectUrl}
-          onClick={() => setOrbit("45deg 75deg auto")}
-        >
-          Angle
-        </button>
-        <button
-          type="button"
-          className="arv2-button arv2-button-quiet"
-          disabled={!objectUrl}
-          onClick={() => setOrbit("180deg 75deg auto")}
-        >
-          Back
-        </button>
-      </div>
+      {showToolbar ? (
+        <div className="arv2-viewer-toolbar" aria-label="Viewer controls">
+          <button
+            type="button"
+            className="arv2-button arv2-button-quiet"
+            disabled={!objectUrl}
+            onClick={() => setOrbit("0deg 75deg auto")}
+          >
+            Reset Camera
+          </button>
+          <button
+            type="button"
+            className="arv2-button arv2-button-quiet"
+            disabled={!objectUrl}
+            onClick={() => setOrbit("0deg 90deg auto")}
+          >
+            Front
+          </button>
+          <button
+            type="button"
+            className="arv2-button arv2-button-quiet"
+            disabled={!objectUrl}
+            onClick={() => setOrbit("45deg 75deg auto")}
+          >
+            Angle
+          </button>
+          <button
+            type="button"
+            className="arv2-button arv2-button-quiet"
+            disabled={!objectUrl}
+            onClick={() => setOrbit("180deg 75deg auto")}
+          >
+            Back
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
