@@ -91,6 +91,43 @@ body::after {
   background-size: 23px 23px, 31px 31px, 37px 37px;
 }
 
+body.public-ar-route {
+  background: #111111;
+  background-image: none;
+}
+
+body.public-ar-route::before,
+body.public-ar-route::after {
+  content: none;
+  display: none;
+}
+
+.public-ar-page {
+  position: relative;
+  min-height: 100svh;
+  background: #111111;
+  background-image: none;
+  isolation: isolate;
+}
+
+@media print {
+  body.public-ar-route {
+    background: #111111 !important;
+    background-image: none !important;
+  }
+
+  body.public-ar-route::before,
+  body.public-ar-route::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  .public-ar-page {
+    background: #111111 !important;
+    background-image: none !important;
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;
