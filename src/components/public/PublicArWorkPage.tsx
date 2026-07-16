@@ -3,104 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getWorkBySlug as getStaticWorkBySlug } from "@/data/works";
-import {
-  getWorkBySlugForPublicRoute,
-  resolveArtistWorkSlug,
-  type ArtistWorkDoc,
-} from "@/lib/firebase/firestore";
-import { getArGlbUrl } from "@/lib/workDisplay";
-import type { Work } from "@/types/work";
+import { getWorkBySlugForPublicRoute } from "@/lib/firebase/firestore";
+import { getArGlbUrl, getReadyArV2GlbUrl } from "@/lib/workDisplay";
 import { PublicArResponsiveLayout } from "./ar/PublicArResponsiveLayout";
 import type { PublicArSource, PublicArWork } from "./ar/types";
-
-function mapPublicWork(
-  firestoreWork?: ArtistWorkDoc | null,
-  fallbackWork?: Work
-): PublicArWork | null {
-  const slug = firestoreWork
-    ? resolveArtistWorkSlug(firestoreWork)
-    : fallbackWork?.slug ?? "";
-  const artistSlug = firestoreWork?.artistSlug ?? fallbackWork?.artistSlug ?? "";
-  const artistName =
-    firestoreWork?.artistName ?? fallbackWork?.artistName ?? "";
-  const title = firestoreWork?.title ?? fallbackWork?.title ?? "";
-
-  if (!slug || !artistSlug || !artistName || !title) {
-    return null;
-  }
-
-  return {
-    id: firestoreWork?.id,
-    slug,
-    artistSlug,
-    artistName,
-    title,
-    year: firestoreWork?.year ?? fallbackWork?.year,
-    medium: firestoreWork?.medium ?? fallbackWork?.medium,
-    dimensions: firestoreWork?.dimensions ?? fallbackWork?.dimensions,
-    description: firestoreWork?.description ?? fallbackWork?.description,
-    coverImage: firestoreWork?.coverImageUrl ?? fallbackWork?.coverImage,
-    coverImageUrl: firestoreWork?.coverImageUrl ?? fallbackWork?.coverImageUrl,
-    modelGlb:
-      firestoreWork?.generatedGlbUrl ??
-      firestoreWork?.modelGlb ??
-      fallbackWork?.modelGlb,
-    modelUsdz:
-      firestoreWork?.generatedUsdzUrl ??
-      firestoreWork?.modelUsdz ??
-      fallbackWork?.modelUsdz,
-    generatedGlbUrl:
-      firestoreWork?.generatedGlbUrl ?? fallbackWork?.generatedGlbUrl,
-    generatedUsdzUrl:
-      firestoreWork?.generatedUsdzUrl ?? fallbackWork?.generatedUsdzUrl,
-    arV2Config: firestoreWork?.arV2Config ?? fallbackWork?.arV2Config,
-    arV2Asset: firestoreWork?.arV2Asset ?? fallbackWork?.arV2Asset,
-    docentAudioEnabled:
-      firestoreWork?.docentAudioEnabled ?? fallbackWork?.docentAudioEnabled,
-    docentAudioUrl:
-      firestoreWork?.docentAudioUrl ?? fallbackWork?.docentAudioUrl,
-    docentAudioTitle:
-      firestoreWork?.docentAudioTitle ?? fallbackWork?.docentAudioTitle,
-    docentAudioDescription:
-      firestoreWork?.docentAudioDescription ??
-      fallbackWork?.docentAudioDescription,
-    widthCm: firestoreWork?.widthCm ?? fallbackWork?.widthCm,
-    heightCm: firestoreWork?.heightCm ?? fallbackWork?.heightCm,
-    depthCm: firestoreWork?.depthCm ?? fallbackWork?.depthCm,
-    frontRotationXDeg:
-      firestoreWork?.frontRotationXDeg ?? fallbackWork?.frontRotationXDeg,
-    frontRotationYDeg:
-      firestoreWork?.frontRotationYDeg ?? fallbackWork?.frontRotationYDeg,
-    sideMode: firestoreWork?.sideMode ?? fallbackWork?.sideMode,
-    showBackLabel:
-      firestoreWork?.showBackLabel ?? fallbackWork?.showBackLabel,
-    isPublished: firestoreWork?.isPublished ?? fallbackWork?.isPublished,
-    archived: firestoreWork?.archived ?? fallbackWork?.archived,
-  };
-}
-
-function getWorkRouteSlug(work: PublicArWork) {
-  return work.slug
-    ? work.slug
-    : work.id
-      ? resolveArtistWorkSlug({
-          id: work.id,
-          slug: work.slug,
-          title: work.title,
-          artistSlug: work.artistSlug,
-        })
-      : "";
-}
-
-function getWorkHref(work: PublicArWork) {
-  const routeSlug = getWorkRouteSlug(work);
-
-  return routeSlug ? `/works/${routeSlug}` : "/works";
-}
-
-function getArtistHref(work?: PublicArWork | null) {
-  return work?.artistSlug ? `/artists/${work.artistSlug}` : "/artists";
-}
+import { useWebXrSupport } from "./webxr/useWebXrSupport";
+import {
+  getPublicArWorkHref,
+  getPublicArWorkRouteSlug,
+  getPublicArtistHref,
+  mapPublicArWork,
+} from "@/lib/publicArWork";
 
 function ArNoticeScreen({
   title,
@@ -229,9 +142,21 @@ export default function PublicArWorkPage({ slug }: { slug: string }) {
   const [unpublished, setUnpublished] = useState(false);
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
   const [publicArUrl, setPublicArUrl] = useState("");
+  const webXrSupport = useWebXrSupport();
 
-  const artistHref = getArtistHref(work ?? staticWork);
-  const workHref = work ? getWorkHref(work) : staticWork ? getWorkHref(staticWork) : "/works";
+  const artistHref = getPublicArtistHref(work ?? staticWork);
+  const workHref = work
+    ? getPublicArWorkHref(work)
+    : staticWork
+      ? getPublicArWorkHref(staticWork)
+      : "/works";
+  const routeWork = work ?? staticWork;
+  const routeSlug = routeWork ? getPublicArWorkRouteSlug(routeWork) || slug : slug;
+  const readyArV2GlbUrl = routeWork ? getReadyArV2GlbUrl(routeWork) : "";
+  const webXrHref =
+    webXrSupport.status === "supported" && routeSlug && readyArV2GlbUrl
+      ? `/ar/${routeSlug}/webxr`
+      : "";
   const arMediaUrl = work ? getArGlbUrl(work) : "";
   const docentAudioEnabled =
     work?.docentAudioEnabled === true && Boolean(work.docentAudioUrl?.trim());
@@ -264,7 +189,7 @@ export default function PublicArWorkPage({ slug }: { slug: string }) {
         }
 
         if (result.work) {
-          const merged = mapPublicWork(result.work, staticWork ?? undefined);
+          const merged = mapPublicArWork(result.work, staticWork ?? undefined);
 
           if (merged) {
             setWork(merged);
@@ -326,6 +251,8 @@ export default function PublicArWorkPage({ slug }: { slug: string }) {
         workHref={workHref}
         artistHref={artistHref}
         publicArUrl={publicArUrl}
+        webXrHref={webXrHref}
+        webXrSupportStatus={webXrSupport.status}
         arMediaUrl={arMediaUrl}
         source={source}
         debugMessage={loadErrorMessage || undefined}

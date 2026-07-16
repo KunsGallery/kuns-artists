@@ -102,6 +102,18 @@ body.public-ar-route::after {
   display: none;
 }
 
+body.webxr-session-active {
+  background: transparent;
+  background-image: none;
+  overflow: hidden;
+}
+
+body.webxr-session-active::before,
+body.webxr-session-active::after {
+  content: none;
+  display: none;
+}
+
 .public-ar-page {
   position: relative;
   min-height: 100svh;
@@ -118,6 +130,18 @@ body.public-ar-route::after {
 
   body.public-ar-route::before,
   body.public-ar-route::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  body.webxr-session-active {
+    background: transparent !important;
+    background-image: none !important;
+    overflow: hidden !important;
+  }
+
+  body.webxr-session-active::before,
+  body.webxr-session-active::after {
     content: none !important;
     display: none !important;
   }

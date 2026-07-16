@@ -36,6 +36,8 @@ export function PublicArResponsiveLayout({
   workHref,
   artistHref,
   publicArUrl,
+  webXrHref,
+  webXrSupportStatus,
   arMediaUrl,
   source,
   debugMessage,
@@ -65,6 +67,8 @@ export function PublicArResponsiveLayout({
         workHref={workHref}
         artistHref={artistHref}
         publicArUrl={publicArUrl}
+        webXrHref={webXrHref}
+        webXrSupportStatus={webXrSupportStatus}
         arMediaUrl={arMediaUrl}
         source={source}
         debugMessage={debugMessage}
@@ -82,6 +86,8 @@ export function PublicArResponsiveLayout({
       workHref={workHref}
       artistHref={artistHref}
       publicArUrl={publicArUrl}
+      webXrHref={webXrHref}
+      webXrSupportStatus={webXrSupportStatus}
       arMediaUrl={arMediaUrl}
       source={source}
       debugMessage={debugMessage}
