@@ -13,25 +13,23 @@
       "dependencies": [
         "npm:@aws-sdk/client-s3@^3.1038.0",
         "npm:@aws-sdk/s3-request-presigner@^3.1038.0",
-        "npm:@google/model-viewer@^4.3.1",
         "npm:@tailwindcss/postcss@^4.2.2",
         "npm:@types/node@20",
         "npm:@types/qrcode@^1.5.6",
         "npm:@types/react-dom@19",
         "npm:@types/react@19",
-        "npm:@types/three@0.183.1",
+        "npm:@types/three@0.184",
         "npm:babel-plugin-react-compiler@1.0.0",
         "npm:eslint-config-next@16.2.1",
         "npm:eslint@9",
         "npm:firebase@^12.11.0",
-        "npm:html-to-image@^1.11.13",
         "npm:next@16.2.1",
         "npm:postcss@^8.5.8",
         "npm:qrcode@^1.5.4",
         "npm:react-dom@19.2.4",
         "npm:react@19.2.4",
         "npm:tailwindcss@^4.2.2",
-        "npm:three@0.183.2",
+        "npm:three@0.184",
         "npm:typescript@5"
       ]
     }
