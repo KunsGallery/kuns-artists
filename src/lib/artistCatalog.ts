@@ -8,6 +8,7 @@ export type PublicArtistCard = {
   type: Artist["type"];
   status?: ArtistDoc["status"];
   tagline?: string;
+  location?: string;
   profileImage?: string;
   featuredWorkId?: string;
   featuredWorkSlug?: string;
@@ -31,6 +32,16 @@ function sortByEnglishName(left: { name: string }, right: { name: string }) {
   return left.name.localeCompare(right.name, "en");
 }
 
+export function resolveProfileImageUrl(
+  firestoreArtist?: ArtistDoc | null,
+  staticArtist?: Artist
+) {
+  const firestoreProfileImage = firestoreArtist?.profileImageUrl?.trim() || "";
+  const staticProfileImage = staticArtist?.profileImage?.trim() || "";
+
+  return firestoreProfileImage || staticProfileImage;
+}
+
 export function mergePublicArtist(
   staticArtist?: Artist,
   firestoreArtist?: ArtistDoc | null
@@ -50,8 +61,8 @@ export function mergePublicArtist(
     type: firestoreArtist?.type ?? staticArtist?.type ?? "represented",
     status: firestoreArtist?.status ?? undefined,
     tagline: firestoreArtist?.tagline ?? staticArtist?.tagline,
-    profileImage:
-      firestoreArtist?.profileImageUrl ?? staticArtist?.profileImage,
+    location: firestoreArtist?.location ?? staticArtist?.location,
+    profileImage: resolveProfileImageUrl(firestoreArtist, staticArtist),
     featuredWorkId: firestoreArtist?.featuredWorkId,
     featuredWorkSlug: firestoreArtist?.featuredWorkSlug,
     featuredWorkTitle: firestoreArtist?.featuredWorkTitle,

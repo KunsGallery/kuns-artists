@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
-import { artists } from "@/data/artists";
+import FeaturedArtistsPreview from "@/components/public/FeaturedArtistsPreview";
 
 export const metadata: Metadata = {
   title: "Artists Archive",
   description:
     "Official artist pages, selected works, and archival records for KÜN’S Gallery represented artists.",
 };
-
-const representedArtists = [...artists]
-  .filter((artist) => artist.type === "represented")
-  .sort((a, b) => a.name.localeCompare(b.name, "en"));
-
-const featuredArtists = representedArtists.slice(0, 4);
 
 const archiveNotes = [
   {
@@ -175,59 +168,8 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            {featuredArtists.map((artist, index) => (
-              <Link
-                key={artist.slug}
-                href={`/artists/${artist.slug}`}
-                className="group overflow-hidden rounded-[1.6rem] border border-white/10 bg-white/[0.03] transition duration-500 hover:-translate-y-1 hover:border-[var(--kuns-orange)]/35 hover:bg-[var(--kuns-orange)]/[0.05]"
-              >
-                <div className="relative aspect-[4/5] overflow-hidden bg-[var(--background-soft)]">
-                  <Image
-                    src={artist.profileImage ?? "/images/artists/jessup-choi.jpg"}
-                    alt={artist.name}
-                    fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw"
-                    className="object-cover transition duration-700 group-hover:scale-[1.03]"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#121212]/90 via-[#121212]/28 to-transparent" />
-
-                  <div className="absolute left-5 top-5 flex items-center gap-3">
-                    <span className="rounded-full border border-white/12 bg-black/18 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-white/70">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                  </div>
-
-                  <div className="absolute inset-x-5 bottom-5">
-                    <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--kuns-orange)]">
-                      Represented Artist
-                    </p>
-                    <p className="mt-3 text-[1.8rem] leading-[1] tracking-[-0.055em] text-[var(--foreground)] transition group-hover:text-[var(--kuns-orange)]">
-                      {artist.name}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4 p-5">
-                  {artist.nameKo ? (
-                    <p className="text-sm text-white/46">{artist.nameKo}</p>
-                  ) : null}
-
-                  {artist.tagline ? (
-                    <p className="text-[14px] leading-7 text-white/60">
-                      {artist.tagline}
-                    </p>
-                  ) : null}
-
-                  <div className="flex items-center justify-between pt-1 text-[11px] uppercase tracking-[0.22em] text-white/34">
-                    <span>{artist.location ?? "Seoul, Korea"}</span>
-                    <span className="transition duration-300 group-hover:translate-x-1 group-hover:text-[var(--kuns-orange)]">
-                      View
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
+          <div className="mt-10">
+            <FeaturedArtistsPreview />
           </div>
         </div>
       </section>

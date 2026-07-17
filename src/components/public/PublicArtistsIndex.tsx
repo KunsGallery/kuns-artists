@@ -8,6 +8,8 @@ import {
 } from "@/lib/artistCatalog";
 import { getAllArtistsForPublicDisplay } from "@/lib/firebase/firestore";
 
+type PublicArtistCollections = ReturnType<typeof buildPublicArtistCollections>;
+
 type ArtistRosterCardProps = {
   artist: PublicArtistCard;
   label: string;
@@ -118,6 +120,42 @@ function ArtistRosterCard({ artist, label, tone }: ArtistRosterCardProps) {
   );
 }
 
+function ArtistRosterCardSkeleton({ tone }: { tone: "represented" | "project" }) {
+  const isProject = tone === "project";
+
+  return (
+    <article
+      className={`flex h-full flex-col overflow-hidden rounded-[1.75rem] border ${
+        isProject
+          ? "border-white/8 bg-white/[0.035]"
+          : "border-white/10 bg-white/[0.045]"
+      }`}
+    >
+      <div className="relative aspect-[4/5] overflow-hidden bg-[#1a1a1a]">
+        <div className="h-full w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02)),radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.12),transparent_36%)]" />
+        <div className="absolute left-4 top-4 h-7 w-24 rounded-full bg-white/8" />
+      </div>
+
+      <div className="flex flex-1 flex-col p-5 md:p-6">
+        <div className="space-y-3">
+          <div className="h-3 w-24 rounded-full bg-white/8" />
+          <div className={`h-8 rounded-full bg-white/10 ${isProject ? "w-3/4" : "w-4/5"}`} />
+          <div className="h-4 w-1/2 rounded-full bg-white/8" />
+        </div>
+
+        <div className="mt-5 space-y-3">
+          <div className="h-4 w-5/6 rounded-full bg-white/8" />
+          <div className="h-4 w-2/3 rounded-full bg-white/8" />
+        </div>
+
+        <div className="mt-auto pt-6">
+          <div className="h-4 w-28 rounded-full bg-white/8" />
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function SectionHeading({
   label,
   title,
@@ -143,20 +181,21 @@ function SectionHeading({
 }
 
 export default function PublicArtistsIndex() {
-  const [collections, setCollections] = useState(() =>
-    buildPublicArtistCollections([])
+  const [collections, setCollections] = useState<PublicArtistCollections | null>(
+    null
   );
-  const [isLoading, setIsLoading] = useState(true);
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
 
   useEffect(() => {
     let isActive = true;
+    let resolved = false;
     const timeoutId = window.setTimeout(() => {
-      if (isActive) {
-        setIsLoading(false);
+      if (isActive && !resolved) {
+        setCollections(buildPublicArtistCollections([]));
         setLoadErrorMessage(
           "작가 정보를 불러오는 데 시간이 걸리고 있습니다. 기본 목록을 먼저 표시합니다."
         );
+        resolved = true;
       }
     }, 6000);
 
@@ -170,6 +209,7 @@ export default function PublicArtistsIndex() {
 
         setCollections(buildPublicArtistCollections(publicArtists));
         setLoadErrorMessage("");
+        resolved = true;
       } catch {
         if (!isActive) {
           return;
@@ -177,10 +217,10 @@ export default function PublicArtistsIndex() {
 
         setCollections(buildPublicArtistCollections([]));
         setLoadErrorMessage("작가 정보를 불러오지 못해 기본 목록을 표시합니다.");
+        resolved = true;
       } finally {
         if (isActive) {
           window.clearTimeout(timeoutId);
-          setIsLoading(false);
         }
       }
     })();
@@ -191,9 +231,11 @@ export default function PublicArtistsIndex() {
     };
   }, []);
 
-  const { representedArtists, projectArtists } = collections;
-  const representedCount = representedArtists.length;
-  const projectCount = projectArtists.length;
+  const representedArtists = collections?.representedArtists ?? [];
+  const projectArtists = collections?.projectArtists ?? [];
+  const representedCount = collections?.representedArtists.length ?? 0;
+  const projectCount = collections?.projectArtists.length ?? 0;
+  const isLoading = collections === null;
 
   return (
     <main className="theme-dark min-h-screen bg-[#111111] text-[#F7F1E8]">
@@ -266,17 +308,17 @@ export default function PublicArtistsIndex() {
                   <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-3">
                     <span className="text-sm text-white/60">Represented</span>
                     <span className="text-2xl font-semibold tracking-[-0.04em] text-[#F7F1E8]">
-                      {representedCount}
+                      {isLoading ? "—" : representedCount}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-3">
                     <span className="text-sm text-white/60">Project</span>
                     <span className="text-2xl font-semibold tracking-[-0.04em] text-[#F7F1E8]">
-                      {projectCount}
+                      {isLoading ? "—" : projectCount}
                     </span>
                   </div>
                   <p className="pt-2 text-sm leading-7 text-white/58">
-                    Firestore artist data is prioritized, with curated seed fallback keeping the archive stable.
+                    Firestore artist data is prioritized, with neutral loading states before any fallback appears.
                   </p>
                   <p className="text-[11px] uppercase tracking-[0.24em] text-[#FF9B5A]">
                     Public roster
@@ -296,14 +338,21 @@ export default function PublicArtistsIndex() {
 
           <div className="mt-10">
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-              {representedArtists.map((artist) => (
-                <ArtistRosterCard
-                  key={artist.slug}
-                  artist={artist}
-                  label="Represented"
-                  tone="represented"
-                />
-              ))}
+              {isLoading
+                ? Array.from({ length: 4 }, (_, index) => (
+                    <ArtistRosterCardSkeleton
+                      key={`represented-skeleton-${index}`}
+                      tone="represented"
+                    />
+                  ))
+                : representedArtists.map((artist) => (
+                    <ArtistRosterCard
+                      key={artist.slug}
+                      artist={artist}
+                      label="Represented"
+                      tone="represented"
+                    />
+                  ))}
             </div>
 
             {isLoading ? (
@@ -314,7 +363,7 @@ export default function PublicArtistsIndex() {
           </div>
         </section>
 
-        {projectArtists.length > 0 ? (
+        {isLoading || projectArtists.length > 0 ? (
           <section
             id="project-artists"
             className="border-t border-white/10 py-16 md:py-24"
@@ -326,14 +375,21 @@ export default function PublicArtistsIndex() {
             />
 
             <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {projectArtists.map((artist) => (
-                <ArtistRosterCard
-                  key={artist.slug}
-                  artist={artist}
-                  label="Project"
-                  tone="project"
-                />
-              ))}
+              {isLoading
+                ? Array.from({ length: 3 }, (_, index) => (
+                    <ArtistRosterCardSkeleton
+                      key={`project-skeleton-${index}`}
+                      tone="project"
+                    />
+                  ))
+                : projectArtists.map((artist) => (
+                    <ArtistRosterCard
+                      key={artist.slug}
+                      artist={artist}
+                      label="Project"
+                      tone="project"
+                    />
+                  ))}
             </div>
           </section>
         ) : null}

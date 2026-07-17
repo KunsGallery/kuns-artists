@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getArtistBySlug, type Artist } from "@/data/artists";
 import { works as staticWorks } from "@/data/works";
+import { resolveProfileImageUrl } from "@/lib/artistCatalog";
 import {
   getPublicArtistBySlug,
   getPublicExhibitionsForArtistSlug,
@@ -107,7 +108,7 @@ function mergePublicArtist(
     bio: firestoreArtist?.bio ?? staticArtist?.bio,
     bioEn: firestoreArtist?.bioEn ?? staticArtist?.bioEn,
     location: firestoreArtist?.location ?? staticArtist?.location,
-    profileImage: firestoreArtist?.profileImageUrl ?? staticArtist?.profileImage,
+    profileImage: resolveProfileImageUrl(firestoreArtist, staticArtist),
     instagramUrl:
       firestoreArtist?.instagramUrl ?? staticArtist?.links?.instagram,
     youtubeUrl: firestoreArtist?.youtubeUrl ?? staticArtist?.links?.youtube,
@@ -300,9 +301,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     [slug]
   );
 
-  const [artist, setArtist] = useState<PublicArtistDetail | null>(
-    mergePublicArtist(staticArtist)
-  );
+  const [artist, setArtist] = useState<PublicArtistDetail | null>(null);
   const [artistWorks, setArtistWorks] = useState<PublicWork[]>(staticArtistWorks);
   const [artistExhibitions, setArtistExhibitions] = useState<PublicExhibition[]>(
     []
@@ -320,10 +319,15 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     let isActive = true;
     const timeoutId = window.setTimeout(() => {
       if (isActive) {
-        setIsLoading(false);
         setLoadErrorMessage(
           "작가 정보를 불러오는 데 시간이 걸리고 있습니다. 기본 정보를 먼저 표시합니다."
         );
+
+        if (staticArtist) {
+          setArtist(mergePublicArtist(staticArtist));
+          setDebugSource("Seed");
+          setIsLoading(false);
+        }
       }
     }, 6000);
 
@@ -508,14 +512,25 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
   if (!artist && isLoading) {
     return (
       <main className="theme-dark min-h-screen bg-[#111111] text-[#F7F1E8]">
-        <div className="mx-auto flex min-h-screen max-w-4xl items-center px-5 py-12 md:px-8">
-          <div className="w-full rounded-[2.5rem] border border-white/10 bg-white/[0.045] p-8 md:p-10">
-            <p className="text-[11px] uppercase tracking-[0.34em] text-white/45">
-              KÜN’S Gallery
-            </p>
-            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] md:text-5xl">
-              작가 정보를 확인하는 중입니다.
-            </h1>
+        <div className="mx-auto flex min-h-screen max-w-7xl items-center px-5 py-12 md:px-8">
+          <div className="w-full rounded-[2.5rem] border border-white/10 bg-white/[0.045] p-6 md:p-10">
+            <div className="grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-end">
+              <div className="space-y-4">
+                <div className="h-3 w-24 rounded-full bg-white/10" />
+                <div className="h-16 w-4/5 rounded-[1.5rem] bg-white/10 md:w-3/4" />
+                <div className="h-5 w-2/3 rounded-full bg-white/8" />
+                <div className="h-5 w-1/2 rounded-full bg-white/8" />
+                <div className="mt-8 flex flex-wrap gap-2">
+                  <div className="h-11 w-28 rounded-full bg-white/10" />
+                  <div className="h-11 w-24 rounded-full bg-white/8" />
+                  <div className="h-11 w-32 rounded-full bg-white/8" />
+                </div>
+              </div>
+
+              <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-white/[0.05]">
+                <div className="aspect-[4/5] w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.12),transparent_36%)]" />
+              </div>
+            </div>
           </div>
         </div>
       </main>
