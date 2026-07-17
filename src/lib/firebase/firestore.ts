@@ -3,7 +3,9 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  getDocFromServer,
   getDoc,
+  getDocsFromServer,
   getDocs,
   limit,
   query,
@@ -1228,6 +1230,14 @@ async function fetchAllArtistDocs() {
   );
 }
 
+async function fetchAllArtistDocsFromServer() {
+  const snapshot = await getDocsFromServer(collection(db, "artists"));
+
+  return snapshot.docs.map((document) =>
+    toArtistDoc(document.id, document.data() as Record<string, unknown>)
+  );
+}
+
 async function fetchAllWorkDocs() {
   const snapshot = await getDocs(collection(db, "works"));
 
@@ -1413,7 +1423,7 @@ export async function getPublicArtistBySlug(
 
   const queryCandidates: ArtistDoc[] = [];
 
-  const slugSnapshot = await getDocs(
+  const slugSnapshot = await getDocsFromServer(
     query(
       collection(db, "artists"),
       where("slug", "==", normalizedSlug),
@@ -1428,7 +1438,7 @@ export async function getPublicArtistBySlug(
     );
   }
 
-  const idSnapshot = await getDoc(doc(db, "artists", normalizedSlug));
+  const idSnapshot = await getDocFromServer(doc(db, "artists", normalizedSlug));
 
   if (idSnapshot.exists()) {
     queryCandidates.push(
@@ -1446,7 +1456,7 @@ export async function getPublicArtistBySlug(
     return matchedQueryCandidate;
   }
 
-  const allArtists = await fetchAllArtistDocs();
+  const allArtists = await fetchAllArtistDocsFromServer();
   const matchedFallback = allArtists.find(
     (artist) =>
       artist.status === "active" &&
@@ -1471,13 +1481,13 @@ export async function getAllArtistsForAdmin(): Promise<ArtistDoc[]> {
 }
 
 export async function getAllArtistsForPublicDisplay(): Promise<ArtistDoc[]> {
-  return (await fetchAllArtistDocs()).filter(
+  return (await fetchAllArtistDocsFromServer()).filter(
     (artist) => artist.status === "active"
   );
 }
 
 export async function getPublicRepresentedArtists(): Promise<ArtistDoc[]> {
-  const snapshot = await getDocs(
+  const snapshot = await getDocsFromServer(
     query(
       collection(db, "artists"),
       where("type", "==", "represented"),

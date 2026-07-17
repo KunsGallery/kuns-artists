@@ -191,11 +191,9 @@ export default function PublicArtistsIndex() {
     let resolved = false;
     const timeoutId = window.setTimeout(() => {
       if (isActive && !resolved) {
-        setCollections(buildPublicArtistCollections([]));
         setLoadErrorMessage(
-          "작가 정보를 불러오는 데 시간이 걸리고 있습니다. 기본 목록을 먼저 표시합니다."
+          "작가 정보를 불러오는 데 시간이 걸리고 있습니다."
         );
-        resolved = true;
       }
     }, 6000);
 

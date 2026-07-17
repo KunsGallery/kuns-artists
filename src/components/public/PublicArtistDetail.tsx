@@ -301,7 +301,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     [slug]
   );
 
-  const [artist, setArtist] = useState<PublicArtistDetail | null>(null);
+  const [artistState, setArtist] = useState<PublicArtistDetail | null>(null);
   const [artistWorks, setArtistWorks] = useState<PublicWork[]>(staticArtistWorks);
   const [artistExhibitions, setArtistExhibitions] = useState<PublicExhibition[]>(
     []
@@ -317,17 +317,17 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
 
   useEffect(() => {
     let isActive = true;
+    setArtist(null);
+    setArtistWorks([]);
+    setArtistExhibitions([]);
+    setIsLoading(true);
+    setLoadErrorMessage("");
+    setDebugSource("Seed");
+    setPortfolioShareMessage("");
+
     const timeoutId = window.setTimeout(() => {
       if (isActive) {
-        setLoadErrorMessage(
-          "작가 정보를 불러오는 데 시간이 걸리고 있습니다. 기본 정보를 먼저 표시합니다."
-        );
-
-        if (staticArtist) {
-          setArtist(mergePublicArtist(staticArtist));
-          setDebugSource("Seed");
-          setIsLoading(false);
-        }
+        setLoadErrorMessage("작가 정보를 불러오는 데 시간이 걸리고 있습니다.");
       }
     }, 6000);
 
@@ -391,6 +391,14 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     };
   }, [slug, staticArtist, staticArtistWorks]);
 
+  const hasStaleArtist = Boolean(artistState && artistState.slug !== slug);
+  const artist = hasStaleArtist ? null : artistState;
+  const artistExhibitionsForDisplay = hasStaleArtist ? [] : artistExhibitions;
+  const artistWorksForDisplay = useMemo(
+    () => (hasStaleArtist ? [] : artistWorks),
+    [artistWorks, hasStaleArtist]
+  );
+
   const instagramHref = normalizeExternalUrl(artist?.instagramUrl);
   const youtubeHref = normalizeExternalUrl(artist?.youtubeUrl);
   const cvHref = normalizeExternalUrl(artist?.cvUrl);
@@ -410,11 +418,11 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
   const visibleWorks = useMemo(
     () =>
       sortWorksForDisplay(
-        artistWorks.filter(
+        artistWorksForDisplay.filter(
           (work) => work.isPublished === true && work.archived !== true
         )
       ),
-    [artistWorks]
+    [artistWorksForDisplay]
   );
   const hasGalleryNote = Boolean(
     artist?.galleryNote?.trim() || artist?.galleryNoteEn?.trim()
@@ -476,7 +484,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     [artsyHref, cvHref, instagramHref, websiteHref, youtubeHref]
   );
   const hasStatement = Boolean(artist?.bio || artist?.bioEn);
-  const hasExhibitions = artistExhibitions.length > 0;
+  const hasExhibitions = artistExhibitionsForDisplay.length > 0;
   const heroTagline =
     artist?.tagline?.trim() || "Selected works from the artist’s current archive.";
   const heroLocation = artist?.location?.trim() || "";
@@ -509,7 +517,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     }
   }
 
-  if (!artist && isLoading) {
+  if (isLoading || hasStaleArtist) {
     return (
       <main className="theme-dark min-h-screen bg-[#111111] text-[#F7F1E8]">
         <div className="mx-auto flex min-h-screen max-w-7xl items-center px-5 py-12 md:px-8">
@@ -885,7 +893,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
             </div>
 
             <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {artistExhibitions.map((exhibition) => {
+              {artistExhibitionsForDisplay.map((exhibition) => {
                 const dateRange = formatExhibitionDateRange(
                   exhibition.startDate,
                   exhibition.endDate
