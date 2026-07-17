@@ -19,6 +19,7 @@ type PresignBody = {
   artistSlug?: string;
   workSlug?: string;
   workId?: string;
+  sizeBytes?: number;
 };
 
 const ALLOWED_TARGETS: R2UploadTarget[] = [
@@ -64,6 +65,17 @@ const ALLOWED_EMAILS = new Set([
   "wwwrosaweb@gmail.com",
   "chlwotjq127@gmail.com",
 ]);
+
+const MAX_QUICK_LOOK_USDZ_BYTES = 100 * 1024 * 1024;
+
+class HttpError extends Error {
+  statusCode: number;
+
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
 
 function getRequiredEnv(name: string) {
   const value = process.env[name];
@@ -133,7 +145,7 @@ async function getGoogleCerts() {
   );
 
   if (!response.ok) {
-    throw new Error("Failed to fetch Firebase signing certificates.");
+    throw new HttpError(500, "Failed to fetch Firebase signing certificates.");
   }
 
   return (await response.json()) as Record<string, string>;
@@ -143,7 +155,7 @@ async function verifyFirebaseIdToken(token: string, projectId: string) {
   const [headerPart, payloadPart, signaturePart] = token.split(".");
 
   if (!headerPart || !payloadPart || !signaturePart) {
-    throw new Error("Invalid authorization token.");
+    throw new HttpError(401, "Invalid authorization token.");
   }
 
   const header = safeDecodeJwtPart(headerPart) as {
@@ -158,14 +170,14 @@ async function verifyFirebaseIdToken(token: string, projectId: string) {
   };
 
   if (header.alg !== "RS256" || typeof header.kid !== "string") {
-    throw new Error("Invalid authorization token.");
+    throw new HttpError(401, "Invalid authorization token.");
   }
 
   const certs = await getGoogleCerts();
   const cert = certs[header.kid];
 
   if (!cert) {
-    throw new Error("Invalid authorization token.");
+    throw new HttpError(401, "Invalid authorization token.");
   }
 
   const verifier = createVerify("RSA-SHA256");
@@ -175,21 +187,21 @@ async function verifyFirebaseIdToken(token: string, projectId: string) {
   const verified = verifier.verify(cert, Buffer.from(signaturePart, "base64url"));
 
   if (!verified) {
-    throw new Error("Invalid authorization token.");
+    throw new HttpError(401, "Invalid authorization token.");
   }
 
   const expectedIssuer = `https://securetoken.google.com/${projectId}`;
 
   if (payload.aud !== projectId || payload.iss !== expectedIssuer) {
-    throw new Error("Invalid authorization token.");
+    throw new HttpError(401, "Invalid authorization token.");
   }
 
   if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) {
-    throw new Error("Authorization token has expired.");
+    throw new HttpError(401, "Authorization token has expired.");
   }
 
   if (typeof payload.email !== "string" || !ALLOWED_EMAILS.has(payload.email.toLowerCase())) {
-    throw new Error("Access denied.");
+    throw new HttpError(403, "Access denied.");
   }
 }
 
@@ -197,7 +209,7 @@ function createObjectKey(payload: Required<Pick<PresignBody, "filename" | "targe
   const prefix = TARGET_PREFIX[payload.target];
   const artistSlug = sanitizeSegment(payload.artistSlug, "unknown-artist");
   const workSlug = sanitizeSegment(payload.workSlug, "temp-work");
-  const workId = sanitizeSegment(payload.workId, "temp-work");
+  const workId = sanitizeSegment(payload.workId, "");
   const safeFilename = sanitizeFilename(payload.filename);
   const baseName = sanitizeSegment(payload.workSlug || payload.filename, "upload");
   const extension = getExtension(payload.filename, payload.target);
@@ -224,6 +236,10 @@ function createObjectKey(payload: Required<Pick<PresignBody, "filename" | "targe
   }
 
   if (payload.target === "quick-look") {
+    if (!workId) {
+      throw new HttpError(400, "workId is required for quick-look uploads.");
+    }
+
     return `${prefix}/${workId}/${stamp}-${safeFilename}.${extension}`;
   }
 
@@ -232,6 +248,35 @@ function createObjectKey(payload: Required<Pick<PresignBody, "filename" | "targe
 
 function normalizePublicBaseUrl(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+function validateQuickLookUploadPayload(payload: PresignBody) {
+  const filename = payload.filename?.trim() || "";
+
+  if (!filename) {
+    throw new HttpError(400, "filename, contentType, target are required.");
+  }
+
+  if (!/\.usdz$/i.test(filename)) {
+    throw new HttpError(400, "Only .usdz files are allowed.");
+  }
+
+  if (payload.sizeBytes === undefined || payload.sizeBytes === null) {
+    throw new HttpError(400, "Quick Look upload size is required.");
+  }
+
+  if (
+    typeof payload.sizeBytes !== "number" ||
+    !Number.isFinite(payload.sizeBytes) ||
+    !Number.isInteger(payload.sizeBytes) ||
+    payload.sizeBytes <= 0
+  ) {
+    throw new HttpError(400, "Quick Look upload size is required.");
+  }
+
+  if (payload.sizeBytes > MAX_QUICK_LOOK_USDZ_BYTES) {
+    throw new HttpError(413, "Quick Look USDZ must be 100MB or smaller.");
+  }
 }
 
 export const handler = async (event: {
@@ -284,6 +329,8 @@ export const handler = async (event: {
           error: "workId is required for quick-look uploads.",
         });
       }
+
+      validateQuickLookUploadPayload(payload);
     }
 
     if (!ALLOWED_TARGETS.includes(payload.target)) {
@@ -305,6 +352,7 @@ export const handler = async (event: {
       target: payload.target,
       artistSlug: payload.artistSlug,
       workSlug: payload.workSlug,
+      workId: payload.workId,
       contentType: payload.contentType,
     });
 
@@ -321,6 +369,12 @@ export const handler = async (event: {
       Bucket: bucketName,
       Key: key,
       ContentType: payload.contentType,
+      ...(payload.target === "quick-look"
+        ? {
+            CacheControl: "public, max-age=31536000, immutable",
+            ContentDisposition: "inline",
+          }
+        : {}),
     });
 
     const uploadUrl = await getSignedUrl(client, command, {
@@ -333,8 +387,22 @@ export const handler = async (event: {
       uploadUrl,
       publicUrl,
       key,
+      ...(payload.target === "quick-look"
+        ? {
+            uploadHeaders: {
+              "cache-control": "public, max-age=31536000, immutable",
+              "content-disposition": "inline",
+            },
+          }
+        : {}),
     });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return jsonResponse(error.statusCode, {
+        error: error.message,
+      });
+    }
+
     const message =
       error instanceof Error ? error.message : "Failed to create upload URL.";
 

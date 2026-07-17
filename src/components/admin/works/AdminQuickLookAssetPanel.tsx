@@ -287,11 +287,10 @@ export function AdminQuickLookAssetPanel({
       notes: notes.trim() || undefined,
     };
 
-    const previousReadyUrl = readyUrl;
-
     setActionState("approving");
     setErrorMessage("");
     setMessage("");
+    setWarningMessage("");
 
     try {
       await updateWorkForAdmin(work.id, {
@@ -303,10 +302,6 @@ export function AdminQuickLookAssetPanel({
       setPendingAsset(null);
       setMessage("전용 USDZ가 공개 사용 중으로 전환되었습니다.");
       setChecklist(getChecklistState());
-
-      if (previousReadyUrl && previousReadyUrl !== nextReadyAsset.usdzUrl) {
-        void deleteR2ObjectsByPublicUrls([previousReadyUrl]).catch(() => undefined);
-      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Quick Look 파일을 공개 상태로 전환하지 못했습니다.",
@@ -325,6 +320,7 @@ export function AdminQuickLookAssetPanel({
     setActionState("releasing");
     setErrorMessage("");
     setMessage("");
+    setWarningMessage("");
 
     try {
       await updateWorkForAdmin(work.id, {
@@ -348,21 +344,30 @@ export function AdminQuickLookAssetPanel({
       return;
     }
 
+    const pendingUrlToDelete = pendingAsset.usdzUrl?.trim() || "";
+
     setActionState("deleting");
     setErrorMessage("");
     setMessage("");
+    setWarningMessage("");
 
     try {
-      if (pendingAsset.usdzUrl) {
-        await deleteR2ObjectsByPublicUrls([pendingAsset.usdzUrl]).catch(() => undefined);
-      }
-
       await updateWorkForAdmin(work.id, {
         quickLookPendingAsset: null,
       });
 
       setPendingAsset(null);
       setMessage("검수용 Quick Look 파일을 삭제했습니다.");
+
+      if (pendingUrlToDelete) {
+        try {
+          await deleteR2ObjectsByPublicUrls([pendingUrlToDelete]);
+        } catch {
+          setWarningMessage(
+            "R2 cleanup failed. The Firestore record was removed, but the old file may remain in storage.",
+          );
+        }
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Quick Look 파일을 삭제하지 못했습니다.",
@@ -378,21 +383,30 @@ export function AdminQuickLookAssetPanel({
       return;
     }
 
+    const readyUrlToDelete = readyAsset.usdzUrl?.trim() || "";
+
     setActionState("deleting");
     setErrorMessage("");
     setMessage("");
+    setWarningMessage("");
 
     try {
-      if (readyAsset.usdzUrl) {
-        await deleteR2ObjectsByPublicUrls([readyAsset.usdzUrl]).catch(() => undefined);
-      }
-
       await updateWorkForAdmin(work.id, {
         quickLookAsset: null,
       });
 
       setReadyAsset(null);
       setMessage("공개 Quick Look 파일을 삭제했습니다.");
+
+      if (readyUrlToDelete) {
+        try {
+          await deleteR2ObjectsByPublicUrls([readyUrlToDelete]);
+        } catch {
+          setWarningMessage(
+            "R2 cleanup failed. The Firestore record was removed, but the old file may remain in storage.",
+          );
+        }
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Quick Look 파일을 삭제하지 못했습니다.",

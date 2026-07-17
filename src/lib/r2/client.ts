@@ -104,6 +104,7 @@ export async function uploadBlobToR2(
       method: "PUT",
       headers: {
         "content-type": payload.contentType,
+        ...(presigned.uploadHeaders ?? {}),
       },
       body: blob,
     });
@@ -211,6 +212,7 @@ export async function uploadQuickLookUsdzFileToR2({
         artistSlug,
         workSlug,
         workId,
+        sizeBytes: file.size,
       },
       `Bearer ${token}`
     );

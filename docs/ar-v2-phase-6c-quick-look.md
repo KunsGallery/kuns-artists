@@ -26,6 +26,7 @@
 ## 5. R2 key
 - Quick Look 전용 업로드는 `quick-look/{workId}/{timestamp}-{sanitizedFileName}` 패턴을 사용한다.
 - 같은 URL에 덮어쓰지 않고, 교체 시 새 immutable key를 생성한다.
+- 서버는 `workId`가 없으면 quick-look 업로드를 거부한다.
 
 ## 6. `ios-src` 연결
 - `ArtworkModelViewer`에 선택 prop `iosSrc`를 추가했다.
@@ -76,6 +77,8 @@
 - 업로드 크기 제한은 100MB다.
 - `.usdz` 확장자를 확인하고, MIME allowlist도 검증한다.
 - R2 object key는 서버에서 생성하고 sanitize한다.
+- 승인 후 이전 공개 파일 정리는 Firestore 저장 뒤 best-effort로 수행한다.
+- 기존 공개 파일은 자동으로 먼저 삭제하지 않는다.
 
 ## 16. regression checklist
 - 기존 AR v2 GLB 생성 흐름이 유지되는가

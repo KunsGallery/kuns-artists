@@ -15,12 +15,14 @@ export type R2PresignRequest = {
   artistSlug?: string;
   workSlug?: string;
   workId?: string;
+  sizeBytes?: number;
 };
 
 export type R2PresignResponse = {
   uploadUrl: string;
   publicUrl: string;
   key: string;
+  uploadHeaders?: Record<string, string>;
 };
 
 export type R2UploadResult = {
