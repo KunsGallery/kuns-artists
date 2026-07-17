@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -34,6 +35,10 @@ import type {
   WorkArV2Request,
   WorkArV2Review,
 } from "@/lib/ar-v2";
+import type {
+  QuickLookAsset,
+  QuickLookPendingAsset,
+} from "@/types/work";
 import {
   LEGACY_FRONT_BRIGHTNESS,
   normalizeFrontBrightness,
@@ -148,6 +153,8 @@ export type ArtistWorkDoc = {
   arV2Asset?: WorkArV2Asset;
   arV2Request?: WorkArV2Request;
   arV2Review?: WorkArV2Review;
+  quickLookAsset?: QuickLookAsset;
+  quickLookPendingAsset?: QuickLookPendingAsset;
   displayOrder?: number;
   isPublished?: boolean;
   archived?: boolean;
@@ -213,6 +220,8 @@ export type ArtistWorkAdminUpdatePayload = {
   docentAudioUrl?: string;
   docentAudioTitle?: string;
   docentAudioDescription?: string;
+  quickLookAsset?: QuickLookAsset | null;
+  quickLookPendingAsset?: QuickLookPendingAsset | null;
 };
 
 export type ArtistWorkArV2SavePayload = {
@@ -428,6 +437,128 @@ function toOptionalArV2Review(value: unknown): WorkArV2Review | undefined {
 
   review.reviewedAt = raw.reviewedAt;
   return review;
+}
+
+function toOptionalQuickLookAssetStatus(
+  value: unknown
+): QuickLookAsset["status"] | undefined {
+  return value === "none" || value === "uploaded" || value === "ready" || value === "failed"
+    ? value
+    : undefined;
+}
+
+function toOptionalQuickLookPendingAssetStatus(
+  value: unknown
+): QuickLookPendingAsset["status"] | undefined {
+  return value === "uploaded" || value === "failed" ? value : undefined;
+}
+
+function toOptionalQuickLookAsset(value: unknown): QuickLookAsset | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const status = toOptionalQuickLookAssetStatus(raw.status);
+
+  if (!status) {
+    return undefined;
+  }
+
+  const asset: QuickLookAsset = { status };
+
+  const usdzUrl = toOptionalString(raw.usdzUrl);
+  if (usdzUrl) asset.usdzUrl = usdzUrl;
+
+  const objectKey = toOptionalString(raw.objectKey);
+  if (objectKey) asset.objectKey = objectKey;
+
+  const fileName = toOptionalString(raw.fileName);
+  if (fileName) asset.fileName = fileName;
+
+  const sizeBytes = toOptionalFiniteNumber(raw.sizeBytes);
+  if (sizeBytes !== undefined) asset.sizeBytes = sizeBytes;
+
+  const contentType = toOptionalString(raw.contentType);
+  if (contentType === "model/vnd.usdz+zip") {
+    asset.contentType = contentType;
+  }
+
+  const uploadedAt = toOptionalString(raw.uploadedAt);
+  if (uploadedAt) asset.uploadedAt = uploadedAt;
+
+  const uploadedBy = toOptionalString(raw.uploadedBy);
+  if (uploadedBy) asset.uploadedBy = uploadedBy;
+
+  const approvedAt = toOptionalString(raw.approvedAt);
+  if (approvedAt) asset.approvedAt = approvedAt;
+
+  const approvedBy = toOptionalString(raw.approvedBy);
+  if (approvedBy) asset.approvedBy = approvedBy;
+
+  const sourceArV2AssetUrl = toOptionalString(raw.sourceArV2AssetUrl);
+  if (sourceArV2AssetUrl) asset.sourceArV2AssetUrl = sourceArV2AssetUrl;
+
+  const sourceArV2GeneratorVersion = toOptionalString(
+    raw.sourceArV2GeneratorVersion
+  );
+  if (sourceArV2GeneratorVersion) {
+    asset.sourceArV2GeneratorVersion = sourceArV2GeneratorVersion;
+  }
+
+  const notes = toOptionalString(raw.notes);
+  if (notes) asset.notes = notes;
+
+  const hasAudio = toOptionalBoolean(raw.hasAudio);
+  if (hasAudio !== undefined) asset.hasAudio = hasAudio;
+
+  const audioDescription = toOptionalString(raw.audioDescription);
+  if (audioDescription) asset.audioDescription = audioDescription;
+
+  const hasAnimation = toOptionalBoolean(raw.hasAnimation);
+  if (hasAnimation !== undefined) asset.hasAnimation = hasAnimation;
+
+  return asset;
+}
+
+function toOptionalQuickLookPendingAsset(
+  value: unknown
+): QuickLookPendingAsset | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const status = toOptionalQuickLookPendingAssetStatus(raw.status);
+
+  if (!status) {
+    return undefined;
+  }
+
+  const asset: QuickLookPendingAsset = { status };
+
+  const usdzUrl = toOptionalString(raw.usdzUrl);
+  if (usdzUrl) asset.usdzUrl = usdzUrl;
+
+  const objectKey = toOptionalString(raw.objectKey);
+  if (objectKey) asset.objectKey = objectKey;
+
+  const fileName = toOptionalString(raw.fileName);
+  if (fileName) asset.fileName = fileName;
+
+  const sizeBytes = toOptionalFiniteNumber(raw.sizeBytes);
+  if (sizeBytes !== undefined) asset.sizeBytes = sizeBytes;
+
+  const uploadedAt = toOptionalString(raw.uploadedAt);
+  if (uploadedAt) asset.uploadedAt = uploadedAt;
+
+  const uploadedBy = toOptionalString(raw.uploadedBy);
+  if (uploadedBy) asset.uploadedBy = uploadedBy;
+
+  const errorMessage = toOptionalString(raw.errorMessage);
+  if (errorMessage) asset.errorMessage = errorMessage;
+
+  return asset;
 }
 
 function toSafeSlugPart(value: string) {
@@ -681,6 +812,10 @@ function toArtistWorkDoc(id: string, rawData: Record<string, unknown>): ArtistWo
     arV2Asset: toOptionalArV2Asset(rawData.arV2Asset),
     arV2Request: toOptionalArV2Request(rawData.arV2Request),
     arV2Review: toOptionalArV2Review(rawData.arV2Review),
+    quickLookAsset: toOptionalQuickLookAsset(rawData.quickLookAsset),
+    quickLookPendingAsset: toOptionalQuickLookPendingAsset(
+      rawData.quickLookPendingAsset
+    ),
     displayOrder: toOptionalFiniteNumber(rawData.displayOrder),
     isPublished: toOptionalBoolean(rawData.isPublished),
     archived: toOptionalBoolean(rawData.archived),
@@ -936,6 +1071,113 @@ function buildArtistWorkEditablePayload(payload: ArtistWorkSavePayload) {
   }
 
   return editablePayload;
+}
+
+function buildQuickLookAssetUpdate(value: QuickLookAsset | null | undefined) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return deleteField();
+  }
+
+  const asset: Record<string, unknown> = {
+    status: value.status,
+  };
+
+  const usdzUrl = toOptionalString(value.usdzUrl);
+  if (usdzUrl) asset.usdzUrl = usdzUrl;
+
+  const objectKey = toOptionalString(value.objectKey);
+  if (objectKey) asset.objectKey = objectKey;
+
+  const fileName = toOptionalString(value.fileName);
+  if (fileName) asset.fileName = fileName;
+
+  const sizeBytes = toOptionalFiniteNumber(value.sizeBytes);
+  if (sizeBytes !== undefined) asset.sizeBytes = sizeBytes;
+
+  if (value.contentType === "model/vnd.usdz+zip") {
+    asset.contentType = value.contentType;
+  }
+
+  const uploadedAt = toOptionalString(value.uploadedAt);
+  if (uploadedAt) asset.uploadedAt = uploadedAt;
+
+  const uploadedBy = toOptionalString(value.uploadedBy);
+  if (uploadedBy) asset.uploadedBy = uploadedBy;
+
+  const approvedAt = toOptionalString(value.approvedAt);
+  if (approvedAt) asset.approvedAt = approvedAt;
+
+  const approvedBy = toOptionalString(value.approvedBy);
+  if (approvedBy) asset.approvedBy = approvedBy;
+
+  const sourceArV2AssetUrl = toOptionalString(value.sourceArV2AssetUrl);
+  if (sourceArV2AssetUrl) asset.sourceArV2AssetUrl = sourceArV2AssetUrl;
+
+  const sourceArV2GeneratorVersion = toOptionalString(
+    value.sourceArV2GeneratorVersion
+  );
+  if (sourceArV2GeneratorVersion) {
+    asset.sourceArV2GeneratorVersion = sourceArV2GeneratorVersion;
+  }
+
+  const notes = toOptionalString(value.notes);
+  if (notes) asset.notes = notes;
+
+  if (value.hasAudio === true) {
+    asset.hasAudio = true;
+  }
+
+  const audioDescription = toOptionalString(value.audioDescription);
+  if (audioDescription) asset.audioDescription = audioDescription;
+
+  if (value.hasAnimation === true) {
+    asset.hasAnimation = true;
+  }
+
+  return asset;
+}
+
+function buildQuickLookPendingAssetUpdate(
+  value: QuickLookPendingAsset | null | undefined
+) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return deleteField();
+  }
+
+  const asset: Record<string, unknown> = {
+    status: value.status,
+  };
+
+  const usdzUrl = toOptionalString(value.usdzUrl);
+  if (usdzUrl) asset.usdzUrl = usdzUrl;
+
+  const objectKey = toOptionalString(value.objectKey);
+  if (objectKey) asset.objectKey = objectKey;
+
+  const fileName = toOptionalString(value.fileName);
+  if (fileName) asset.fileName = fileName;
+
+  const sizeBytes = toOptionalFiniteNumber(value.sizeBytes);
+  if (sizeBytes !== undefined) asset.sizeBytes = sizeBytes;
+
+  const uploadedAt = toOptionalString(value.uploadedAt);
+  if (uploadedAt) asset.uploadedAt = uploadedAt;
+
+  const uploadedBy = toOptionalString(value.uploadedBy);
+  if (uploadedBy) asset.uploadedBy = uploadedBy;
+
+  const errorMessage = toOptionalString(value.errorMessage);
+  if (errorMessage) asset.errorMessage = errorMessage;
+
+  return asset;
 }
 
 function buildArtistWorkCreatePayload(
@@ -1577,6 +1819,18 @@ export async function updateWorkForAdmin(
 
   if (payload.docentAudioDescription !== undefined) {
     updatePayload.docentAudioDescription = payload.docentAudioDescription.trim();
+  }
+
+  const quickLookAsset = buildQuickLookAssetUpdate(payload.quickLookAsset);
+  if (quickLookAsset !== undefined) {
+    updatePayload.quickLookAsset = quickLookAsset;
+  }
+
+  const quickLookPendingAsset = buildQuickLookPendingAssetUpdate(
+    payload.quickLookPendingAsset
+  );
+  if (quickLookPendingAsset !== undefined) {
+    updatePayload.quickLookPendingAsset = quickLookPendingAsset;
   }
 
   await updateDoc(doc(db, "works", workId), updatePayload);

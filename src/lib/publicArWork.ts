@@ -5,6 +5,19 @@ export type PublicArWork = Work & {
   id?: string;
 };
 
+function isValidHttpsUrl(value?: string | null) {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function mapPublicArWork(
   firestoreWork?: ArtistWorkDoc | null,
   fallbackWork?: Work
@@ -47,6 +60,11 @@ export function mapPublicArWork(
       firestoreWork?.generatedUsdzUrl ?? fallbackWork?.generatedUsdzUrl,
     arV2Config: firestoreWork?.arV2Config ?? fallbackWork?.arV2Config,
     arV2Asset: firestoreWork?.arV2Asset ?? fallbackWork?.arV2Asset,
+    quickLookAsset:
+      firestoreWork?.quickLookAsset ?? fallbackWork?.quickLookAsset,
+    quickLookPendingAsset:
+      firestoreWork?.quickLookPendingAsset ??
+      fallbackWork?.quickLookPendingAsset,
     docentAudioEnabled:
       firestoreWork?.docentAudioEnabled ?? fallbackWork?.docentAudioEnabled,
     docentAudioUrl:
@@ -71,6 +89,27 @@ export function mapPublicArWork(
   };
 }
 
+export function getReadyQuickLookUsdzUrl(
+  work: PublicArWork | ArtistWorkDoc
+): string | null {
+  if (work.quickLookAsset?.status !== "ready") {
+    return null;
+  }
+
+  const usdzUrl = work.quickLookAsset.usdzUrl?.trim() ?? "";
+  if (!isValidHttpsUrl(usdzUrl)) {
+    return null;
+  }
+
+  return usdzUrl;
+}
+
+export function hasReadyQuickLookAsset(
+  work: PublicArWork | ArtistWorkDoc
+): boolean {
+  return Boolean(getReadyQuickLookUsdzUrl(work));
+}
+
 export function getPublicArWorkRouteSlug(work: PublicArWork) {
   return work.slug
     ? work.slug
@@ -93,4 +132,3 @@ export function getPublicArWorkHref(work: PublicArWork) {
 export function getPublicArtistHref(work?: PublicArWork | null) {
   return work?.artistSlug ? `/artists/${work.artistSlug}` : "/artists";
 }
-

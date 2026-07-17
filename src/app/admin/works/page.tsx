@@ -24,6 +24,7 @@ import { getArV2WorkflowStatus } from "@/lib/ar-v2";
 import { AdminArtworkArV2Builder } from "@/components/ar-v2/AdminArtworkArV2Builder";
 import { getWorkArV2Summary } from "@/components/ar-v2/AdminArV2Status";
 import { WorkDetailTabs, type WorkDetailTab } from "@/components/admin/works/WorkDetailTabs";
+import { AdminQuickLookAssetPanel } from "@/components/admin/works/AdminQuickLookAssetPanel";
 
 const DEFAULT_AR_SIDE_COLOR = "#111111";
 const DEFAULT_AR_DEPTH_CM = 3.5;
@@ -2005,17 +2006,24 @@ function AdminWorksPageContent() {
                     ) : null}
 
                     {activeDetailTab === "ar-v2" ? (
-                      <AdminArtworkArV2Builder
-                        key={selectedWork.id}
-                        work={selectedWork}
-                        coverImageUrl={selectedForm.coverImageUrl || selectedWork.coverImageUrl || ""}
-                        adminUid={uid ?? undefined}
-                        onUploaded={async () => {
-                          const refreshed = await getAllWorksForAdmin();
-                          setWorks(refreshed);
-                          setSaveMessage("AR v2 model saved.");
-                        }}
-                      />
+                      <div className="space-y-6">
+                        <AdminArtworkArV2Builder
+                          key={selectedWork.id}
+                          work={selectedWork}
+                          coverImageUrl={selectedForm.coverImageUrl || selectedWork.coverImageUrl || ""}
+                          adminUid={uid ?? undefined}
+                          onUploaded={async () => {
+                            const refreshed = await getAllWorksForAdmin();
+                            setWorks(refreshed);
+                            setSaveMessage("AR v2 model saved.");
+                          }}
+                        />
+
+                        <AdminQuickLookAssetPanel
+                          work={selectedWork}
+                          adminUid={uid ?? undefined}
+                        />
+                      </div>
                     ) : null}
 
                     {activeDetailTab === "docent" ? (

@@ -11,6 +11,7 @@ export type PublicArLayoutProps = {
   workHref: string;
   artistHref: string;
   publicArUrl: string;
+  quickLookUsdzUrl: string | null;
   webXrHref?: string;
   webXrSupportStatus?: WebXrSupportStatus;
   arMediaUrl: string;

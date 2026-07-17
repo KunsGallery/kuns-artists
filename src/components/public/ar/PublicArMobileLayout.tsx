@@ -15,6 +15,7 @@ export function PublicArMobileLayout({
   workHref,
   artistHref,
   arMediaUrl,
+  quickLookUsdzUrl,
   webXrHref,
   webXrSupportStatus,
   source,
@@ -57,14 +58,15 @@ export function PublicArMobileLayout({
 
           <div className="p-4 md:p-6">
             <div className="overflow-hidden rounded-[1.65rem] border border-white/10 bg-[#141414] shadow-[0_18px_60px_rgba(0,0,0,0.24)]">
-              <ArtworkModelViewer
-                objectUrl={arMediaUrl || null}
+                <ArtworkModelViewer
+                  objectUrl={arMediaUrl || null}
+                  iosSrc={quickLookUsdzUrl}
                   arDisabled={!arMediaUrl}
                   arButtonLabel="내 공간에 놓아보기"
                   showArButton
                   showToolbar={false}
                   stageClassName="min-h-[clamp(320px,92vw,560px)]"
-                viewerClassName="h-[clamp(320px,92vw,560px)]"
+                  viewerClassName="h-[clamp(320px,92vw,560px)]"
               />
             </div>
 

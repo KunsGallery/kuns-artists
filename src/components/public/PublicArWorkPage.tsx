@@ -12,6 +12,7 @@ import {
   getPublicArWorkHref,
   getPublicArWorkRouteSlug,
   getPublicArtistHref,
+  getReadyQuickLookUsdzUrl,
   mapPublicArWork,
 } from "@/lib/publicArWork";
 
@@ -153,6 +154,7 @@ export default function PublicArWorkPage({ slug }: { slug: string }) {
   const routeWork = work ?? staticWork;
   const routeSlug = routeWork ? getPublicArWorkRouteSlug(routeWork) || slug : slug;
   const readyArV2GlbUrl = routeWork ? getReadyArV2GlbUrl(routeWork) : "";
+  const readyQuickLookUsdzUrl = work ? getReadyQuickLookUsdzUrl(work) : null;
   const webXrHref =
     webXrSupport.status === "supported" && routeSlug && readyArV2GlbUrl
       ? `/ar/${routeSlug}/webxr`
@@ -254,6 +256,7 @@ export default function PublicArWorkPage({ slug }: { slug: string }) {
         webXrHref={webXrHref}
         webXrSupportStatus={webXrSupport.status}
         arMediaUrl={arMediaUrl}
+        quickLookUsdzUrl={readyQuickLookUsdzUrl}
         source={source}
         debugMessage={loadErrorMessage || undefined}
         docentAudioEnabled={docentAudioEnabled}

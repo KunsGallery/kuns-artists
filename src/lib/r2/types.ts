@@ -4,6 +4,7 @@ export type R2UploadTarget =
   | "exhibition-image"
   | "glb"
   | "ar-model"
+  | "quick-look"
   | "usdz"
   | "cv";
 
@@ -13,6 +14,7 @@ export type R2PresignRequest = {
   target: R2UploadTarget;
   artistSlug?: string;
   workSlug?: string;
+  workId?: string;
 };
 
 export type R2PresignResponse = {

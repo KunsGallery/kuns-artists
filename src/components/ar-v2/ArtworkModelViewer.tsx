@@ -8,6 +8,7 @@ import type {
 
 type Props = {
   objectUrl: string | null;
+  iosSrc?: string | null;
   arDisabled: boolean;
   onEvent?: (type: string, message: string) => void;
   onLoadStatusChange?: (status: ModelViewerLoadStatus, message?: string) => void;
@@ -48,6 +49,7 @@ function getEventErrorMessage(event: Event) {
 
 export function ArtworkModelViewer({
   objectUrl,
+  iosSrc = null,
   arDisabled,
   onEvent = () => undefined,
   onLoadStatusChange,
@@ -227,9 +229,10 @@ export function ArtworkModelViewer({
           </div>
         ) : (
           <model-viewer
-            key={objectUrl}
+            key={`${objectUrl || "no-object"}-${iosSrc || "auto-usdz"}`}
             ref={setViewerNode}
             src={objectUrl}
+            ios-src={iosSrc || undefined}
             alt="3D preview of the artwork"
             camera-controls
             ar={!arDisabled}

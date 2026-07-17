@@ -23,6 +23,7 @@ declare global {
           "ar-modes"?: string;
           "ar-placement"?: "wall" | "floor";
           "ar-scale"?: "auto" | "fixed";
+          "ios-src"?: string;
           "camera-controls"?: boolean;
           "camera-orbit"?: string;
           "shadow-intensity"?: string;

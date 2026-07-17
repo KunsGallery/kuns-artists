@@ -14,10 +14,23 @@ export const R2_IMAGE_UPLOAD_CONTENT_TYPES = [
 ] as const;
 
 export const R2_IMAGE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+export const R2_QUICK_LOOK_UPLOAD_CONTENT_TYPES = [
+  "model/vnd.usdz+zip",
+  "model/usd",
+  "application/octet-stream",
+] as const;
+export const MAX_QUICK_LOOK_USDZ_BYTES = 100 * 1024 * 1024;
+export const RECOMMENDED_QUICK_LOOK_USDZ_BYTES = 30 * 1024 * 1024;
 
 function isAllowedImageContentType(contentType: string) {
   return (
     R2_IMAGE_UPLOAD_CONTENT_TYPES as readonly string[]
+  ).includes(contentType);
+}
+
+function isAllowedQuickLookContentType(contentType: string) {
+  return (
+    R2_QUICK_LOOK_UPLOAD_CONTENT_TYPES as readonly string[]
   ).includes(contentType);
 }
 
@@ -46,7 +59,8 @@ async function getCurrentIdToken() {
 }
 
 export async function requestR2UploadUrl(
-  payload: R2PresignRequest
+  payload: R2PresignRequest,
+  authorization?: string
 ): Promise<R2PresignResponse> {
   let response: Response;
 
@@ -55,6 +69,7 @@ export async function requestR2UploadUrl(
       method: "POST",
       headers: {
         "content-type": "application/json",
+        ...(authorization ? { authorization } : {}),
       },
       body: JSON.stringify(payload),
     });
@@ -79,9 +94,10 @@ export async function requestR2UploadUrl(
 
 export async function uploadBlobToR2(
   blob: Blob,
-  payload: R2PresignRequest
+  payload: R2PresignRequest,
+  authorization?: string
 ): Promise<R2UploadResult> {
-  const presigned = await requestR2UploadUrl(payload);
+  const presigned = await requestR2UploadUrl(payload, authorization);
 
   try {
     const uploadResponse = await fetch(presigned.uploadUrl, {
@@ -149,28 +165,91 @@ export async function uploadGlbFileToR2({
   }
 }
 
-export async function uploadUsdzFileToR2({
-  blob,
-  filename,
+function getNormalizedQuickLookContentType(contentType: string) {
+  return contentType.trim() || "application/octet-stream";
+}
+
+function validateQuickLookFileName(filename: string) {
+  if (!filename.toLowerCase().endsWith(".usdz")) {
+    throw new Error(".usdz 파일만 등록할 수 있습니다.");
+  }
+}
+
+export async function uploadQuickLookUsdzFileToR2({
+  file,
   artistSlug,
   workSlug,
+  workId,
 }: {
-  blob: Blob;
-  filename: string;
+  file: File;
   artistSlug?: string;
   workSlug?: string;
+  workId?: string;
 }): Promise<R2UploadResult> {
-  try {
-    return await uploadBlobToR2(blob, {
-      filename,
-      contentType: "model/vnd.usdz+zip",
-      target: "usdz",
-      artistSlug,
-      workSlug,
-    });
-  } catch {
-    throw new Error("AR 준비용 USDZ 파일 업로드에 실패했습니다. 잠시 후 다시 시도해주세요.");
+  const contentType = getNormalizedQuickLookContentType(file.type);
+
+  if (!isAllowedQuickLookContentType(contentType)) {
+    throw new Error(
+      "USDZ 파일은 model/vnd.usdz+zip, model/usd, application/octet-stream 형식만 업로드할 수 있습니다."
+    );
   }
+
+  if (file.size > MAX_QUICK_LOOK_USDZ_BYTES) {
+    throw new Error("파일 크기는 100MB 이하여야 합니다.");
+  }
+
+  validateQuickLookFileName(file.name);
+
+  try {
+    const token = await getCurrentIdToken();
+    return await uploadBlobToR2(
+      file,
+      {
+        filename: file.name,
+        contentType,
+        target: "quick-look",
+        artistSlug,
+        workSlug,
+        workId,
+      },
+      `Bearer ${token}`
+    );
+  } catch (error) {
+    if (error instanceof Error) {
+      if (
+        error.message === ".usdz 파일만 등록할 수 있습니다." ||
+        error.message === "파일 크기는 100MB 이하여야 합니다." ||
+        error.message ===
+          "USDZ 파일은 model/vnd.usdz+zip, model/usd, application/octet-stream 형식만 업로드할 수 있습니다." ||
+        error.message === "로그인이 필요합니다."
+      ) {
+        throw error;
+      }
+    }
+
+    throw new Error(
+      "USDZ 파일 업로드에 실패했습니다. 잠시 후 다시 시도해주세요."
+    );
+  }
+}
+
+export async function uploadUsdzFileToR2({
+  file,
+  artistSlug,
+  workSlug,
+  workId,
+}: {
+  file: File;
+  artistSlug?: string;
+  workSlug?: string;
+  workId?: string;
+}): Promise<R2UploadResult> {
+  return uploadQuickLookUsdzFileToR2({
+    file,
+    artistSlug,
+    workSlug,
+    workId,
+  });
 }
 
 export async function uploadImageFileToR2({
