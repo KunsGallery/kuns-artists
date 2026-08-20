@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { getArtistBySlug } from "@/data/artists";
 import PublicArtistDetail from "@/components/public/PublicArtistDetail";
+import { getPublicArtistBySlug } from "@/lib/firebase/firestore";
+import { resolveProfileImageUrl } from "@/lib/artistCatalog";
 
 type PageProps = {
   params: Promise<{
@@ -10,11 +12,16 @@ type PageProps = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const artist = getArtistBySlug(slug);
-  const title = artist ? `${artist.name} | Artist Archive` : "Artist Archive";
+  const staticArtist = getArtistBySlug(slug);
+  const firestoreArtist = await getPublicArtistBySlug(slug).catch(() => null);
+  const artistName = firestoreArtist?.name ?? staticArtist?.name;
+  const artistTagline = firestoreArtist?.tagline ?? staticArtist?.tagline;
+  const artistBio = firestoreArtist?.bio ?? staticArtist?.bio;
+  const profileImage = resolveProfileImageUrl(firestoreArtist, staticArtist);
+  const title = artistName ? `${artistName} | Artist Archive` : "Artist Archive";
   const description =
-    artist?.tagline ||
-    artist?.bio ||
+    artistTagline ||
+    artistBio ||
     "Official artist archive pages, selected works, and exhibition records for KÜN’S Gallery.";
 
   return {
@@ -24,13 +31,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title,
       description,
       type: "profile",
-      images: artist?.profileImage ? [artist.profileImage] : undefined,
+      images: profileImage ? [profileImage] : undefined,
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: artist?.profileImage ? [artist.profileImage] : undefined,
+      images: profileImage ? [profileImage] : undefined,
     },
   };
 }

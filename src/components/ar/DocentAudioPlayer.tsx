@@ -27,9 +27,12 @@ export default function DocentAudioPlayer({
 }: DocentAudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [hasError, setHasError] = useState(false);
+  const [audioState, setAudioState] = useState({
+    currentTime: 0,
+    duration: 0,
+    hasError: false,
+  });
+  const { currentTime, duration, hasError } = audioState;
 
   const progress = useMemo(() => {
     if (!duration) {
@@ -42,21 +45,8 @@ export default function DocentAudioPlayer({
   useEffect(() => {
     const audio = audioRef.current;
 
-    if (!audio) {
-      return;
-    }
-
-    audio.pause();
-    audio.currentTime = 0;
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-    setHasError(false);
-  }, [src]);
-
-  useEffect(() => {
     return () => {
-      audioRef.current?.pause();
+      audio?.pause();
     };
   }, []);
 
@@ -76,7 +66,7 @@ export default function DocentAudioPlayer({
         setIsPlaying(false);
       }
     } catch {
-      setHasError(true);
+      setAudioState((state) => ({ ...state, hasError: true }));
       setIsPlaying(false);
     }
   }
@@ -90,7 +80,7 @@ export default function DocentAudioPlayer({
     }
 
     audio.currentTime = nextTime;
-    setCurrentTime(nextTime);
+    setAudioState((state) => ({ ...state, currentTime: nextTime }));
   }
 
   return (
@@ -120,19 +110,37 @@ export default function DocentAudioPlayer({
 
       <div className="mt-5 rounded-[1.4rem] border border-white/10 bg-black/25 px-4 py-4">
         <audio
+          key={src}
           ref={audioRef}
           src={src}
           preload="metadata"
-          onLoadedMetadata={(event) => {
-            setDuration(event.currentTarget.duration || 0);
-            setHasError(false);
+          onLoadStart={() => {
+            setIsPlaying(false);
+            setAudioState({
+              currentTime: 0,
+              duration: 0,
+              hasError: false,
+            });
           }}
-          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onLoadedMetadata={(event) => {
+            setIsPlaying(false);
+            setAudioState({
+              currentTime: 0,
+              duration: event.currentTarget.duration || 0,
+              hasError: false,
+            });
+          }}
+          onTimeUpdate={(event) =>
+            setAudioState((state) => ({
+              ...state,
+              currentTime: event.currentTarget.currentTime,
+            }))
+          }
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
           onError={() => {
-            setHasError(true);
+            setAudioState((state) => ({ ...state, hasError: true }));
             setIsPlaying(false);
           }}
         />

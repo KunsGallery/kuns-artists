@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getArtistBySlug } from "@/data/artists";
 import { getWorkBySlug as getStaticWorkBySlug } from "@/data/works";
 import PublicWorkDetailPage from "@/components/public/PublicWorkDetailPage";
+import { getWorkBySlugForPublicRoute } from "@/lib/firebase/firestore";
 
 type PageProps = {
   params: Promise<{
@@ -11,16 +12,26 @@ type PageProps = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const work = getStaticWorkBySlug(slug);
-  const artist = work ? getArtistBySlug(work.artistSlug) : undefined;
+  const staticWork = getStaticWorkBySlug(slug);
+  const firestoreResult = await getWorkBySlugForPublicRoute(slug).catch(
+    () => null
+  );
+  const firestoreWork =
+    firestoreResult?.work && !firestoreResult.unpublished
+      ? firestoreResult.work
+      : null;
+  const work = firestoreWork ?? staticWork;
+  const artistSlug = firestoreWork?.artistSlug ?? staticWork?.artistSlug;
+  const artist = artistSlug ? getArtistBySlug(artistSlug) : undefined;
+  const artistName = firestoreWork?.artistName ?? artist?.name ?? staticWork?.artistName;
   const title = work
-    ? `${work.title} | ${artist?.name ?? work.artistName} | Artwork`
+    ? `${work.title} | ${artistName ?? "KÜN’S Gallery"} | Artwork`
     : "Artwork | KÜN’S Gallery";
   const description =
     work?.description ||
     work?.medium ||
     "Official artwork detail page for KÜN’S Gallery selected works.";
-  const image = work?.coverImage ?? work?.coverImageUrl;
+  const image = firestoreWork?.coverImageUrl ?? staticWork?.coverImage ?? staticWork?.coverImageUrl;
 
   return {
     title,

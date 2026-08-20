@@ -1027,10 +1027,6 @@ async function updateArtistAdminDocument(
 ) {
   const cleanPayload = toArtistAdminPayload(payload);
 
-  if (process.env.NODE_ENV !== "production") {
-    console.log("Admin artist save payload", cleanPayload);
-  }
-
   await updateDoc(doc(db, "artists", docId), {
     ...cleanPayload,
     updatedAt: serverTimestamp(),
@@ -1481,9 +1477,22 @@ export async function getAllArtistsForAdmin(): Promise<ArtistDoc[]> {
 }
 
 export async function getAllArtistsForPublicDisplay(): Promise<ArtistDoc[]> {
-  return (await fetchAllArtistDocsFromServer()).filter(
-    (artist) => artist.status === "active"
+  const snapshot = await getDocsFromServer(
+    query(collection(db, "artists"), where("status", "==", "active"))
   );
+
+  return snapshot.docs
+    .map((document) =>
+      toArtistDoc(document.id, document.data() as Record<string, unknown>)
+    )
+    .sort((left, right) => {
+      const typeOrder =
+        left.type === right.type ? 0 : left.type === "represented" ? -1 : 1;
+
+      if (typeOrder !== 0) return typeOrder;
+
+      return (left.name ?? "").localeCompare(right.name ?? "", "en");
+    });
 }
 
 export async function getPublicRepresentedArtists(): Promise<ArtistDoc[]> {
@@ -1634,7 +1643,19 @@ export async function getWorkBySlugForPublicRoute(slug: string): Promise<{
 export async function getPublicWorksForArtistSlug(
   artistSlug: string
 ): Promise<ArtistWorkDoc[]> {
-  const snapshot = await getDocs(collection(db, "works"));
+  const normalizedArtistSlug = artistSlug.trim();
+
+  if (!normalizedArtistSlug) {
+    return [];
+  }
+
+  const snapshot = await getDocs(
+    query(
+      collection(db, "works"),
+      where("artistSlug", "==", normalizedArtistSlug),
+      where("isPublished", "==", true)
+    )
+  );
 
   return snapshot.docs
     .map((document) =>
@@ -1642,7 +1663,7 @@ export async function getPublicWorksForArtistSlug(
     )
     .filter(
       (work) =>
-        work.artistSlug === artistSlug &&
+        work.artistSlug === normalizedArtistSlug &&
         work.isPublished === true &&
         work.archived !== true
     )
