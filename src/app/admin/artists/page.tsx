@@ -43,6 +43,7 @@ const EMPTY_PROJECT_FORM: ArtistFormValues = {
   bioEn: "",
   location: "",
   profileImageUrl: "",
+  profileImagePosition: "center center",
   instagramUrl: "",
   youtubeUrl: "",
   cvUrl: "",
@@ -74,6 +75,7 @@ function toFormValues(artist: ArtistDoc): ArtistFormValues {
     bioEn: artist.bioEn || "",
     location: artist.location || "",
     profileImageUrl: artist.profileImageUrl || "",
+    profileImagePosition: artist.profileImagePosition || "center center",
     instagramUrl: artist.instagramUrl || "",
     youtubeUrl: artist.youtubeUrl || "",
     cvUrl: artist.cvUrl || "",
@@ -1966,6 +1968,33 @@ export default function AdminArtistsPage() {
                       artistSlug={selectedArtist?.slug}
                     />
 
+                    <div className="grid gap-5 md:grid-cols-[0.75fr_1fr]">
+                      <SelectField
+                        label="Profile Image Position"
+                        value={selectedForm.profileImagePosition || "center center"}
+                        onChange={(value) =>
+                          updateSelectedField("profileImagePosition", value)
+                        }
+                      >
+                        <option value="center center">Center</option>
+                        <option value="center top">Top</option>
+                        <option value="center 28%">Upper Portrait</option>
+                        <option value="center 38%">Face Higher</option>
+                        <option value="center 62%">Face Lower</option>
+                        <option value="center bottom">Bottom</option>
+                        <option value="left center">Left</option>
+                        <option value="right center">Right</option>
+                      </SelectField>
+                      <TextField
+                        label="Custom CSS Position"
+                        value={selectedForm.profileImagePosition || ""}
+                        onChange={(value) =>
+                          updateSelectedField("profileImagePosition", value)
+                        }
+                        placeholder="center 38%"
+                      />
+                    </div>
+
                     <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-5 md:p-6">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
@@ -2936,6 +2965,33 @@ export default function AdminArtistsPage() {
                   target="profile"
                   artistSlug={projectForm.slug}
                 />
+
+                <div className="grid gap-5 md:grid-cols-[0.75fr_1fr]">
+                  <SelectField
+                    label="Profile Image Position"
+                    value={projectForm.profileImagePosition || "center center"}
+                    onChange={(value) =>
+                      updateProjectField("profileImagePosition", value)
+                    }
+                  >
+                    <option value="center center">Center</option>
+                    <option value="center top">Top</option>
+                    <option value="center 28%">Upper Portrait</option>
+                    <option value="center 38%">Face Higher</option>
+                    <option value="center 62%">Face Lower</option>
+                    <option value="center bottom">Bottom</option>
+                    <option value="left center">Left</option>
+                    <option value="right center">Right</option>
+                  </SelectField>
+                  <TextField
+                    label="Custom CSS Position"
+                    value={projectForm.profileImagePosition || ""}
+                    onChange={(value) =>
+                      updateProjectField("profileImagePosition", value)
+                    }
+                    placeholder="center 38%"
+                  />
+                </div>
 
                 <div className="grid gap-5 md:grid-cols-2">
                   <TextField

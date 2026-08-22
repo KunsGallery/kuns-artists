@@ -190,6 +190,21 @@ img {
   letter-spacing: -0.055em;
 }
 
+.gallery-wordmark {
+  font-family:
+    "Big Caslon",
+    "Big Caslon FB",
+    "Libre Caslon Display",
+    "Libre Baskerville",
+    Georgia,
+    "Times New Roman",
+    "Apple SD Gothic Neo",
+    serif;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  text-transform: none;
+}
+
 .luxury-container {
   width: min(100% - 2.5rem, 1560px);
   margin-inline: auto;

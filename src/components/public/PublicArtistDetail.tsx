@@ -62,6 +62,77 @@ type PublicArtistDetail = {
   archives?: Artist["archives"];
 };
 
+type ArtistPageTheme = {
+  page: string;
+  panel: string;
+  panelSoft: string;
+  text: string;
+  muted: string;
+  accent: string;
+  accentSoft: string;
+  heroImage: string;
+  moodLine: string;
+};
+
+const defaultArtistPageTheme: ArtistPageTheme = {
+  page: "#ebe5db",
+  panel: "rgba(255, 252, 246, 0.78)",
+  panelSoft: "rgba(255, 252, 246, 0.56)",
+  text: "#171411",
+  muted: "rgba(23, 20, 17, 0.62)",
+  accent: "#F37021",
+  accentSoft: "rgba(243, 112, 33, 0.12)",
+  heroImage: "rgba(23, 20, 17, 0.08)",
+  moodLine: "Official artist archive",
+};
+
+const artistPageThemes: Record<string, ArtistPageTheme> = {
+  "jessup-choi": {
+    page: "#e7e1d8",
+    panel: "rgba(252, 248, 241, 0.78)",
+    panelSoft: "rgba(252, 248, 241, 0.54)",
+    text: "#191512",
+    muted: "rgba(25, 21, 18, 0.62)",
+    accent: "#D95D2A",
+    accentSoft: "rgba(217, 93, 42, 0.12)",
+    heroImage: "rgba(31, 24, 20, 0.09)",
+    moodLine: "Compressed emotion, trace, release",
+  },
+  "jung-boram": {
+    page: "#eee9df",
+    panel: "rgba(255, 252, 245, 0.8)",
+    panelSoft: "rgba(255, 252, 245, 0.58)",
+    text: "#171511",
+    muted: "rgba(23, 21, 17, 0.62)",
+    accent: "#B46A35",
+    accentSoft: "rgba(180, 106, 53, 0.13)",
+    heroImage: "rgba(30, 24, 18, 0.08)",
+    moodLine: "Writing as rhythm and sensation",
+  },
+  "kim-hwan": {
+    page: "#f0eadb",
+    panel: "rgba(255, 252, 242, 0.82)",
+    panelSoft: "rgba(255, 252, 242, 0.6)",
+    text: "#19160f",
+    muted: "rgba(25, 22, 15, 0.62)",
+    accent: "#F37021",
+    accentSoft: "rgba(243, 112, 33, 0.14)",
+    heroImage: "rgba(91, 63, 28, 0.1)",
+    moodLine: "Light, color, inner resonance",
+  },
+  "rosa-kang": {
+    page: "#e5e2dc",
+    panel: "rgba(250, 247, 241, 0.78)",
+    panelSoft: "rgba(250, 247, 241, 0.54)",
+    text: "#161513",
+    muted: "rgba(22, 21, 19, 0.62)",
+    accent: "#C65E46",
+    accentSoft: "rgba(198, 94, 70, 0.12)",
+    heroImage: "rgba(28, 25, 23, 0.08)",
+    moodLine: "Instability, repetition, perception",
+  },
+};
+
 type SeedArtistWithCollections = Artist & {
   cvItems?: ArtistCvItem[];
   archiveLinks?: ArtistArchiveLink[];
@@ -488,6 +559,9 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
   const heroTagline =
     artist?.tagline?.trim() || "Selected works from the artist’s current archive.";
   const heroLocation = artist?.location?.trim() || "";
+  const pageTheme = artist
+    ? artistPageThemes[artist.slug] ?? defaultArtistPageTheme
+    : defaultArtistPageTheme;
 
   useEffect(() => {
     return () => {
@@ -498,12 +572,29 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
   }, []);
 
   async function handleSharePortfolio() {
+    const shareUrl = window.location.href;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: artist?.name
+            ? `${artist.name} | KÜN’S Gallery`
+            : "KÜN’S Gallery Artist Archive",
+          url: shareUrl,
+        });
+        setPortfolioShareMessage("공유 창을 열었습니다.");
+        return;
+      } catch {
+        // Continue to clipboard fallback when native share is cancelled or blocked.
+      }
+    }
+
     try {
-      await navigator.clipboard.writeText(window.location.href);
-      setPortfolioShareMessage("Portfolio link copied.");
+      await navigator.clipboard.writeText(shareUrl);
+      setPortfolioShareMessage("포트폴리오 링크를 복사했습니다.");
     } catch {
       setPortfolioShareMessage(
-        "링크 복사에 실패했습니다. URL을 직접 복사해주세요."
+        `복사가 막혀 있습니다. 주소창의 URL을 복사해주세요: ${shareUrl}`
       );
     } finally {
       if (shareMessageTimeoutRef.current !== null) {
@@ -519,24 +610,24 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
 
   if (isLoading || hasStaleArtist) {
     return (
-      <main className="theme-dark min-h-screen bg-[#111111] text-[#F7F1E8]">
+      <main className="min-h-screen bg-[#eee6d9] text-[#171411]">
         <div className="mx-auto flex min-h-screen max-w-7xl items-center px-5 py-12 md:px-8">
-          <div className="w-full rounded-[2.5rem] border border-white/10 bg-white/[0.045] p-6 md:p-10">
+          <div className="w-full rounded-[2.5rem] border border-black/10 bg-white/45 p-6 shadow-[0_30px_120px_rgba(58,42,24,0.12)] md:p-10">
             <div className="grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-end">
               <div className="space-y-4">
-                <div className="h-3 w-24 rounded-full bg-white/10" />
-                <div className="h-16 w-4/5 rounded-[1.5rem] bg-white/10 md:w-3/4" />
-                <div className="h-5 w-2/3 rounded-full bg-white/8" />
-                <div className="h-5 w-1/2 rounded-full bg-white/8" />
+                <div className="h-3 w-24 rounded-full bg-black/10" />
+                <div className="h-16 w-4/5 rounded-[1.5rem] bg-black/10 md:w-3/4" />
+                <div className="h-5 w-2/3 rounded-full bg-black/8" />
+                <div className="h-5 w-1/2 rounded-full bg-black/8" />
                 <div className="mt-8 flex flex-wrap gap-2">
-                  <div className="h-11 w-28 rounded-full bg-white/10" />
-                  <div className="h-11 w-24 rounded-full bg-white/8" />
-                  <div className="h-11 w-32 rounded-full bg-white/8" />
+                  <div className="h-11 w-28 rounded-full bg-black/10" />
+                  <div className="h-11 w-24 rounded-full bg-black/8" />
+                  <div className="h-11 w-32 rounded-full bg-black/8" />
                 </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-white/[0.05]">
-                <div className="aspect-[4/5] w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.12),transparent_36%)]" />
+              <div className="relative overflow-hidden rounded-[2.3rem] border border-black/10 bg-white/35">
+                <div className="aspect-[4/5] w-full animate-pulse bg-[linear-gradient(180deg,rgba(255,255,255,0.45),rgba(255,255,255,0.12)),radial-gradient(circle_at_20%_20%,rgba(217,121,61,0.14),transparent_36%)]" />
               </div>
             </div>
           </div>
@@ -547,21 +638,21 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
 
   if (!artist) {
     return (
-      <main className="theme-dark min-h-screen bg-[#111111] text-[#F7F1E8]">
+      <main className="min-h-screen bg-[#eee6d9] text-[#171411]">
         <div className="mx-auto flex min-h-screen max-w-4xl items-center px-5 py-12 md:px-8">
-          <div className="w-full rounded-[2.5rem] border border-white/10 bg-white/[0.045] p-8 md:p-10">
-            <p className="text-[11px] uppercase tracking-[0.34em] text-white/45">
+          <div className="w-full rounded-[2.5rem] border border-black/10 bg-white/45 p-8 shadow-[0_30px_120px_rgba(58,42,24,0.12)] md:p-10">
+            <p className="text-[11px] uppercase tracking-[0.34em] text-black/45">
               KÜN’S Gallery
             </p>
             <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] md:text-5xl">
               작가 정보를 찾을 수 없습니다.
             </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/65">
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-black/65">
               등록된 작가 정보를 찾지 못했습니다.
             </p>
             <Link
               href="/artists"
-              className="mt-8 inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.1]"
+              className="mt-8 inline-flex h-11 items-center rounded-full border border-black/10 bg-white/45 px-5 text-sm transition hover:border-black/20 hover:bg-white/75"
             >
               Back to Artists
             </Link>
@@ -572,20 +663,28 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
   }
 
   return (
-    <main className="theme-dark min-h-screen bg-[#111111] text-[#F7F1E8]">
+    <main
+      className="min-h-screen"
+      style={{
+        background:
+          `radial-gradient(circle at 12% 8%, ${pageTheme.accentSoft}, transparent 28rem), ` +
+          `linear-gradient(180deg, ${pageTheme.page} 0%, #f8f3ea 52%, ${pageTheme.page} 100%)`,
+        color: pageTheme.text,
+      }}
+    >
       <div className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-8">
         <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <Link
             href="/"
-            className="text-[11px] uppercase tracking-[0.34em] text-white/45"
+            className="gallery-wordmark text-[1.45rem] leading-none opacity-80 transition hover:opacity-100"
           >
-            KÜN’S GALLERY
+            Kün&apos;s Gallery
           </Link>
 
           <div className="flex flex-wrap items-center gap-2 md:gap-3">
             <Link
               href="/artists"
-              className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.1]"
+              className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/40 px-5 text-sm transition hover:border-black/20 hover:bg-white/70"
             >
               Back to Artists
             </Link>
@@ -594,35 +693,48 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
       </div>
 
       <div className="mx-auto max-w-7xl px-5 pb-20 md:px-8">
-        <section className="relative overflow-hidden rounded-[2.6rem] border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03)),radial-gradient(circle_at_80%_10%,rgba(243,112,33,0.22),transparent_28%),radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.08),transparent_24%),#171717] p-6 shadow-[0_30px_120px_rgba(0,0,0,0.35)] md:p-10 lg:p-12">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(243,112,33,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(255,255,255,0.05),transparent_28%)]" />
+        <section
+          className="relative overflow-hidden rounded-[2.6rem] border border-black/10 p-6 shadow-[0_30px_120px_rgba(58,42,24,0.16)] md:p-10 lg:p-12"
+          style={{
+            background:
+              `linear-gradient(145deg, ${pageTheme.panel} 0%, ${pageTheme.panelSoft} 58%, rgba(255,255,255,0.42) 100%)`,
+          }}
+        >
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                `radial-gradient(circle at top left, ${pageTheme.accentSoft}, transparent 32%), ` +
+                "radial-gradient(circle at bottom right, rgba(255,255,255,0.42), transparent 30%)",
+            }}
+          />
 
           <div className="relative grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-end">
             <div className="space-y-6">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-[10px] uppercase tracking-[0.34em] text-white/50">
+                <span className="inline-flex rounded-full border border-black/10 bg-white/40 px-3 py-1 text-[10px] uppercase tracking-[0.34em] opacity-60">
                   KÜN’S GALLERY
                 </span>
               </div>
 
               <div className="max-w-4xl">
-                <h1 className="text-5xl font-semibold tracking-[-0.05em] text-[#F7F1E8] md:text-7xl md:leading-[0.92]">
+                <h1 className="text-5xl font-semibold tracking-[-0.05em] md:text-7xl md:leading-[0.92]">
                   {artist.name}
                 </h1>
                 {artist.nameKo ? (
-                  <p className="mt-4 text-lg text-white/62 md:text-xl">
+                  <p className="mt-4 text-lg opacity-65 md:text-xl">
                     {artist.nameKo}
                   </p>
                 ) : null}
               </div>
 
               <div className="max-w-3xl space-y-4">
-                <p className="text-lg leading-8 text-white/76 md:text-[1.15rem] md:leading-9">
+                <p className="text-lg leading-8 opacity-75 md:text-[1.15rem] md:leading-9">
                   {heroTagline}
                 </p>
 
                 {heroLocation ? (
-                  <p className="text-sm uppercase tracking-[0.22em] text-white/48">
+                  <p className="text-sm uppercase tracking-[0.22em] opacity-55">
                     {heroLocation}
                   </p>
                 ) : null}
@@ -631,7 +743,8 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
               <div className="flex flex-wrap gap-2">
                 <Link
                   href="#works"
-                  className="inline-flex h-11 items-center rounded-full border border-[#F37021]/45 bg-[#F37021] px-5 text-sm font-medium text-[#171717] transition hover:bg-[#ff7a2f]"
+                  className="inline-flex h-11 items-center rounded-full px-5 text-sm font-medium text-white shadow-[0_10px_28px_rgba(0,0,0,0.12)] transition hover:brightness-110"
+                  style={{ backgroundColor: pageTheme.accent }}
                 >
                   View Works
                 </Link>
@@ -640,7 +753,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                     href={portfolioPdfHref}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.045] px-5 text-sm text-white/76 transition hover:border-[#F37021]/40 hover:bg-[#F37021]/12 hover:text-[#F7F1E8]"
+                    className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/35 px-5 text-sm opacity-75 transition hover:bg-white/65 hover:opacity-100"
                   >
                     {portfolioPdfLabel}
                   </a>
@@ -648,13 +761,13 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                 <button
                   type="button"
                   onClick={handleSharePortfolio}
-                  className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.045] px-5 text-sm text-white/76 transition hover:border-[#F37021]/40 hover:bg-[#F37021]/12 hover:text-[#F7F1E8]"
+                  className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/35 px-5 text-sm opacity-75 transition hover:bg-white/65 hover:opacity-100"
                 >
                   Share Portfolio
                 </button>
                 <Link
                   href="/artists"
-                  className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm text-[#F7F1E8] transition hover:border-white/20 hover:bg-white/[0.1]"
+                  className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/35 px-5 text-sm transition hover:bg-white/65"
                 >
                   Back to Artists
                 </Link>
@@ -663,7 +776,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                     href={websiteHref}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.045] px-5 text-sm text-white/76 transition hover:border-[#F37021]/40 hover:bg-[#F37021]/12 hover:text-[#F7F1E8]"
+                    className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/35 px-5 text-sm opacity-75 transition hover:bg-white/65 hover:opacity-100"
                   >
                     Website
                   </a>
@@ -678,7 +791,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                       href={item.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/[0.045] px-4 text-[11px] uppercase tracking-[0.22em] text-white/70 transition hover:border-[#F37021]/40 hover:bg-[#F37021]/12 hover:text-[#F7F1E8]"
+                      className="inline-flex h-10 items-center rounded-full border border-black/10 bg-white/35 px-4 text-[11px] uppercase tracking-[0.22em] opacity-65 transition hover:bg-white/65 hover:opacity-100"
                     >
                       {item.label}
                     </a>
@@ -687,7 +800,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
               ) : null}
 
               {portfolioShareMessage ? (
-                <p className="max-w-2xl text-xs leading-6 text-white/55">
+                <p className="max-w-2xl rounded-2xl border border-black/10 bg-white/45 px-4 py-3 text-xs leading-6 shadow-[0_10px_30px_rgba(58,42,24,0.08)]">
                   {portfolioShareMessage}
                 </p>
               ) : null}
@@ -707,8 +820,18 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
 
             <div className="lg:justify-self-end">
               {featuredWork?.imageUrl ? (
-                <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-white/[0.05] shadow-[0_28px_100px_rgba(0,0,0,0.45)]">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.18),transparent_28%),radial-gradient(circle_at_80%_8%,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%,rgba(0,0,0,0.16))]" />
+                <div
+                  className="relative overflow-hidden rounded-[2.3rem] border border-black/10 shadow-[0_28px_100px_rgba(58,42,24,0.2)]"
+                  style={{ backgroundColor: pageTheme.heroImage }}
+                >
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background:
+                        `radial-gradient(circle at 20% 20%, ${pageTheme.accentSoft}, transparent 28%), ` +
+                        "linear-gradient(180deg,rgba(255,255,255,0.08),transparent 38%,rgba(0,0,0,0.14))",
+                    }}
+                  />
                   <div className="relative aspect-[4/5] w-full min-w-0 max-w-none lg:w-[430px]">
                     <img
                       src={featuredWork.imageUrl}
@@ -716,8 +839,8 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                       className="h-full w-full object-cover"
                     />
                     <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.72))] p-5">
-                      <p className="text-[10px] uppercase tracking-[0.36em] text-white/50">
-                        Featured Work
+                      <p className="text-[10px] uppercase tracking-[0.36em] text-white/62">
+                        {pageTheme.moodLine}
                       </p>
                       <p className="mt-2 text-lg font-medium tracking-[-0.03em] text-[#F7F1E8]">
                         {featuredWork.title || "Untitled"}
@@ -746,8 +869,18 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                   </div>
                 </div>
               ) : (
-                <div className="relative overflow-hidden rounded-[2.3rem] border border-white/10 bg-white/[0.05] shadow-[0_28px_100px_rgba(0,0,0,0.45)]">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.18),transparent_28%),radial-gradient(circle_at_80%_8%,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%,rgba(0,0,0,0.16))]" />
+                <div
+                  className="relative overflow-hidden rounded-[2.3rem] border border-black/10 shadow-[0_28px_100px_rgba(58,42,24,0.2)]"
+                  style={{ backgroundColor: pageTheme.heroImage }}
+                >
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background:
+                        `radial-gradient(circle at 20% 20%, ${pageTheme.accentSoft}, transparent 28%), ` +
+                        "linear-gradient(180deg,rgba(255,255,255,0.08),transparent 38%,rgba(0,0,0,0.14))",
+                    }}
+                  />
                   <div className="relative aspect-[4/5] w-full min-w-0 max-w-none lg:w-[430px]">
                     {artist.profileImage ? (
                       <img
@@ -841,7 +974,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
           </section>
         ) : null}
 
-        <section id="works" className="border-t border-white/10 py-16 md:py-24">
+        <section id="works" className="border-t border-black/10 py-16 md:py-24">
           <SectionHeading
             label="SELECTED WORKS"
             title="Works"
@@ -1037,13 +1170,13 @@ function SectionHeading({
 }) {
   return (
     <div className="max-w-3xl space-y-4">
-      <p className="text-[11px] uppercase tracking-[0.34em] text-white/45">
+      <p className="text-[11px] uppercase tracking-[0.34em] text-black/45">
         {label}
       </p>
-      <h2 className="text-3xl font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-5xl">
+      <h2 className="text-3xl font-semibold tracking-[-0.04em] text-[#171411] md:text-5xl">
         {title}
       </h2>
-      <p className="text-sm leading-7 text-white/62 md:text-[15px]">
+      <p className="text-sm leading-7 text-black/62 md:text-[15px]">
         {description}
       </p>
     </div>
@@ -1068,7 +1201,7 @@ function WorkCard({
   dimensions?: string;
 }) {
   return (
-    <article className="group relative overflow-hidden rounded-[1.7rem] border border-white/10 bg-white/[0.04] transition hover:-translate-y-0.5 hover:border-[#F37021]/40 hover:shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+    <article className="group relative overflow-hidden rounded-[1.7rem] border border-black/10 bg-white/55 shadow-[0_18px_60px_rgba(58,42,24,0.08)] transition hover:-translate-y-0.5 hover:border-[#F37021]/40 hover:bg-white/80 hover:shadow-[0_24px_80px_rgba(58,42,24,0.16)]">
       <Link
         href={href}
         aria-label={`${title} View Artwork`}
@@ -1113,10 +1246,10 @@ function WorkCard({
       </div>
 
       <div className="space-y-3 p-5 md:p-6">
-        <h3 className="text-[1.28rem] font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-[1.42rem]">
+        <h3 className="text-[1.28rem] font-semibold tracking-[-0.04em] text-[#171411] md:text-[1.42rem]">
           {title}
         </h3>
-        <div className="flex flex-wrap gap-x-3 gap-y-2 text-sm leading-6 text-white/60">
+        <div className="flex flex-wrap gap-x-3 gap-y-2 text-sm leading-6 text-black/60">
           {year ? <span>{year}</span> : null}
           {medium ? <span>{medium}</span> : null}
           {dimensions ? <span>{dimensions}</span> : null}

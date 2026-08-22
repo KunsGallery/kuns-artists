@@ -10,6 +10,7 @@ export type PublicArtistCard = {
   tagline?: string;
   location?: string;
   profileImage?: string;
+  profileImagePosition?: string;
   featuredWorkId?: string;
   featuredWorkSlug?: string;
   featuredWorkTitle?: string;
@@ -63,6 +64,7 @@ export function mergePublicArtist(
     tagline: firestoreArtist?.tagline ?? staticArtist?.tagline,
     location: firestoreArtist?.location ?? staticArtist?.location,
     profileImage: resolveProfileImageUrl(firestoreArtist, staticArtist),
+    profileImagePosition: firestoreArtist?.profileImagePosition,
     featuredWorkId: firestoreArtist?.featuredWorkId,
     featuredWorkSlug: firestoreArtist?.featuredWorkSlug,
     featuredWorkTitle: firestoreArtist?.featuredWorkTitle,

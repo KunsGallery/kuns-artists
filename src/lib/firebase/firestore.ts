@@ -68,6 +68,7 @@ export type ArtistDoc = ArtistFeaturedWork &
   bioEn?: string;
   location?: string;
   profileImageUrl?: string;
+  profileImagePosition?: string;
   instagramUrl?: string;
   youtubeUrl?: string;
   cvUrl?: string;
@@ -89,6 +90,7 @@ export type ArtistProfileUpdatePayload = {
   bioEn?: string;
   location?: string;
   profileImageUrl?: string;
+  profileImagePosition?: string;
   instagramUrl?: string;
   youtubeUrl?: string;
   cvUrl?: string;
@@ -111,6 +113,7 @@ export type ArtistAdminSavePayload = {
   bioEn: string;
   location: string;
   profileImageUrl: string;
+  profileImagePosition?: string;
   instagramUrl: string;
   youtubeUrl: string;
   cvUrl: string;
@@ -757,6 +760,7 @@ function toArtistDoc(id: string, rawData: Record<string, unknown>): ArtistDoc {
     bioEn: toOptionalString(rawData.bioEn),
     location: toOptionalString(rawData.location),
     profileImageUrl: toOptionalString(rawData.profileImageUrl),
+    profileImagePosition: toOptionalString(rawData.profileImagePosition),
     instagramUrl: toOptionalString(rawData.instagramUrl),
     youtubeUrl: toOptionalString(rawData.youtubeUrl),
     cvUrl: toOptionalString(rawData.cvUrl),
@@ -920,6 +924,7 @@ function toArtistAdminPayload(payload: ArtistAdminSavePayload) {
     bioEn: payload.bioEn.trim(),
     location: payload.location.trim(),
     profileImageUrl: payload.profileImageUrl.trim(),
+    profileImagePosition: payload.profileImagePosition?.trim() ?? "",
     instagramUrl: payload.instagramUrl.trim(),
     youtubeUrl: payload.youtubeUrl.trim(),
     cvUrl: payload.cvUrl.trim(),
