@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   buildPublicArtistCollections,
   type PublicArtistCard,
@@ -25,24 +25,45 @@ type ArchiveWorkTile = {
 
 type WorkTileProps = {
   work: ArchiveWorkTile;
-  className: string;
+  index: number;
+  ratio: CardRatio;
+  ringStyle: CSSProperties;
+  onSelect: () => void;
+  canSelect: boolean;
+  isRingHovering: boolean;
+  isSelected: boolean;
   priority?: boolean;
 };
 
-const workTileClasses = [
-  "col-span-1 row-span-2 md:absolute md:left-[0.5%] md:top-[0%] md:h-[33%] md:w-[24.5%] md:z-10",
-  "col-span-1 row-span-2 md:absolute md:left-[24.3%] md:top-[1.8%] md:h-[31.2%] md:w-[25.8%] md:z-20",
-  "col-span-1 row-span-2 md:absolute md:left-[49.7%] md:top-[0.4%] md:h-[33.2%] md:w-[24.6%] md:z-10",
-  "col-span-1 row-span-2 md:absolute md:right-[0.4%] md:top-[1.1%] md:h-[32.4%] md:w-[25.2%] md:z-10",
-  "col-span-1 row-span-2 md:absolute md:left-[1.4%] md:top-[33.2%] md:h-[32.4%] md:w-[23.9%] md:z-20",
-  "col-span-1 row-span-2 md:absolute md:left-[24.7%] md:top-[32.1%] md:h-[34.1%] md:w-[25.3%] md:z-30",
-  "col-span-1 row-span-2 md:absolute md:left-[49.6%] md:top-[34%] md:h-[31.8%] md:w-[25.8%] md:z-20",
-  "col-span-1 row-span-2 md:absolute md:right-[0.8%] md:top-[32.7%] md:h-[33.1%] md:w-[24.6%] md:z-30",
-  "col-span-1 row-span-2 md:absolute md:left-[0.2%] md:bottom-[0.2%] md:h-[33.1%] md:w-[25%] md:z-10",
-  "col-span-1 row-span-2 md:absolute md:left-[25.2%] md:bottom-[1.4%] md:h-[31.9%] md:w-[24.7%] md:z-20",
-  "col-span-1 row-span-2 md:absolute md:left-[49.1%] md:bottom-[0%] md:h-[33.2%] md:w-[25.8%] md:z-10",
-  "col-span-1 row-span-2 md:absolute md:right-[0%] md:bottom-[0.9%] md:h-[32.5%] md:w-[25.4%] md:z-20",
+type CardRatio = "fourThree" | "threeFour" | "sixteenNine" | "nineSixteen";
+
+const RING_CARD_COUNT = 18;
+const cardRatios: CardRatio[] = [
+  "threeFour",
+  "sixteenNine",
+  "fourThree",
+  "nineSixteen",
+  "sixteenNine",
+  "threeFour",
+  "fourThree",
+  "sixteenNine",
+  "nineSixteen",
+  "fourThree",
+  "threeFour",
+  "sixteenNine",
+  "fourThree",
+  "nineSixteen",
+  "sixteenNine",
+  "threeFour",
+  "fourThree",
+  "nineSixteen",
 ];
+const cardRatioClasses: Record<CardRatio, string> = {
+  fourThree: "md:h-[29%] md:w-[28%]",
+  threeFour: "md:h-[39%] md:w-[20%]",
+  sixteenNine: "md:h-[24%] md:w-[32%]",
+  nineSixteen: "md:h-[42%] md:w-[16%]",
+};
 
 const seedRepresentedArtists =
   buildPublicArtistCollections([]).representedArtists.slice(0, 4);
@@ -98,7 +119,7 @@ function getStaticWorkTiles(artistSlugs: string[]): ArchiveWorkTile[] {
 }
 
 function createFallbackWorkTiles(artists: PublicArtistCard[]) {
-  return Array.from({ length: workTileClasses.length }, (_, index) => {
+  return Array.from({ length: RING_CARD_COUNT }, (_, index) => {
     const artist = artists[index % Math.max(artists.length, 1)];
 
     return {
@@ -119,10 +140,50 @@ function fillWithFallbackWorks(
   const fallbackWorks = createFallbackWorkTiles(artists);
   const mergedWorks = [...sourceWorks, ...fallbackWorks];
 
-  return mergedWorks.slice(0, Math.max(workTileClasses.length, mergedWorks.length));
+  return mergedWorks.slice(0, Math.max(RING_CARD_COUNT, mergedWorks.length));
 }
 
-function WorkTile({ work, className, priority = false }: WorkTileProps) {
+function getRingCardStyle(
+  index: number,
+  selectedIndex: number,
+  total: number
+): CSSProperties {
+  const angleStep = 360 / Math.max(total, 1);
+  const angle = (index - selectedIndex) * angleStep;
+  const radians = (angle * Math.PI) / 180;
+  const frontness = (Math.cos(radians) + 1) / 2;
+  const focus = Math.pow(frontness, 1.75);
+  const xFactor = Math.sin(radians).toFixed(4);
+  const yFactor = Math.cos(radians).toFixed(4);
+  const z = Math.round((focus - 0.5) * 460);
+  const scale = (0.48 + focus * 0.56).toFixed(3);
+  const tilt = (-angle * 0.055).toFixed(2);
+
+  return {
+    zIndex: Math.round(frontness * 100),
+    opacity: 0.42 + focus * 0.58,
+    ["--ring-transform" as string]: `translate(-50%, -50%) translate3d(calc(${xFactor} * min(34vw, 540px)), calc(${yFactor} * min(13vw, 175px)), ${z}px) rotateY(${tilt}deg) scale(${scale})`,
+    ["--ring-frontness" as string]: focus.toFixed(3),
+  };
+}
+
+function getCircularDistance(index: number, selectedIndex: number, total: number) {
+  const rawDistance = Math.abs(index - selectedIndex);
+
+  return Math.min(rawDistance, Math.max(total - rawDistance, 0));
+}
+
+function WorkTile({
+  work,
+  index,
+  ratio,
+  ringStyle,
+  onSelect,
+  canSelect,
+  isRingHovering,
+  isSelected,
+  priority = false,
+}: WorkTileProps) {
   const [failedImageId, setFailedImageId] = useState("");
   const fallbackImageUrl = getFallbackImageForId(work.id);
   const imageUrl =
@@ -133,22 +194,40 @@ function WorkTile({ work, className, priority = false }: WorkTileProps) {
   return (
     <Link
       href={`/artists/${work.artistSlug}`}
-      className={`group relative isolate min-h-[10rem] border border-[#1d1710]/20 bg-[#17110b] p-[5px] shadow-[0_20px_48px_rgba(77,55,31,0.22)] transition duration-500 hover:z-40 md:min-h-0 md:p-[7px] ${className}`}
+      className={`archive-ring-card group relative isolate col-span-1 row-span-2 min-h-[10rem] overflow-hidden rounded-[1.05rem] bg-[#f8f1e7] shadow-[0_24px_60px_rgba(83,58,31,0.16)] transition duration-700 hover:shadow-[0_34px_90px_rgba(83,58,31,0.24)] md:absolute md:left-[46%] md:top-[43%] md:min-h-0 ${cardRatioClasses[ratio]}`}
+      style={{
+        ...ringStyle,
+        ["--archive-delay" as string]: `${index * -0.45}s`,
+        ["--archive-grayscale" as string]:
+          isRingHovering && !isSelected ? "1" : "0",
+        ["--archive-image-opacity" as string]:
+          isRingHovering && !isSelected ? "0.54" : "1",
+        pointerEvents: canSelect ? "auto" : "none",
+      }}
+      onMouseEnter={() => {
+        if (canSelect) {
+          onSelect();
+        }
+      }}
+      onFocus={() => {
+        if (canSelect) {
+          onSelect();
+        }
+      }}
     >
-      <div className="pointer-events-none absolute inset-y-2 left-1 hidden w-px bg-[repeating-linear-gradient(to_bottom,rgba(217,121,61,0.48)_0_2px,transparent_2px_10px)] md:block" />
-      <div className="pointer-events-none absolute inset-y-2 right-1 hidden w-px bg-[repeating-linear-gradient(to_bottom,rgba(217,121,61,0.34)_0_2px,transparent_2px_10px)] md:block" />
-      <div className="pointer-events-none absolute bottom-1 left-1/2 hidden h-px w-12 -translate-x-1/2 bg-[#D9793D]/45 md:block" />
-      <div className="relative h-full min-h-[calc(10rem-14px)] overflow-hidden bg-[#efe7dc] md:min-h-0">
+      <div className="archive-card-inner relative h-full min-h-[10rem] overflow-hidden bg-[#efe7dc] md:min-h-0">
         <Image
+          key={`${work.id}-${imageUrl}`}
           src={imageUrl}
           alt={work.title}
           fill
           priority={priority}
-          sizes="(max-width: 768px) 50vw, 24vw"
-          className="object-cover grayscale transition duration-700 ease-out group-hover:scale-[1.04] group-hover:grayscale-0"
+          sizes="(max-width: 768px) 50vw, 30vw"
+          className="archive-image-current object-cover transition duration-[900ms] ease-out group-hover:scale-[1.035]"
           onError={() => setFailedImageId(work.id)}
         />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.02),rgba(0,0,0,0.46))] opacity-80 transition group-hover:opacity-45" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,248,238,0.02),rgba(23,17,11,0.32))] opacity-70 transition duration-700 group-hover:opacity-35" />
+        <div className="pointer-events-none absolute inset-0 rounded-[1.2rem] ring-1 ring-white/28" />
         <div className="absolute inset-x-3 bottom-3 translate-y-2 opacity-0 transition duration-500 group-hover:translate-y-0 group-hover:opacity-100">
           <p className="truncate text-[11px] uppercase tracking-[0.18em] text-white/74">
             {work.isFallback ? "Temporary Image" : work.artistName}
@@ -163,10 +242,11 @@ export default function HomeArchiveWall() {
   const [artists, setArtists] = useState<PublicArtistCard[]>(
     seedRepresentedArtists
   );
-  const [works, setWorks] = useState<ArchiveWorkTile[]>(seedWorkTiles);
   const [visibleWorks, setVisibleWorks] = useState<ArchiveWorkTile[]>(
-    seedWorkTiles.slice(0, workTileClasses.length)
+    seedWorkTiles.slice(0, RING_CARD_COUNT)
   );
+  const [selectedRingIndex, setSelectedRingIndex] = useState(0);
+  const [isRingHovering, setIsRingHovering] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,8 +296,7 @@ export default function HomeArchiveWall() {
       }
 
       setArtists(nextArtists);
-      setWorks(filledWorks);
-      setVisibleWorks(shuffle(filledWorks).slice(0, workTileClasses.length));
+      setVisibleWorks(shuffle(filledWorks).slice(0, RING_CARD_COUNT));
     })();
 
     return () => {
@@ -226,25 +305,18 @@ export default function HomeArchiveWall() {
   }, []);
 
   useEffect(() => {
-    if (works.length <= workTileClasses.length) {
+    if (isRingHovering || visibleWorks.length <= 1) {
       return;
     }
 
     const intervalId = window.setInterval(() => {
-      setVisibleWorks((currentWorks) => {
-        const currentIds = new Set(currentWorks.map((work) => work.id));
-        const candidates = works.filter((work) => !currentIds.has(work.id));
-        const replacement = shuffle(candidates.length > 0 ? candidates : works)[0];
-        const replaceIndex = Math.floor(Math.random() * workTileClasses.length);
-        const nextWorks = [...currentWorks];
-        nextWorks[replaceIndex] = replacement;
-
-        return nextWorks;
-      });
-    }, 3600);
+      setSelectedRingIndex((currentIndex) =>
+        (currentIndex + 1) % Math.min(visibleWorks.length, RING_CARD_COUNT)
+      );
+    }, 4600);
 
     return () => window.clearInterval(intervalId);
-  }, [works]);
+  }, [isRingHovering, visibleWorks.length]);
 
   const fallbackWorkTiles = useMemo(
     () =>
@@ -256,8 +328,10 @@ export default function HomeArchiveWall() {
   );
   const displayWorks =
     visibleWorks.length > 0
-      ? visibleWorks
-      : fallbackWorkTiles.slice(0, workTileClasses.length);
+      ? visibleWorks.slice(0, RING_CARD_COUNT)
+      : fallbackWorkTiles.slice(0, RING_CARD_COUNT);
+  const normalizedSelectedIndex =
+    selectedRingIndex % Math.max(displayWorks.length, 1);
 
   return (
     <main className="min-h-screen bg-[#eee6d9] text-[#171411]">
@@ -288,39 +362,53 @@ export default function HomeArchiveWall() {
             </nav>
           </header>
 
-          <div className="grid flex-1 gap-6 py-8 md:min-h-0 md:grid-cols-[24rem_1fr] md:items-stretch md:py-6 lg:grid-cols-[26rem_1fr]">
-            <aside className="flex flex-col justify-end md:border-r md:border-[#1d1710]/10 md:pr-8">
-              <h1 className="max-w-[12rem] text-[5.2rem] font-normal leading-[0.78] tracking-[-0.04em] text-[#171411] md:[writing-mode:vertical-rl] md:rotate-180 md:text-[8.6rem] lg:text-[10rem]">
-                Artists
-              </h1>
-
-              <div className="mt-8 grid gap-3 md:mt-10">
-                <Link
-                  href="/artists"
-                  className="group inline-flex h-16 items-center justify-between bg-[#D9793D] px-7 text-[1.05rem] font-medium text-white shadow-[0_14px_40px_rgba(112,73,39,0.18)] transition hover:bg-[#e8874e]"
-                >
-                  <span>View Artists</span>
-                  <span className="transition group-hover:translate-x-1">→</span>
-                </Link>
-                <Link
-                  href="/artist/login"
-                  className="group inline-flex h-16 items-center justify-between border border-[#1d1710]/20 bg-white/30 px-7 text-[1.05rem] font-medium text-[#171411] transition hover:border-[#D9793D] hover:bg-white/60 hover:text-[#A85025]"
-                >
-                  <span>Artist Login</span>
-                  <span className="transition group-hover:translate-x-1">→</span>
-                </Link>
-              </div>
-            </aside>
-
-            <div className="relative grid auto-rows-[6.2rem] grid-cols-2 gap-2 md:block md:h-full md:min-h-[40rem] md:overflow-visible">
+          <div className="flex flex-1 flex-col gap-5 py-8 md:min-h-0 md:py-6">
+            <div
+              className="archive-ring-stage relative grid auto-rows-[6.2rem] grid-cols-2 gap-2 md:block md:min-h-0 md:flex-1 md:overflow-hidden"
+              onMouseEnter={() => setIsRingHovering(true)}
+              onMouseLeave={() => setIsRingHovering(false)}
+            >
               {displayWorks.map((work, index) => (
                 <WorkTile
                   key={`${work.id}-${index}`}
                   work={work}
-                  className={workTileClasses[index] ?? workTileClasses[0]}
+                  index={index}
+                  ratio={cardRatios[index % cardRatios.length]}
+                  ringStyle={getRingCardStyle(
+                    index,
+                    normalizedSelectedIndex,
+                    displayWorks.length
+                  )}
+                  onSelect={() => setSelectedRingIndex(index)}
+                  canSelect={
+                    getCircularDistance(
+                      index,
+                      normalizedSelectedIndex,
+                      displayWorks.length
+                    ) <= 2
+                  }
+                  isRingHovering={isRingHovering}
+                  isSelected={normalizedSelectedIndex === index}
                   priority={index < 4}
                 />
               ))}
+            </div>
+
+            <div className="mx-auto grid w-full max-w-[36rem] gap-3 sm:grid-cols-2">
+              <Link
+                href="/artists"
+                className="group inline-flex h-16 items-center justify-between bg-[#D9793D] px-7 text-[1.05rem] font-medium text-white shadow-[0_14px_40px_rgba(112,73,39,0.18)] transition hover:bg-[#e8874e]"
+              >
+                <span>View Artists</span>
+                <span className="transition group-hover:translate-x-1">→</span>
+              </Link>
+              <Link
+                href="/artist/login"
+                className="group inline-flex h-16 items-center justify-between border border-[#1d1710]/20 bg-white/30 px-7 text-[1.05rem] font-medium text-[#171411] transition hover:border-[#D9793D] hover:bg-white/60 hover:text-[#A85025]"
+              >
+                <span>Artist Login</span>
+                <span className="transition group-hover:translate-x-1">→</span>
+              </Link>
             </div>
           </div>
         </div>
