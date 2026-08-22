@@ -119,12 +119,44 @@ function getPublicationStateTone(state: ArtistWorkPublicationState) {
 }
 
 function mergeInitialValues(initialValues?: Partial<WorkFormValues>) {
-  return {
+  const merged = {
     ...DEFAULT_FORM_VALUES,
     ...Object.fromEntries(
       Object.entries(initialValues ?? {}).filter(([, value]) => value !== undefined)
     ),
   } satisfies WorkFormValues;
+
+  if ((!merged.heightCm || !merged.widthCm) && merged.dimensions) {
+    const parsed = parseDimensionsText(merged.dimensions);
+
+    return {
+      ...merged,
+      heightCm: merged.heightCm || parsed.heightCm,
+      widthCm: merged.widthCm || parsed.widthCm,
+    };
+  }
+
+  return merged;
+}
+
+function formatDimensionsText(heightCm: string, widthCm: string) {
+  const height = heightCm.trim();
+  const width = widthCm.trim();
+
+  if (!height || !width) {
+    return "";
+  }
+
+  return `${height} × ${width} cm`;
+}
+
+function parseDimensionsText(dimensions: string) {
+  const matches = dimensions.match(/\d+(?:\.\d+)?/g) ?? [];
+
+  return {
+    heightCm: matches[0] ?? "",
+    widthCm: matches[1] ?? "",
+  };
 }
 
 function getOptionalNumberError(value: string, label: string) {
@@ -172,6 +204,41 @@ function validateArDownload(form: WorkFormValues) {
   );
 }
 
+function validateWorkSave(form: WorkFormValues) {
+  if (!form.title.trim()) {
+    return "작품명은 필수입니다.";
+  }
+
+  if (!form.coverImageUrl.trim()) {
+    return "대표 이미지를 업로드해 주세요.";
+  }
+
+  if (!form.year.trim()) {
+    return "제작연도는 필수입니다.";
+  }
+
+  if (!form.medium.trim()) {
+    return "재료는 필수입니다.";
+  }
+
+  if (!form.heightCm.trim()) {
+    return "세로 크기는 필수입니다.";
+  }
+
+  if (!form.widthCm.trim()) {
+    return "가로 크기는 필수입니다.";
+  }
+
+  const heightError = getOptionalNumberError(form.heightCm, "세로");
+  const widthError = getOptionalNumberError(form.widthCm, "가로");
+
+  if (heightError || widthError) {
+    return heightError || widthError;
+  }
+
+  return null;
+}
+
 export default function ArtistWorkGlbForm({
   mode,
   initialValues,
@@ -210,6 +277,22 @@ export default function ArtistWorkGlbForm({
     }));
   }
 
+  function updateHeightCm(value: string) {
+    setForm((current) => ({
+      ...current,
+      heightCm: value,
+      dimensions: formatDimensionsText(value, current.widthCm),
+    }));
+  }
+
+  function updateWidthCm(value: string) {
+    setForm((current) => ({
+      ...current,
+      widthCm: value,
+      dimensions: formatDimensionsText(current.heightCm, value),
+    }));
+  }
+
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -222,6 +305,12 @@ export default function ArtistWorkGlbForm({
     setSaveSuccessMessage(null);
 
     try {
+      const validationError = validateWorkSave(form);
+
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
       const message = await onSave(form);
       setSaveSuccessMessage(message ?? "작품이 저장되었습니다.");
     } catch (error) {
@@ -298,7 +387,10 @@ export default function ArtistWorkGlbForm({
   const previewTitle = form.title.trim() || "작품 제목";
   const previewYear = form.year.trim() || "연도 미입력";
   const previewMedium = form.medium.trim() || "재료 미입력";
-  const previewDimensions = form.dimensions.trim() || "크기 미입력";
+  const previewDimensions =
+    form.dimensions.trim() ||
+    formatDimensionsText(form.heightCm, form.widthCm) ||
+    "크기 미입력";
   const previewImageUrl = form.coverImageUrl.trim();
   const saveActionLabel =
     saveButtonLabel ?? (mode === "new" ? "작품 저장" : "변경사항 저장");
@@ -332,13 +424,14 @@ export default function ArtistWorkGlbForm({
             >
               <R2ImageUploadField
                 label="Artwork Image"
-                description="이미지를 업로드하거나 공개 페이지 주소를 직접 입력할 수 있습니다."
+                description="작품 대표 이미지를 업로드해주세요."
                 value={form.coverImageUrl}
                 onChange={(value) => updateField("coverImageUrl", value)}
                 target="work-image"
                 artistSlug={artistSlug}
                 workSlug={workSlug}
                 disabled={isGenerating || isSaving}
+                hideManualUrlInput
               />
             </FormSection>
 
@@ -370,8 +463,8 @@ export default function ArtistWorkGlbForm({
 
                 <InputField
                   label="Year"
-                  badge="권장"
-                  badgeTone="recommended"
+                  badge="필수"
+                  badgeTone="required"
                   value={form.year}
                   onChange={(value) => updateField("year", value)}
                   placeholder="2026"
@@ -382,21 +475,41 @@ export default function ArtistWorkGlbForm({
               <div className="grid gap-4 md:grid-cols-2">
                 <InputField
                   label="Medium"
-                  badge="권장"
-                  badgeTone="recommended"
+                  badge="필수"
+                  badgeTone="required"
                   value={form.medium}
                   onChange={(value) => updateField("medium", value)}
                   placeholder="Acrylic and Pigment on Canvas"
                   disabled={isGenerating || isSaving}
                 />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <InputField
+                  label="세로 cm"
+                  badge="필수"
+                  badgeTone="required"
+                  value={form.heightCm}
+                  onChange={updateHeightCm}
+                  placeholder="91.0"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  inputMode="decimal"
+                  disabled={isGenerating || isSaving}
+                />
 
                 <InputField
-                  label="Dimensions"
-                  badge="권장"
-                  badgeTone="recommended"
-                  value={form.dimensions}
-                  onChange={(value) => updateField("dimensions", value)}
-                  placeholder="116.8 x 91.0 cm"
+                  label="가로 cm"
+                  badge="필수"
+                  badgeTone="required"
+                  value={form.widthCm}
+                  onChange={updateWidthCm}
+                  placeholder="116.8"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  inputMode="decimal"
                   disabled={isGenerating || isSaving}
                 />
               </div>
@@ -415,15 +528,29 @@ export default function ArtistWorkGlbForm({
 
             <FormSection
               label="3. Physical Dimensions"
-              description="AR 제작과 작품 기록에 사용되는 실제 크기입니다."
+              description="세로와 가로는 위 기본 정보에서 자동으로 채워집니다. 깊이는 필요할 때만 조정해주세요."
             >
               <div className="grid gap-4 md:grid-cols-3">
+                <InputField
+                  label="세로 cm"
+                  badge="필수"
+                  badgeTone="required"
+                  value={form.heightCm}
+                  onChange={updateHeightCm}
+                  placeholder="91.0"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  inputMode="decimal"
+                  disabled={isGenerating || isSaving}
+                />
+
                 <InputField
                   label="가로 cm"
                   badge="필수"
                   badgeTone="required"
                   value={form.widthCm}
-                  onChange={(value) => updateField("widthCm", value)}
+                  onChange={updateWidthCm}
                   placeholder="116.8"
                   type="number"
                   min="0.1"
@@ -433,26 +560,12 @@ export default function ArtistWorkGlbForm({
                 />
 
                 <InputField
-                  label="세로 cm"
-                  badge="필수"
-                  badgeTone="required"
-                  value={form.heightCm}
-                  onChange={(value) => updateField("heightCm", value)}
-                  placeholder="91"
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  inputMode="decimal"
-                  disabled={isGenerating || isSaving}
-                />
-
-                <InputField
                   label="깊이 cm"
-                  badge="필수"
-                  badgeTone="required"
+                  badge="권장"
+                  badgeTone="recommended"
                   value={form.depthCm}
                   onChange={(value) => updateField("depthCm", value)}
-                  placeholder={String(DEFAULT_DEPTH_CM)}
+                  placeholder="3.5"
                   type="number"
                   min="0.1"
                   step="0.1"
@@ -463,72 +576,92 @@ export default function ArtistWorkGlbForm({
             </FormSection>
 
             {showLegacyArPreparation ? (
-              <FormSection
-                label="4. Legacy AR Preparation"
-                description="관리자용 기존 AR V1 준비 영역입니다. 작가 화면에서는 표시되지 않습니다."
-              >
-                <div className="grid gap-4 md:grid-cols-2">
-                  <SelectField
-                    label="앞면 기울기 X"
-                    badge="선택"
-                    badgeTone="optional"
-                    value={form.frontRotationXDeg}
-                    onChange={(value) => updateField("frontRotationXDeg", value)}
-                    disabled={isGenerating || isSaving}
-                  >
-                    {FRONT_ROTATION_X_OPTIONS.map((rotation) => (
-                      <option key={rotation} value={rotation}>
-                        {rotation}°
-                      </option>
-                    ))}
-                  </SelectField>
+              <details className="rounded-[1.75rem] border border-black/8 bg-[#fcfbf8] p-5 md:p-6">
+                <summary className="cursor-pointer list-none">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-medium tracking-[0.24em] text-neutral-500">
+                        4. Legacy AR Preparation
+                      </p>
+                      <p className="max-w-2xl text-sm leading-7 text-neutral-600">
+                        관리자용 기존 AR V1 준비 영역입니다. 작가 계정 화면에는 표시되지 않습니다.
+                      </p>
+                    </div>
+                    <span className="w-fit rounded-full border border-black/10 bg-white px-3 py-1 text-[11px] text-neutral-600">
+                      열어서 보기
+                    </span>
+                  </div>
+                </summary>
 
-                  <SelectField
-                    label="앞면 기울기 Y"
-                    badge="선택"
-                    badgeTone="optional"
-                    value={form.frontRotationYDeg}
-                    onChange={(value) => updateField("frontRotationYDeg", value)}
-                    disabled={isGenerating || isSaving}
-                  >
-                    {FRONT_ROTATION_Y_OPTIONS.map((rotation) => (
-                      <option key={rotation} value={rotation}>
-                        {rotation}°
-                      </option>
-                    ))}
-                  </SelectField>
+                <div className="mt-6 space-y-5 border-t border-black/8 pt-6">
+                  <p className="text-sm leading-7 text-neutral-500">
+                    이 영역은 관리자 계정에서만 보이는 보조 설정입니다. 일반 작가는
+                    작품 등록 시 이 항목을 신경 쓰지 않아도 됩니다.
+                  </p>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <SelectField
+                      label="앞면 기울기 X"
+                      badge="선택"
+                      badgeTone="optional"
+                      value={form.frontRotationXDeg}
+                      onChange={(value) => updateField("frontRotationXDeg", value)}
+                      disabled={isGenerating || isSaving}
+                    >
+                      {FRONT_ROTATION_X_OPTIONS.map((rotation) => (
+                        <option key={rotation} value={rotation}>
+                          {rotation}°
+                        </option>
+                      ))}
+                    </SelectField>
+
+                    <SelectField
+                      label="앞면 기울기 Y"
+                      badge="선택"
+                      badgeTone="optional"
+                      value={form.frontRotationYDeg}
+                      onChange={(value) => updateField("frontRotationYDeg", value)}
+                      disabled={isGenerating || isSaving}
+                    >
+                      {FRONT_ROTATION_Y_OPTIONS.map((rotation) => (
+                        <option key={rotation} value={rotation}>
+                          {rotation}°
+                        </option>
+                      ))}
+                    </SelectField>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <SelectField
+                      label="측면 표현"
+                      badge="선택"
+                      badgeTone="optional"
+                      value={form.sideMode}
+                      onChange={(value) =>
+                        updateField("sideMode", value as WorkFormValues["sideMode"])
+                      }
+                      disabled={isGenerating || isSaving}
+                    >
+                      <option value="canvas">캔버스형</option>
+                      <option value="image">이미지형</option>
+                    </SelectField>
+
+                    <ToggleField
+                      label="뒷면 라벨"
+                      badge="선택"
+                      badgeTone="optional"
+                      checked={form.showBackLabel}
+                      onChange={(checked) => updateField("showBackLabel", checked)}
+                      disabled={isGenerating || isSaving}
+                    />
+                  </div>
+
+                  <p className="text-sm leading-6 text-neutral-500">
+                    AR 준비용 파일은 필요할 때만 내려받을 수 있습니다. 저장에는 영향을
+                    주지 않습니다.
+                  </p>
                 </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <SelectField
-                    label="측면 표현"
-                    badge="선택"
-                    badgeTone="optional"
-                    value={form.sideMode}
-                    onChange={(value) =>
-                      updateField("sideMode", value as WorkFormValues["sideMode"])
-                    }
-                    disabled={isGenerating || isSaving}
-                  >
-                    <option value="canvas">캔버스형</option>
-                    <option value="image">이미지형</option>
-                  </SelectField>
-
-                  <ToggleField
-                    label="뒷면 라벨"
-                    badge="선택"
-                    badgeTone="optional"
-                    checked={form.showBackLabel}
-                    onChange={(checked) => updateField("showBackLabel", checked)}
-                    disabled={isGenerating || isSaving}
-                  />
-                </div>
-
-                <p className="text-sm leading-6 text-neutral-500">
-                  AR 준비용 파일은 필요할 때만 내려받을 수 있습니다. 저장에는 영향을
-                  주지 않습니다.
-                </p>
-              </FormSection>
+              </details>
             ) : null}
 
             <div className="space-y-3 pt-2">
@@ -597,7 +730,7 @@ export default function ArtistWorkGlbForm({
         </form>
       </div>
 
-      <aside className="space-y-4">
+      <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
         <PreviewCard
           title={previewTitle}
           year={previewYear}
@@ -656,7 +789,7 @@ function FieldBadge({
   tone: BadgeTone;
 }) {
   const styles = {
-    required: "border-[#F37021]/35 bg-[#F37021]/10 text-[#B85D18]",
+    required: "border-[#B85D18] bg-[#B85D18] text-white shadow-[0_4px_14px_rgba(184,93,24,0.22)]",
     recommended: "border-[#d8c8a0] bg-[#f6f0e3] text-[#7a6640]",
     optional: "border-[#cfc5b4] bg-[#eee6d8] text-[#63574b]",
     auto: "border-slate-200 bg-slate-50 text-slate-600",

@@ -25,6 +25,17 @@ function normalizeOptionalText(value: string) {
   return trimmed || undefined;
 }
 
+function formatDimensionsText(heightCm: string, widthCm: string) {
+  const height = heightCm.trim();
+  const width = widthCm.trim();
+
+  if (!height || !width) {
+    return "";
+  }
+
+  return `${height} × ${width} cm`;
+}
+
 function getPublicationState(
   work?: ArtistWorkDoc | null
 ): ArtistWorkPublicationState {
@@ -70,7 +81,9 @@ function buildSavePayload(values: WorkFormValues): ArtistWorkSavePayload {
     title: values.title.trim(),
     year: normalizeOptionalText(values.year),
     medium: normalizeOptionalText(values.medium),
-    dimensions: normalizeOptionalText(values.dimensions),
+    dimensions: normalizeOptionalText(
+      values.dimensions || formatDimensionsText(values.heightCm, values.widthCm)
+    ),
     description: normalizeOptionalText(values.description),
     coverImageUrl: normalizeOptionalText(values.coverImageUrl),
     widthCm,
@@ -178,6 +191,26 @@ export default function ArtistWorkEditor({
 
     if (!title) {
       throw new Error("작품명은 필수입니다.");
+    }
+
+    if (!values.coverImageUrl.trim()) {
+      throw new Error("대표 이미지를 업로드해 주세요.");
+    }
+
+    if (!values.year.trim()) {
+      throw new Error("제작연도는 필수입니다.");
+    }
+
+    if (!values.medium.trim()) {
+      throw new Error("재료는 필수입니다.");
+    }
+
+    if (!values.heightCm.trim()) {
+      throw new Error("세로 크기는 필수입니다.");
+    }
+
+    if (!values.widthCm.trim()) {
+      throw new Error("가로 크기는 필수입니다.");
     }
 
     const payload = buildSavePayload(values);

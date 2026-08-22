@@ -21,6 +21,7 @@ type R2ImageUploadFieldProps = {
   artistSlug?: string;
   workSlug?: string;
   disabled?: boolean;
+  hideManualUrlInput?: boolean;
 };
 
 type UploadFeedback =
@@ -42,6 +43,7 @@ export default function R2ImageUploadField({
   artistSlug,
   workSlug,
   disabled = false,
+  hideManualUrlInput = false,
 }: R2ImageUploadFieldProps) {
   const inputId = useId();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -129,15 +131,17 @@ export default function R2ImageUploadField({
           </p>
         ) : null}
 
-        <input
-          id={inputId}
-          type="text"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="h-13 w-full rounded-[1.25rem] border border-black/10 bg-white px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20 disabled:cursor-not-allowed disabled:bg-neutral-100"
-          placeholder="이미지 주소를 직접 붙여넣거나 업로드하세요."
-          disabled={disabled}
-        />
+        {hideManualUrlInput ? null : (
+          <input
+            id={inputId}
+            type="text"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="h-13 w-full rounded-[1.25rem] border border-black/10 bg-white px-4 text-sm text-neutral-900 outline-none transition focus:border-black/20 disabled:cursor-not-allowed disabled:bg-neutral-100"
+            placeholder="이미지 주소를 직접 붙여넣거나 업로드하세요."
+            disabled={disabled}
+          />
+        )}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
@@ -159,6 +163,7 @@ export default function R2ImageUploadField({
         </p>
 
         <input
+          id={hideManualUrlInput ? inputId : undefined}
           ref={fileInputRef}
           type="file"
           accept={R2_IMAGE_UPLOAD_CONTENT_TYPES.join(",")}
@@ -188,7 +193,7 @@ export default function R2ImageUploadField({
           )}
         </div>
 
-        {value.trim() ? (
+        {!hideManualUrlInput && value.trim() ? (
           <p className="break-all text-[12px] leading-6 text-neutral-500">
             {value}
           </p>

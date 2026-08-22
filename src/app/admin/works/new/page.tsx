@@ -18,6 +18,17 @@ function normalizeOptionalText(value: string) {
   return trimmed || undefined;
 }
 
+function formatDimensionsText(heightCm: string, widthCm: string) {
+  const height = heightCm.trim();
+  const width = widthCm.trim();
+
+  if (!height || !width) {
+    return "";
+  }
+
+  return `${height} × ${width} cm`;
+}
+
 function buildSavePayload(values: WorkFormValues) {
   const widthCm = values.widthCm.trim() ? Number(values.widthCm) : undefined;
   const heightCm = values.heightCm.trim() ? Number(values.heightCm) : undefined;
@@ -33,7 +44,9 @@ function buildSavePayload(values: WorkFormValues) {
     title: values.title.trim(),
     year: normalizeOptionalText(values.year),
     medium: normalizeOptionalText(values.medium),
-    dimensions: normalizeOptionalText(values.dimensions),
+    dimensions: normalizeOptionalText(
+      values.dimensions || formatDimensionsText(values.heightCm, values.widthCm)
+    ),
     description: normalizeOptionalText(values.description),
     coverImageUrl: normalizeOptionalText(values.coverImageUrl),
     widthCm,
