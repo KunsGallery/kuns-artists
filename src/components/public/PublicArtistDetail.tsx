@@ -16,9 +16,6 @@ import {
 import { normalizeExternalUrl } from "@/lib/url";
 import { sortWorksForDisplay } from "@/lib/workDisplay";
 import {
-  ARTIST_CV_DISPLAY_ORDER,
-  getArtistArchiveLinkTypeLabel,
-  getArtistCvTypeDisplayLabel,
   sortArtistArchiveLinks,
   sortArtistCvItems,
   type ArtistArchiveLink,
@@ -209,46 +206,6 @@ function mergePublicArtist(
   };
 }
 
-function groupCvItemsByType(items: ArtistCvItem[]) {
-  const grouped = new Map<string, ArtistCvItem[]>();
-
-  for (const item of items) {
-    const next = grouped.get(item.type) ?? [];
-    next.push(item);
-    grouped.set(item.type, next);
-  }
-
-  return ARTIST_CV_DISPLAY_ORDER.map((type) => ({
-    type,
-    items: sortArtistCvItems(grouped.get(type) ?? []),
-  })).filter((entry) => entry.items.length > 0);
-}
-
-const ARCHIVE_LINK_DISPLAY_ORDER: ArtistArchiveLink["type"][] = [
-  "interview",
-  "article",
-  "video",
-  "catalog",
-  "press",
-  "website",
-  "other",
-];
-
-function groupArchiveLinksByType(items: ArtistArchiveLink[]) {
-  const grouped = new Map<string, ArtistArchiveLink[]>();
-
-  for (const item of items) {
-    const next = grouped.get(item.type) ?? [];
-    next.push(item);
-    grouped.set(item.type, next);
-  }
-
-  return ARCHIVE_LINK_DISPLAY_ORDER.map((type) => ({
-    type,
-    items: sortArtistArchiveLinks(grouped.get(type) ?? []),
-  })).filter((entry) => entry.items.length > 0);
-}
-
 function findStaticFallbackWork(
   artistSlug: string,
   firestoreWork: ArtistWorkDoc
@@ -383,6 +340,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
   );
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
   const [portfolioShareMessage, setPortfolioShareMessage] = useState("");
+  const [lightboxWork, setLightboxWork] = useState<PublicWork | null>(null);
   const shareMessageTimeoutRef = useRef<number | null>(null);
   const showDebugNote = process.env.NODE_ENV === "development";
 
@@ -495,9 +453,6 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
       ),
     [artistWorksForDisplay]
   );
-  const hasGalleryNote = Boolean(
-    artist?.galleryNote?.trim() || artist?.galleryNoteEn?.trim()
-  );
   const featuredWork = useMemo(() => {
     const featuredWorkId = artist?.featuredWorkId?.trim() || "";
     const featuredWorkSlug = artist?.featuredWorkSlug?.trim() || "";
@@ -554,14 +509,20 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
       ].filter((entry): entry is { label: string; href: string } => Boolean(entry)),
     [artsyHref, cvHref, instagramHref, websiteHref, youtubeHref]
   );
-  const hasStatement = Boolean(artist?.bio || artist?.bioEn);
-  const hasExhibitions = artistExhibitionsForDisplay.length > 0;
   const heroTagline =
     artist?.tagline?.trim() || "Selected works from the artist’s current archive.";
   const heroLocation = artist?.location?.trim() || "";
   const pageTheme = artist
     ? artistPageThemes[artist.slug] ?? defaultArtistPageTheme
     : defaultArtistPageTheme;
+  const statementPreview =
+    artist?.bio?.trim() || artist?.bioEn?.trim() || artist?.galleryNote?.trim() || "";
+  const compactCvItems = displayCvItems.slice(0, 6);
+  const compactArchiveLinks = displayArchiveLinks.slice(0, 5);
+  const compactExhibitions = artistExhibitionsForDisplay.slice(0, 3);
+  const heroWorks = visibleWorks.slice(0, 8);
+  const lightboxImage =
+    lightboxWork?.coverImageUrl ?? lightboxWork?.coverImage ?? "";
 
   useEffect(() => {
     return () => {
@@ -664,7 +625,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
 
   return (
     <main
-      className="min-h-screen"
+      className="min-h-screen overflow-x-hidden"
       style={{
         background:
           `radial-gradient(circle at 12% 8%, ${pageTheme.accentSoft}, transparent 28rem), ` +
@@ -672,8 +633,8 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
         color: pageTheme.text,
       }}
     >
-      <div className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-8">
-        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="mx-auto max-w-[1720px] px-5 py-5 md:px-8">
+        <header className="flex h-14 items-center justify-between border-b border-black/10">
           <Link
             href="/"
             className="gallery-wordmark text-[1.45rem] leading-none opacity-80 transition hover:opacity-100"
@@ -681,505 +642,434 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
             Kün&apos;s Gallery
           </Link>
 
-          <div className="flex flex-wrap items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-4">
+            <a
+              href="#works"
+              className="hidden text-[11px] uppercase tracking-[0.22em] opacity-58 transition hover:opacity-100 md:inline-flex"
+            >
+              Works
+            </a>
+            <a
+              href="#archive"
+              className="hidden text-[11px] uppercase tracking-[0.22em] opacity-58 transition hover:opacity-100 md:inline-flex"
+            >
+              Archive
+            </a>
             <Link
               href="/artists"
-              className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/40 px-5 text-sm transition hover:border-black/20 hover:bg-white/70"
+              className="text-[11px] uppercase tracking-[0.22em] opacity-58 transition hover:opacity-100"
             >
-              Back to Artists
+              Artists
             </Link>
           </div>
         </header>
-      </div>
 
-      <div className="mx-auto max-w-7xl px-5 pb-20 md:px-8">
-        <section
-          className="relative overflow-hidden rounded-[2.6rem] border border-black/10 p-6 shadow-[0_30px_120px_rgba(58,42,24,0.16)] md:p-10 lg:p-12"
-          style={{
-            background:
-              `linear-gradient(145deg, ${pageTheme.panel} 0%, ${pageTheme.panelSoft} 58%, rgba(255,255,255,0.42) 100%)`,
-          }}
-        >
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                `radial-gradient(circle at top left, ${pageTheme.accentSoft}, transparent 32%), ` +
-                "radial-gradient(circle at bottom right, rgba(255,255,255,0.42), transparent 30%)",
-            }}
-          />
-
-          <div className="relative grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-end">
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex rounded-full border border-black/10 bg-white/40 px-3 py-1 text-[10px] uppercase tracking-[0.34em] opacity-60">
-                  KÜN’S GALLERY
-                </span>
-              </div>
-
-              <div className="max-w-4xl">
-                <h1 className="text-5xl font-semibold tracking-[-0.05em] md:text-7xl md:leading-[0.92]">
-                  {artist.name}
-                </h1>
-                {artist.nameKo ? (
-                  <p className="mt-4 text-lg opacity-65 md:text-xl">
-                    {artist.nameKo}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="max-w-3xl space-y-4">
-                <p className="text-lg leading-8 opacity-75 md:text-[1.15rem] md:leading-9">
-                  {heroTagline}
-                </p>
-
-                {heroLocation ? (
-                  <p className="text-sm uppercase tracking-[0.22em] opacity-55">
-                    {heroLocation}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href="#works"
-                  className="inline-flex h-11 items-center rounded-full px-5 text-sm font-medium text-white shadow-[0_10px_28px_rgba(0,0,0,0.12)] transition hover:brightness-110"
-                  style={{ backgroundColor: pageTheme.accent }}
-                >
-                  View Works
-                </Link>
-                {portfolioPdfHref ? (
+        <section className="relative min-h-[calc(100vh-5.5rem)] py-6 md:py-8">
+          <div className="grid min-h-[calc(100vh-8rem)] gap-6 lg:grid-cols-[8.5rem_minmax(0,1fr)]">
+            <nav className="hidden border-r border-black/10 pr-5 pt-6 lg:block">
+              <div className="sticky top-8 space-y-7">
+                {["Intro", "Works", "Statement", "CV", "Press"].map((item) => (
                   <a
-                    href={portfolioPdfHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/35 px-5 text-sm opacity-75 transition hover:bg-white/65 hover:opacity-100"
+                    key={item}
+                    href={item === "Intro" ? "#" : item === "Works" ? "#works" : "#archive"}
+                    className="block text-[11px] uppercase tracking-[0.18em] opacity-52 transition hover:opacity-100"
                   >
-                    {portfolioPdfLabel}
+                    {item}
                   </a>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={handleSharePortfolio}
-                  className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/35 px-5 text-sm opacity-75 transition hover:bg-white/65 hover:opacity-100"
-                >
-                  Share Portfolio
-                </button>
-                <Link
-                  href="/artists"
-                  className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/35 px-5 text-sm transition hover:bg-white/65"
-                >
-                  Back to Artists
-                </Link>
-                {websiteHref ? (
-                  <a
-                    href={websiteHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white/35 px-5 text-sm opacity-75 transition hover:bg-white/65 hover:opacity-100"
-                  >
-                    Website
-                  </a>
-                ) : null}
+                ))}
               </div>
+            </nav>
 
-              {heroLinks.length > 0 ? (
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {heroLinks.map((item) => (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex h-10 items-center rounded-full border border-black/10 bg-white/35 px-4 text-[11px] uppercase tracking-[0.22em] opacity-65 transition hover:bg-white/65 hover:opacity-100"
+            <div className="relative grid content-between gap-6">
+              <div className="grid gap-8 lg:grid-cols-[0.42fr_0.58fr] lg:items-center">
+                <div className="relative z-10 max-w-xl pt-5">
+                  <h1 className="text-[4.4rem] font-normal leading-[0.9] tracking-[-0.04em] md:text-[6rem]">
+                    {artist.name}
+                  </h1>
+                  {artist.nameKo ? (
+                    <p className="mt-3 text-2xl leading-none opacity-78">
+                      {artist.nameKo}
+                    </p>
+                  ) : null}
+                  <div
+                    className="mt-5 h-[3px] w-14"
+                    style={{ backgroundColor: pageTheme.accent }}
+                  />
+                  <p className="mt-7 max-w-md text-[15px] leading-7 opacity-68">
+                    {heroTagline}
+                  </p>
+                  {heroLocation ? (
+                    <p className="mt-5 text-[11px] uppercase tracking-[0.26em] opacity-50">
+                      {heroLocation}
+                    </p>
+                  ) : null}
+                  <div className="mt-9 flex flex-wrap gap-5">
+                    <Link
+                      href="#works"
+                      className="inline-flex h-11 items-center border-b border-current text-sm font-medium transition hover:opacity-60"
+                      style={{ color: pageTheme.accent }}
                     >
-                      {item.label}
-                    </a>
-                  ))}
-                </div>
-              ) : null}
-
-              {portfolioShareMessage ? (
-                <p className="max-w-2xl rounded-2xl border border-black/10 bg-white/45 px-4 py-3 text-xs leading-6 shadow-[0_10px_30px_rgba(58,42,24,0.08)]">
-                  {portfolioShareMessage}
-                </p>
-              ) : null}
-
-              {showDebugNote ? (
-                <details className="max-w-2xl rounded-[1.35rem] border border-white/10 bg-black/20 px-3 py-2 text-sm leading-6 text-white/60">
-                  <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.28em] text-[#F37021]">
-                    개발 정보
-                  </summary>
-                  <div className="mt-2 space-y-1">
-                    <p>source: {debugSource}</p>
-                    {loadErrorMessage ? <p>{loadErrorMessage}</p> : null}
+                      View Works
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleSharePortfolio}
+                      className="inline-flex h-11 items-center border-b border-black/35 text-sm transition hover:border-black hover:opacity-70"
+                    >
+                      Share Portfolio
+                    </button>
+                    {portfolioPdfHref ? (
+                      <a
+                        href={portfolioPdfHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-11 items-center border-b border-black/35 text-sm transition hover:border-black hover:opacity-70"
+                      >
+                        {portfolioPdfLabel}
+                      </a>
+                    ) : null}
                   </div>
-                </details>
-              ) : null}
-            </div>
-
-            <div className="lg:justify-self-end">
-              {featuredWork?.imageUrl ? (
-                <div
-                  className="relative overflow-hidden rounded-[2.3rem] border border-black/10 shadow-[0_28px_100px_rgba(58,42,24,0.2)]"
-                  style={{ backgroundColor: pageTheme.heroImage }}
-                >
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      background:
-                        `radial-gradient(circle at 20% 20%, ${pageTheme.accentSoft}, transparent 28%), ` +
-                        "linear-gradient(180deg,rgba(255,255,255,0.08),transparent 38%,rgba(0,0,0,0.14))",
-                    }}
-                  />
-                  <div className="relative aspect-[4/5] w-full min-w-0 max-w-none lg:w-[430px]">
-                    <img
-                      src={featuredWork.imageUrl}
-                      alt={featuredWork.title || artist.name}
-                      className="h-full w-full object-cover"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.72))] p-5">
-                      <p className="text-[10px] uppercase tracking-[0.36em] text-white/62">
-                        {pageTheme.moodLine}
-                      </p>
-                      <p className="mt-2 text-lg font-medium tracking-[-0.03em] text-[#F7F1E8]">
-                        {featuredWork.title || "Untitled"}
-                      </p>
-                      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-                        {artist.profileImage ? (
-                          <img
-                            src={artist.profileImage}
-                            alt={artist.name}
-                            className="h-14 w-14 rounded-full border border-white/12 object-cover shadow-[0_8px_20px_rgba(0,0,0,0.25)]"
-                          />
-                        ) : (
-                          <div className="h-14 w-14 rounded-full border border-white/10 bg-white/[0.06]" />
-                        )}
-
-                        {featuredWork.slug ? (
-                          <Link
-                            href={`/works/${featuredWork.slug}`}
-                            className="inline-flex h-10 items-center rounded-full border border-[#F37021]/45 bg-[#F37021] px-4 text-xs font-medium text-[#171717] transition hover:bg-[#ff7a2f]"
-                          >
-                            View Artwork
-                          </Link>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
+                  {portfolioShareMessage ? (
+                    <p className="mt-4 max-w-md border-l border-black/20 pl-4 text-xs leading-6 opacity-65">
+                      {portfolioShareMessage}
+                    </p>
+                  ) : null}
                 </div>
-              ) : (
-                <div
-                  className="relative overflow-hidden rounded-[2.3rem] border border-black/10 shadow-[0_28px_100px_rgba(58,42,24,0.2)]"
-                  style={{ backgroundColor: pageTheme.heroImage }}
-                >
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      background:
-                        `radial-gradient(circle at 20% 20%, ${pageTheme.accentSoft}, transparent 28%), ` +
-                        "linear-gradient(180deg,rgba(255,255,255,0.08),transparent 38%,rgba(0,0,0,0.14))",
-                    }}
-                  />
-                  <div className="relative aspect-[4/5] w-full min-w-0 max-w-none lg:w-[430px]">
+
+                <div className="relative min-h-[28rem] md:min-h-[34rem]">
+                  <div className="absolute left-[2%] top-[10%] h-[47%] w-[42%] overflow-hidden shadow-[0_28px_70px_rgba(58,42,24,0.16)] md:left-[4%]">
                     {artist.profileImage ? (
                       <img
                         src={artist.profileImage}
                         alt={artist.name}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-cover grayscale-[0.15]"
                       />
                     ) : (
-                      <div className="flex h-full w-full flex-col justify-between bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.15),transparent_36%)] p-6">
-                        <div className="space-y-2">
-                          <p className="text-[10px] uppercase tracking-[0.34em] text-white/45">
-                            Portrait placeholder
+                      <div className="h-full w-full bg-white/35" />
+                    )}
+                  </div>
+
+                  {featuredWork?.imageUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetWork = visibleWorks.find(
+                          (work) => getWorkRouteSlug(work) === featuredWork.slug
+                        );
+                        if (targetWork) {
+                          setLightboxWork(targetWork);
+                        }
+                      }}
+                      className="absolute right-[2%] top-[2%] h-[64%] w-[58%] overflow-hidden bg-white/45 text-left shadow-[0_34px_90px_rgba(58,42,24,0.2)] transition duration-700 hover:-translate-y-1 hover:shadow-[0_42px_110px_rgba(58,42,24,0.25)]"
+                    >
+                      <img
+                        src={featuredWork.imageUrl}
+                        alt={featuredWork.title || artist.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  ) : null}
+
+                  <div className="absolute bottom-[2%] left-[20%] w-[70%] border-t border-black/12 bg-[rgba(248,243,234,0.82)] px-5 py-4 backdrop-blur-sm">
+                    <p className="text-[10px] uppercase tracking-[0.28em] opacity-48">
+                      {pageTheme.moodLine}
+                    </p>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 opacity-66">
+                      {featuredWork?.title || "Official artist archive"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div id="works" className="border-t border-black/10 pt-5">
+                <div className="flex items-end justify-between gap-4">
+                  <h2 className="text-3xl font-normal tracking-[-0.03em]">
+                    Works
+                  </h2>
+                  <p className="text-[11px] uppercase tracking-[0.22em] opacity-45">
+                    {visibleWorks.length} works
+                  </p>
+                </div>
+
+                {heroWorks.length > 0 ? (
+                  <div className="mt-5 grid auto-rows-[8rem] grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+                    {heroWorks.map((work, index) => {
+                      const artworkImage =
+                        work.coverImageUrl ?? work.coverImage ?? "";
+                      const workHref = getWorkHref(work);
+                      const arHref = getArHref(work);
+
+                      return (
+                        <WorkCard
+                          key={workHref}
+                          href={workHref}
+                          secondaryHref={arHref}
+                          image={artworkImage}
+                          title={work.title}
+                          year={work.year}
+                          medium={work.medium}
+                          dimensions={work.dimensions}
+                          featured={index === 1 || index === 4}
+                          onOpen={() => setLightboxWork(work)}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-5 border border-black/10 bg-white/30 p-6 text-sm leading-7 opacity-62">
+                    현재 공개된 작품을 준비 중입니다.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="archive"
+          className="grid gap-8 border-t border-black/10 py-12 lg:min-h-screen lg:grid-cols-[1.05fr_0.95fr] lg:py-14"
+        >
+          <div className="grid gap-6">
+            <article className="border-b border-black/10 pb-8">
+              <h2 className="text-4xl font-normal tracking-[-0.03em]">
+                Statement
+              </h2>
+              {statementPreview ? (
+                <div className="mt-5 max-w-3xl space-y-4 text-[15px] leading-8 opacity-70">
+                  {statementPreview
+                    .split("\n")
+                    .filter(Boolean)
+                    .slice(0, 3)
+                    .map((paragraph, index) => (
+                      <p key={`statement-preview-${index}`}>{paragraph}</p>
+                    ))}
+                </div>
+              ) : (
+                <p className="mt-5 text-sm leading-7 opacity-56">
+                  작가 노트를 준비 중입니다.
+                </p>
+              )}
+            </article>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <article className="border-b border-black/10 pb-6 md:border-b-0 md:border-r md:pr-6">
+                <h2 className="text-3xl font-normal tracking-[-0.03em]">CV</h2>
+                {compactCvItems.length > 0 ? (
+                  <div className="mt-5 divide-y divide-black/10">
+                    {compactCvItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-4 py-3"
+                      >
+                        <p
+                          className="text-xs font-medium"
+                          style={{ color: pageTheme.accent }}
+                        >
+                          {item.year || "—"}
+                        </p>
+                        <div>
+                          <p className="line-clamp-1 text-sm font-medium">
+                            {item.title}
                           </p>
-                          <p className="text-sm leading-6 text-white/62">
-                            프로필 이미지를 등록하면 공식 페이지의 인상이 더 선명해집니다.
-                          </p>
-                        </div>
-                        <div className="flex items-end justify-between gap-4">
-                          <div className="h-16 w-16 rounded-full border border-white/10 bg-white/[0.06]" />
-                          <p className="text-[11px] uppercase tracking-[0.24em] text-white/45">
-                            KÜN’S Gallery
+                          <p className="mt-1 line-clamp-1 text-xs opacity-52">
+                            {[item.venue, item.location].filter(Boolean).join(", ")}
                           </p>
                         </div>
                       </div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.55))] p-5">
-                      <p className="text-[10px] uppercase tracking-[0.36em] text-white/50">
-                        Official artist archive
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-white/72">
-                        프라이빗 아카이브와 공개 포트폴리오 사이의 균형을 맞춘 공식 작가 페이지입니다.
-                      </p>
-                    </div>
+                    ))}
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
+                ) : (
+                  <p className="mt-5 text-sm leading-7 opacity-56">
+                    CV 항목을 준비 중입니다.
+                  </p>
+                )}
+              </article>
 
-        {hasGalleryNote ? (
-          <section className="border-t border-white/10 py-16 md:py-24">
-            <div className="grid gap-10 rounded-[2rem] border border-white/10 px-6 py-8 md:px-8 md:py-10 lg:grid-cols-[0.72fr_1.28fr] lg:gap-12">
-              <div className="space-y-4">
-                <p className="text-[11px] uppercase tracking-[0.34em] text-white/45">
-                  GALLERY NOTE
-                </p>
-                <h2 className="text-3xl font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-5xl">
-                  Curatorial Note
+              <article className="border-b border-black/10 pb-6 md:border-b-0">
+                <h2 className="text-3xl font-normal tracking-[-0.03em]">
+                  Press & Archive
                 </h2>
-                <div className="h-px w-16 bg-[#F37021]/55" />
-                <p className="max-w-md text-sm leading-7 text-white/62 md:text-[15px]">
-                  KÜN’S Gallery가 바라보는 작가의 작업 세계를 공식적으로 정리한 큐레이토리얼 코멘트입니다.
-                </p>
-              </div>
+                {compactArchiveLinks.length > 0 ? (
+                  <div className="mt-5 divide-y divide-black/10">
+                    {compactArchiveLinks.map((item) => {
+                      const href = normalizeExternalUrl(item.url);
+                      const content = (
+                        <div className="flex items-center justify-between gap-4 py-3">
+                          <div className="min-w-0">
+                            <p className="line-clamp-1 text-sm font-medium">
+                              {item.title}
+                            </p>
+                            <p className="mt-1 line-clamp-1 text-xs opacity-52">
+                              {[item.source, item.year].filter(Boolean).join(" · ")}
+                            </p>
+                          </div>
+                          <span className="text-sm opacity-45">→</span>
+                        </div>
+                      );
 
-              <div
-                className={`grid gap-8 ${
-                  artist?.galleryNote && artist?.galleryNoteEn
-                    ? "md:grid-cols-2"
-                    : "md:grid-cols-1"
-                }`}
-              >
-                {artist?.galleryNote ? (
-                  <article className="space-y-4 border-l border-[#F37021]/35 pl-5 md:pl-6">
-                    <p className="text-[10px] uppercase tracking-[0.32em] text-[#F37021]">
-                      Korean Text
-                    </p>
-                    <div className="space-y-5 text-[16px] leading-8 text-white/76 md:text-[17px]">
-                      {artist.galleryNote.split("\n").map((paragraph, index) => (
-                        <p key={`gallery-note-ko-${index}`}>{paragraph}</p>
-                      ))}
-                    </div>
-                  </article>
-                ) : null}
-
-                {artist?.galleryNoteEn ? (
-                  <article className="space-y-4 border-l border-white/10 pl-5 md:pl-6">
-                    <p className="text-[10px] uppercase tracking-[0.32em] text-white/45">
-                      English Text
-                    </p>
-                    <div className="space-y-5 text-[16px] leading-8 text-white/76 md:text-[17px]">
-                      {artist.galleryNoteEn.split("\n").map((paragraph, index) => (
-                        <p key={`gallery-note-en-${index}`}>{paragraph}</p>
-                      ))}
-                    </div>
-                  </article>
-                ) : null}
-              </div>
+                      return href ? (
+                        <a
+                          key={item.id}
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block transition hover:opacity-62"
+                        >
+                          {content}
+                        </a>
+                      ) : (
+                        <div key={item.id}>{content}</div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-5 text-sm leading-7 opacity-56">
+                    Press & Archive를 준비 중입니다.
+                  </p>
+                )}
+              </article>
             </div>
-          </section>
-        ) : null}
-
-        <section id="works" className="border-t border-black/10 py-16 md:py-24">
-          <SectionHeading
-            label="SELECTED WORKS"
-            title="Works"
-            description="Selected works from the artist’s current archive."
-          />
-
-          <div className="mt-10">
-            {visibleWorks.length > 0 ? (
-              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                {visibleWorks.map((work) => {
-                  const artworkImage = work.coverImageUrl ?? work.coverImage ?? "";
-                  const workHref = getWorkHref(work);
-                  const arHref = getArHref(work);
-
-                  return (
-                    <WorkCard
-                      key={workHref}
-                      href={workHref}
-                      secondaryHref={arHref}
-                      image={artworkImage}
-                      title={work.title}
-                      year={work.year}
-                      medium={work.medium}
-                      dimensions={work.dimensions}
-                    />
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-8 text-sm leading-7 text-white/60">
-                현재 공개된 작품을 준비 중입니다.
-              </div>
-            )}
           </div>
-        </section>
 
-        {hasExhibitions ? (
-          <section id="exhibitions" className="border-t border-white/10 py-16 md:py-24">
-            <div className="max-w-3xl space-y-4">
-              <p className="text-[11px] uppercase tracking-[0.34em] text-white/45">
-                EXHIBITIONS
-              </p>
-              <h2 className="text-3xl font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-5xl">
-                Exhibition Archive
-              </h2>
-              <p className="text-sm leading-7 text-white/58 md:text-[15px]">
-                Recent exhibitions listed in reverse chronological order.
-              </p>
+          <aside className="grid gap-6 content-start">
+            <div className="grid grid-cols-2 gap-3">
+              {heroLinks.slice(0, 4).map((item) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="border border-black/10 bg-white/25 px-4 py-4 text-sm transition hover:bg-white/55"
+                >
+                  <span className="block text-[10px] uppercase tracking-[0.24em] opacity-45">
+                    Link
+                  </span>
+                  <span className="mt-2 block">{item.label}</span>
+                </a>
+              ))}
+              <button
+                type="button"
+                onClick={handleSharePortfolio}
+                className="border border-black/10 bg-white/25 px-4 py-4 text-left text-sm transition hover:bg-white/55"
+              >
+                <span className="block text-[10px] uppercase tracking-[0.24em] opacity-45">
+                  Share
+                </span>
+                <span className="mt-2 block">Portfolio</span>
+              </button>
+              <Link
+                href="/artists"
+                className="border border-black/10 bg-white/25 px-4 py-4 text-sm transition hover:bg-white/55"
+              >
+                <span className="block text-[10px] uppercase tracking-[0.24em] opacity-45">
+                  Back
+                </span>
+                <span className="mt-2 block">Artists</span>
+              </Link>
             </div>
 
-            <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {artistExhibitionsForDisplay.map((exhibition) => {
-                const dateRange = formatExhibitionDateRange(
-                  exhibition.startDate,
-                  exhibition.endDate
-                );
-                const venueLabel = [exhibition.venue, exhibition.location]
-                  .filter(Boolean)
-                  .join(" · ");
-
-                return (
-                  <article
-                    key={exhibition.id}
-                    className="group overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.04] transition hover:-translate-y-0.5 hover:border-[#F37021]/35 hover:bg-white/[0.055] hover:shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
-                  >
-                    <div className="relative overflow-hidden bg-[#161616]">
+            <article className="border-t border-black/10 pt-6">
+              <h2 className="text-3xl font-normal tracking-[-0.03em]">
+                Exhibitions
+              </h2>
+              {compactExhibitions.length > 0 ? (
+                <div className="mt-5 divide-y divide-black/10">
+                  {compactExhibitions.map((exhibition) => (
+                    <div key={exhibition.id} className="grid grid-cols-[5rem_1fr] gap-4 py-4">
                       {exhibition.imageUrl ? (
                         <img
                           src={exhibition.imageUrl}
                           alt={exhibition.title || artist.name}
-                          className="aspect-[4/3] h-full w-full object-cover transition duration-700 group-hover:scale-[1.02]"
+                          className="aspect-[4/3] h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="flex aspect-[4/3] items-center justify-center bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-6 text-center text-sm leading-7 text-white/55">
-                          전시 이미지를 준비 중입니다.
-                        </div>
+                        <div className="aspect-[4/3] bg-black/8" />
                       )}
-                    </div>
-
-                    <div className="space-y-2 bg-[#0f0f0f] px-5 py-5">
-                      <h3 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-[1.32rem]">
-                        {exhibition.title || "Untitled Exhibition"}
-                      </h3>
-                      {dateRange ? (
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/58">
-                          {dateRange}
+                      <div>
+                        <p className="line-clamp-1 text-sm font-medium">
+                          {exhibition.title || "Untitled Exhibition"}
                         </p>
-                      ) : null}
-                      {venueLabel ? (
-                        <p className="text-sm leading-6 text-white/62">
-                          {venueLabel}
+                        <p className="mt-1 text-xs opacity-52">
+                          {formatExhibitionDateRange(
+                            exhibition.startDate,
+                            exhibition.endDate
+                          )}
                         </p>
-                      ) : null}
+                        <p className="mt-1 line-clamp-1 text-xs opacity-52">
+                          {[exhibition.venue, exhibition.location]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
                     </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-5 text-sm leading-7 opacity-56">
+                  전시 기록을 준비 중입니다.
+                </p>
+              )}
+            </article>
+          </aside>
+        </section>
+      </div>
 
-        {hasStatement ? (
-          <section id="statement" className="border-t border-white/10 py-16 md:py-24">
-            <SectionHeading
-              label="ARTIST STATEMENT"
-              title="Statement"
-              description="Artist notes and short-form biography for the public archive."
-            />
-
-            <div
-              className={`mt-10 grid gap-10 ${
-                artist.bio && artist.bioEn ? "lg:grid-cols-2" : "lg:grid-cols-1"
-              }`}
+      {lightboxWork && lightboxImage ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-[#171411]/72 p-4 backdrop-blur-md md:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${lightboxWork.title} high resolution preview`}
+          onClick={() => setLightboxWork(null)}
+        >
+          <div
+            className="relative max-h-full w-full max-w-6xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setLightboxWork(null)}
+              className="absolute right-0 top-0 z-10 -translate-y-12 text-sm uppercase tracking-[0.22em] text-white/80 transition hover:text-white"
             >
-              {artist.bio ? (
-                <article className="max-w-3xl space-y-4">
-                  <p className="text-[10px] uppercase tracking-[0.32em] text-white/45">
-                    Korean Text
-                  </p>
-                  <div className="space-y-5 text-[16px] leading-8 text-white/76 md:text-[17px]">
-                    {artist.bio.split("\n").map((paragraph, index) => (
-                      <p key={`ko-${index}`}>{paragraph}</p>
-                    ))}
-                  </div>
-                </article>
-              ) : null}
-
-              {artist.bioEn ? (
-                <article className="max-w-3xl space-y-4">
-                  <p className="text-[10px] uppercase tracking-[0.32em] text-white/45">
-                    English Text
-                  </p>
-                  <div className="space-y-5 text-[16px] leading-8 text-white/76 md:text-[17px]">
-                    {artist.bioEn.split("\n").map((paragraph, index) => (
-                      <p key={`en-${index}`}>{paragraph}</p>
-                    ))}
-                  </div>
-                </article>
-              ) : null}
+              Close
+            </button>
+            <div className="max-h-[82vh] overflow-hidden bg-[#f8f3ea] shadow-[0_40px_140px_rgba(0,0,0,0.42)]">
+              <img
+                src={lightboxImage}
+                alt={lightboxWork.title}
+                className="max-h-[82vh] w-full object-contain"
+              />
             </div>
-          </section>
-        ) : null}
-
-        <CvHistorySection items={displayCvItems} />
-        <PressArchiveSection items={displayArchiveLinks} />
-
-        <footer className="border-t border-white/10 py-16 md:py-20">
-          <div className="rounded-[2.4rem] border border-white/10 bg-white/[0.045] p-6 md:p-8">
-            <p className="text-[11px] uppercase tracking-[0.34em] text-white/45">
-              KÜN’S GALLERY
-            </p>
-            <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-[#F7F1E8] md:text-4xl">
-              Official artist archive
-            </h2>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-white/62 md:text-[15px]">
-              전속 작가의 작품, 기록, 외부 링크를 한곳에서 보도록 정리한 공식 공개 페이지입니다.
-            </p>
-
-            <div className="mt-6 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-col gap-3 text-white md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-2xl font-normal tracking-[-0.03em]">
+                  {lightboxWork.title}
+                </h2>
+                <p className="mt-1 text-sm text-white/65">
+                  {[lightboxWork.year, lightboxWork.medium, lightboxWork.dimensions]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </div>
               <Link
-                href="/artists"
-                className="inline-flex h-11 items-center rounded-full border border-[#F37021]/45 bg-[#F37021] px-5 text-sm font-medium text-[#171717] transition hover:bg-[#ff7a2f]"
+                href={getWorkHref(lightboxWork)}
+                className="inline-flex w-fit border-b border-white/50 pb-1 text-sm transition hover:border-white hover:text-white"
               >
-                Back to Artists
+                View Artwork Detail
               </Link>
-              {heroLinks.slice(0, 3).map((item) => (
-                <a
-                  key={`footer-${item.label}`}
-                  href={item.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex h-11 items-center rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm text-[#F7F1E8] transition hover:border-[#F37021]/40 hover:bg-[#F37021]/12"
-                >
-                  {item.label}
-                </a>
-              ))}
             </div>
           </div>
-        </footer>
-      </div>
-    </main>
-  );
-}
+        </div>
+      ) : null}
 
-function SectionHeading({
-  label,
-  title,
-  description,
-}: {
-  label: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="max-w-3xl space-y-4">
-      <p className="text-[11px] uppercase tracking-[0.34em] text-black/45">
-        {label}
-      </p>
-      <h2 className="text-3xl font-semibold tracking-[-0.04em] text-[#171411] md:text-5xl">
-        {title}
-      </h2>
-      <p className="text-sm leading-7 text-black/62 md:text-[15px]">
-        {description}
-      </p>
-    </div>
+      {showDebugNote ? (
+        <div className="fixed bottom-4 left-4 z-40 max-w-xs border border-black/10 bg-white/80 px-3 py-2 text-xs shadow-[0_10px_40px_rgba(58,42,24,0.12)]">
+          source: {debugSource}
+          {loadErrorMessage ? <span> · {loadErrorMessage}</span> : null}
+        </div>
+      ) : null}
+
+    </main>
   );
 }
 
@@ -1191,6 +1081,8 @@ function WorkCard({
   year,
   medium,
   dimensions,
+  featured = false,
+  onOpen,
 }: {
   href: string;
   secondaryHref?: string;
@@ -1199,32 +1091,35 @@ function WorkCard({
   year?: string;
   medium?: string;
   dimensions?: string;
+  featured?: boolean;
+  onOpen: () => void;
 }) {
   return (
-    <article className="group relative overflow-hidden rounded-[1.7rem] border border-black/10 bg-white/55 shadow-[0_18px_60px_rgba(58,42,24,0.08)] transition hover:-translate-y-0.5 hover:border-[#F37021]/40 hover:bg-white/80 hover:shadow-[0_24px_80px_rgba(58,42,24,0.16)]">
-      <Link
-        href={href}
-        aria-label={`${title} View Artwork`}
-        className="absolute inset-0 z-10"
-      >
-        <span className="sr-only">{title}</span>
-      </Link>
-
+    <article
+      className={`group relative overflow-hidden bg-white/35 shadow-[0_16px_45px_rgba(58,42,24,0.1)] transition duration-500 hover:-translate-y-1 hover:bg-white/60 hover:shadow-[0_26px_72px_rgba(58,42,24,0.16)] ${
+        featured ? "col-span-2 row-span-2" : ""
+      }`}
+    >
       {secondaryHref ? (
         <Link
           href={secondaryHref}
-          className="absolute right-4 top-4 z-20 rounded-full border border-white/12 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.24em] text-white/85 transition hover:border-[#F37021]/40 hover:bg-[#F37021]/12 hover:text-[#F7F1E8]"
+          className="absolute right-3 top-3 z-20 bg-black/45 px-2.5 py-1 text-[9px] uppercase tracking-[0.2em] text-white/85 backdrop-blur-sm transition hover:bg-black/70"
         >
-          View AR
+          AR
         </Link>
       ) : null}
 
-      <div className="relative aspect-[4/5] overflow-hidden bg-[#1a1a1a]">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="relative block h-full min-h-[8rem] w-full overflow-hidden bg-[#1a1a1a] text-left"
+        aria-label={`${title} 이미지 크게 보기`}
+      >
         {image ? (
           <img
             src={image}
             alt={title}
-            className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.03]"
+            className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
           />
         ) : (
           <div className="flex h-full w-full flex-col justify-between bg-[radial-gradient(circle_at_20%_20%,rgba(243,112,33,0.15),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5">
@@ -1236,25 +1131,26 @@ function WorkCard({
             </p>
           </div>
         )}
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(0,0,0,0.42))] opacity-90 transition group-hover:opacity-100" />
-        <div className="absolute left-4 top-4 rounded-full border border-white/15 bg-black/35 px-3 py-1 text-[10px] uppercase tracking-[0.26em] text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_38%,rgba(0,0,0,0.58))] opacity-90 transition group-hover:opacity-100" />
+        <div className="absolute left-3 top-3 bg-black/38 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-white">
           {year || "Year"}
         </div>
-        <div className="absolute bottom-4 left-4 rounded-full border border-white/10 bg-white/[0.08] px-3 py-1 text-[10px] uppercase tracking-[0.26em] text-white/85">
-          View Artwork
+        <div className="absolute inset-x-0 bottom-0 p-3 text-white">
+          <h3 className="line-clamp-1 text-sm font-medium tracking-[-0.02em]">
+            {title}
+          </h3>
+          <p className="mt-1 line-clamp-1 text-[11px] text-white/62">
+            {[medium, dimensions].filter(Boolean).join(" · ")}
+          </p>
         </div>
-      </div>
+      </button>
 
-      <div className="space-y-3 p-5 md:p-6">
-        <h3 className="text-[1.28rem] font-semibold tracking-[-0.04em] text-[#171411] md:text-[1.42rem]">
-          {title}
-        </h3>
-        <div className="flex flex-wrap gap-x-3 gap-y-2 text-sm leading-6 text-black/60">
-          {year ? <span>{year}</span> : null}
-          {medium ? <span>{medium}</span> : null}
-          {dimensions ? <span>{dimensions}</span> : null}
-        </div>
-      </div>
+      <Link
+        href={href}
+        className="absolute bottom-3 right-3 z-20 border-b border-white/50 text-[10px] uppercase tracking-[0.18em] text-white/85 transition hover:border-white hover:text-white"
+      >
+        Detail
+      </Link>
     </article>
   );
 }
@@ -1313,145 +1209,4 @@ function formatExhibitionDate(value?: Date | null) {
     year: "numeric",
     timeZone: "UTC",
   }).format(value);
-}
-
-function CvHistorySection({ items }: { items: ArtistCvItem[] }) {
-  const groupedItems = groupCvItemsByType(items);
-
-  if (groupedItems.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="border-t border-white/10 py-16 md:py-24">
-      <SectionHeading
-        label="CV / SELECTED HISTORY"
-        title="Selected History"
-        description="Official CV highlights arranged for public viewing."
-      />
-
-      <div className="mt-10 space-y-12">
-        {groupedItems.map((group) => (
-          <div key={group.type} className="border-t border-white/10 pt-6 md:pt-8">
-            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.32em] text-white/45">
-                  Category
-                </p>
-                <h3 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[#F7F1E8] md:text-2xl">
-                  {getArtistCvTypeDisplayLabel(group.type)}
-                </h3>
-              </div>
-              <span className="inline-flex w-fit rounded-full border border-[#f3c49d]/40 bg-[#fef4ea]/10 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-[#FF9B5A]">
-                KÜN’S Orange
-              </span>
-            </div>
-
-            <div className="mt-6 divide-y divide-white/10 border-t border-white/10">
-              {group.items.map((item) => (
-                <article
-                  key={item.id}
-                  className="grid gap-4 py-4 md:grid-cols-[108px_minmax(0,1fr)] md:gap-8 md:py-5"
-                >
-                  <div className="flex items-start gap-3 md:flex-col md:gap-2">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.26em] text-[#FF9B5A] md:text-sm md:normal-case md:tracking-[0.02em]">
-                      {item.year || "—"}
-                    </p>
-                  </div>
-
-                  <div className="min-w-0">
-                    <h4 className="text-[1.05rem] font-medium tracking-[-0.03em] text-[#F7F1E8] md:text-[1.08rem]">
-                      {item.title}
-                    </h4>
-                    <p className="mt-2 text-sm leading-7 text-white/62">
-                      {[item.venue, item.location].filter(Boolean).join(", ")}
-                    </p>
-                    {item.note ? (
-                      <p className="mt-2 text-sm leading-6 text-white/48">
-                        {item.note}
-                      </p>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function PressArchiveSection({ items }: { items: ArtistArchiveLink[] }) {
-  const groupedItems = groupArchiveLinksByType(items);
-
-  if (groupedItems.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="border-t border-white/10 py-16 md:py-24">
-      <SectionHeading
-        label="PRESS & ARCHIVE"
-        title="Press & Archive"
-        description="External references and selected press materials."
-      />
-
-      <div className="mt-10 space-y-4">
-        {groupedItems.map((group) => (
-          <div key={group.type} className="space-y-3">
-            <h3 className="text-[11px] uppercase tracking-[0.32em] text-white/45">
-              {getArtistArchiveLinkTypeLabel(group.type)}
-            </h3>
-            <div className="space-y-3">
-              {group.items.map((item) => {
-                const href = normalizeExternalUrl(item.url);
-
-                const content = (
-                  <article className="group rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4 transition hover:border-[#F37021]/35 hover:bg-white/[0.055] md:p-5">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="text-[1.05rem] font-medium tracking-[-0.03em] text-[#F7F1E8]">
-                            {item.title}
-                          </h4>
-                          {item.year ? (
-                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.22em] text-white/45">
-                              {item.year}
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-2 text-sm leading-7 text-white/62">
-                          {item.source}
-                        </p>
-                        {item.description ? (
-                          <p className="mt-2 max-w-3xl text-sm leading-7 text-white/48">
-                            {item.description}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="shrink-0 text-[11px] uppercase tracking-[0.28em] text-[#FF9B5A]">
-                        {href ? "External Link ↗" : "Reference"}
-                      </div>
-                    </div>
-                  </article>
-                );
-
-                if (!href) {
-                  return <div key={item.id}>{content}</div>;
-                }
-
-                return (
-                  <a key={item.id} href={href} target="_blank" rel="noreferrer">
-                    {content}
-                  </a>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
 }
