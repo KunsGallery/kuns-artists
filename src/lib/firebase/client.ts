@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, setLogLevel } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -27,6 +27,8 @@ validateFirebaseEnv();
 
 export const firebaseApp =
   getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+setLogLevel("silent");
 
 export const auth = getAuth(firebaseApp);
 export const db = getFirestore(firebaseApp);
