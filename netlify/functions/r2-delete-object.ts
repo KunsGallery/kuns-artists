@@ -20,6 +20,12 @@ const ALLOWED_EMAILS = new Set([
   "wwwrosaweb@gmail.com",
   "chlwotjq127@gmail.com",
 ]);
+const ARTIST_SLUG_BY_EMAIL: Record<string, string> = {
+  "gallerykuns@gmail.com": "kim-hwan",
+  "boramine5255@gmail.com": "jung-boram",
+  "wwwrosaweb@gmail.com": "rosa-kang",
+  "chlwotjq127@gmail.com": "jessup-choi",
+};
 
 const GOOGLE_CERTS_URL =
   "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
@@ -200,7 +206,7 @@ export const handler = async (event: {
     }
 
     const projectId = getRequiredEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
-    await verifyFirebaseIdToken(bearerToken, projectId);
+    const identity = await verifyFirebaseIdToken(bearerToken, projectId);
 
     const accountId = getRequiredEnv("R2_ACCOUNT_ID");
     const accessKeyId = getRequiredEnv("R2_ACCESS_KEY_ID");
@@ -223,15 +229,25 @@ export const handler = async (event: {
         : []),
     ];
 
-    const keys = uniqueStrings(
+    const candidateUniqueKeys = uniqueStrings(
       candidateKeys.filter((key) => isSafeR2Key(key))
     );
+    const email = (identity.email as string).toLowerCase();
+    const isAdmin = email === "gallerykuns@gmail.com";
+    const slug = ARTIST_SLUG_BY_EMAIL[email];
+    const keys = isAdmin
+      ? candidateUniqueKeys
+      : candidateUniqueKeys.filter((key) =>
+          ["profiles", "work-images", "exhibition-images", "models/glb", "models/usdz", "ar-models", "quick-look", "cv"]
+            .some((prefix) => key.startsWith(`${prefix}/${slug}/`))
+        );
+    const skippedKeys = candidateUniqueKeys.filter((key) => !keys.includes(key));
 
     if (keys.length === 0) {
       return jsonResponse(200, {
         ok: true,
         deletedKeys: [],
-        skippedKeys: [],
+        skippedKeys,
         failedKeys: [],
       });
     }
@@ -272,7 +288,7 @@ export const handler = async (event: {
     return jsonResponse(200, {
       ok: true,
       deletedKeys,
-      skippedKeys: [],
+      skippedKeys,
       failedKeys,
     });
   } catch (error) {

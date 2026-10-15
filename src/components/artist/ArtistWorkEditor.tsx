@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import ArtistWorkGlbForm from "./ArtistWorkGlbForm";
@@ -100,6 +100,8 @@ export default function ArtistWorkEditor({
   const [work, setWork] = useState<ArtistWorkDoc | null>(null);
   const [initialValues, setInitialValues] = useState<Partial<WorkFormValues>>();
   const [editorErrorMessage, setEditorErrorMessage] = useState("");
+  const draftIdRef = useRef<string | null>(null);
+  const draftCreationRef = useRef<Promise<string> | null>(null);
   const { artist, uid, isLoading, errorMessage } = useProtectedArtist({
     fallbackErrorMessage: "작품 정보를 불러오는 중 오류가 발생했습니다.",
   });
@@ -178,6 +180,45 @@ export default function ArtistWorkEditor({
     };
   }, [artist, mode, uid, workId]);
 
+  useEffect(() => {
+    draftIdRef.current = mode === "edit" ? workId ?? null : null;
+    draftCreationRef.current = null;
+  }, [mode, workId]);
+
+  async function persistDraft(payload: ArtistWorkSavePayload) {
+    if (!uid || !artist) throw new Error("작가 정보를 불러오지 못했습니다.");
+    if (draftIdRef.current) {
+      await updateWorkForArtist(draftIdRef.current, uid, artist, payload);
+      return draftIdRef.current;
+    }
+    const pendingCreation = draftCreationRef.current ?? createWorkForArtist(
+      uid,
+      artist,
+      { ...payload, title: payload.title || "작품 초안" }
+    );
+    draftCreationRef.current = pendingCreation;
+    let createdId: string;
+    try {
+      createdId = await pendingCreation;
+      draftIdRef.current = createdId;
+    } finally {
+      if (draftCreationRef.current === pendingCreation) {
+        draftCreationRef.current = null;
+      }
+    }
+    await updateWorkForArtist(createdId, uid, artist, payload);
+    return createdId;
+  }
+
+  async function handleAutosave(values: WorkFormValues) {
+    if (!uid || !artist || !values.coverImageUrl.trim()) return;
+    const payload = buildSavePayload({
+      ...values,
+      title: values.title.trim() || "작품 초안",
+    });
+    await persistDraft(payload);
+  }
+
   async function handleSave(values: WorkFormValues) {
     if (!uid) {
       throw new Error("로그인 정보를 확인할 수 없습니다.");
@@ -216,7 +257,8 @@ export default function ArtistWorkEditor({
     const payload = buildSavePayload(values);
 
   if (mode === "new") {
-      const createdWorkId = await createWorkForArtist(uid, artist, payload);
+      const createdWorkId = await persistDraft(payload);
+      draftIdRef.current = createdWorkId;
       router.push(`/artist/works/${createdWorkId}/ar?created=1`);
       return "작품이 저장되었습니다.";
     }
@@ -263,6 +305,7 @@ export default function ArtistWorkEditor({
       mode={mode}
       initialValues={initialValues}
       onSave={handleSave}
+      onAutosave={handleAutosave}
       saveButtonLabel={mode === "new" ? "작품 저장" : "변경사항 저장"}
       artistSlug={artist?.slug}
       workSlug={work?.slug}

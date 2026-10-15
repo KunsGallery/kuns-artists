@@ -2,16 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
   buildPublicArtistCollections,
-  type PublicArtistCard,
 } from "@/lib/artistCatalog";
 import {
   getPublicRepresentedArtists,
   getPublicWorksForArtistSlug,
 } from "@/lib/firebase/firestore";
-import { works as staticWorks } from "@/data/works";
 import FeaturedArtistsPreview from "@/components/public/FeaturedArtistsPreview";
 
 type ArchiveWorkTile = {
@@ -20,7 +18,6 @@ type ArchiveWorkTile = {
   artistName: string;
   title: string;
   imageUrl: string;
-  isFallback?: boolean;
 };
 
 type WorkTileProps = {
@@ -67,80 +64,13 @@ const cardRatioClasses: Record<CardRatio, string> = {
 
 const seedRepresentedArtists =
   buildPublicArtistCollections([]).representedArtists.slice(0, 4);
-const fallbackAbstractImages = [
-  "/images/fallback-works/fallback-abstract-01.svg",
-  "/images/fallback-works/fallback-abstract-02.svg",
-  "/images/fallback-works/fallback-abstract-03.svg",
-  "/images/fallback-works/fallback-abstract-04.svg",
-  "/images/fallback-works/fallback-abstract-05.svg",
-  "/images/fallback-works/fallback-abstract-06.svg",
-];
-
-const seedWorkTiles = fillWithFallbackWorks(
-  getStaticWorkTiles(seedRepresentedArtists.map((artist) => artist.slug)),
-  seedRepresentedArtists
-);
-
 function shuffle<T>(items: T[]) {
-  return [...items].sort(() => Math.random() - 0.5);
-}
-
-function hasUsableImageUrl(value?: string) {
-  const imageUrl = value?.trim() ?? "";
-
-  if (!imageUrl || imageUrl === "#") {
-    return false;
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
   }
-
-  return (
-    imageUrl.startsWith("/") ||
-    imageUrl.startsWith("https://") ||
-    imageUrl.startsWith("http://")
-  );
-}
-
-function getFallbackImageForId(id: string) {
-  const hash = [...id].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-
-  return fallbackAbstractImages[hash % fallbackAbstractImages.length];
-}
-
-function getStaticWorkTiles(artistSlugs: string[]): ArchiveWorkTile[] {
-  return staticWorks
-    .filter((work) => artistSlugs.includes(work.artistSlug))
-    .map((work) => ({
-      id: work.slug,
-      artistSlug: work.artistSlug,
-      artistName: work.artistName,
-      title: work.title,
-      imageUrl: work.coverImageUrl ?? work.coverImage ?? "",
-    }))
-    .filter((work) => hasUsableImageUrl(work.imageUrl));
-}
-
-function createFallbackWorkTiles(artists: PublicArtistCard[]) {
-  return Array.from({ length: RING_CARD_COUNT }, (_, index) => {
-    const artist = artists[index % Math.max(artists.length, 1)];
-
-    return {
-      id: `fallback-abstract-${index + 1}`,
-      artistSlug: artist?.slug ?? "artists",
-      artistName: artist?.name ?? "KÜN’S Gallery",
-      title: "Temporary Artwork Image",
-      imageUrl: fallbackAbstractImages[index % fallbackAbstractImages.length],
-      isFallback: true,
-    };
-  });
-}
-
-function fillWithFallbackWorks(
-  sourceWorks: ArchiveWorkTile[],
-  artists: PublicArtistCard[]
-) {
-  const fallbackWorks = createFallbackWorkTiles(artists);
-  const mergedWorks = [...sourceWorks, ...fallbackWorks];
-
-  return mergedWorks.slice(0, Math.max(RING_CARD_COUNT, mergedWorks.length));
+  return shuffled;
 }
 
 function getRingCardStyle(
@@ -185,11 +115,7 @@ function WorkTile({
   priority = false,
 }: WorkTileProps) {
   const [failedImageId, setFailedImageId] = useState("");
-  const fallbackImageUrl = getFallbackImageForId(work.id);
-  const imageUrl =
-    failedImageId === work.id || !hasUsableImageUrl(work.imageUrl)
-      ? fallbackImageUrl
-      : work.imageUrl;
+  const imageUrl = failedImageId === work.id ? "" : work.imageUrl;
 
   return (
     <Link
@@ -216,7 +142,7 @@ function WorkTile({
       }}
     >
       <div className="archive-card-inner relative h-full min-h-[10rem] overflow-hidden bg-[#efe7dc] md:min-h-0">
-        <Image
+        {imageUrl ? <Image
           key={`${work.id}-${imageUrl}`}
           src={imageUrl}
           alt={work.title}
@@ -225,12 +151,12 @@ function WorkTile({
           sizes="(max-width: 768px) 50vw, 30vw"
           className="archive-image-current object-cover transition duration-[900ms] ease-out group-hover:scale-[1.035]"
           onError={() => setFailedImageId(work.id)}
-        />
+        /> : <div className="absolute inset-0 bg-[#e4d8c8]" aria-hidden="true" />}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,248,238,0.02),rgba(23,17,11,0.32))] opacity-70 transition duration-700 group-hover:opacity-35" />
         <div className="pointer-events-none absolute inset-0 rounded-[1.2rem] ring-1 ring-white/28" />
         <div className="absolute inset-x-3 bottom-3 translate-y-2 opacity-0 transition duration-500 group-hover:translate-y-0 group-hover:opacity-100">
           <p className="truncate text-[11px] uppercase tracking-[0.18em] text-white/74">
-            {work.isFallback ? "Temporary Image" : work.artistName}
+            {work.artistName}
           </p>
         </div>
       </div>
@@ -239,12 +165,7 @@ function WorkTile({
 }
 
 export default function HomeArchiveWall() {
-  const [artists, setArtists] = useState<PublicArtistCard[]>(
-    seedRepresentedArtists
-  );
-  const [visibleWorks, setVisibleWorks] = useState<ArchiveWorkTile[]>(
-    seedWorkTiles.slice(0, RING_CARD_COUNT)
-  );
+  const [visibleWorks, setVisibleWorks] = useState<ArchiveWorkTile[]>([]);
   const [selectedRingIndex, setSelectedRingIndex] = useState(0);
   const [isRingHovering, setIsRingHovering] = useState(false);
 
@@ -252,18 +173,11 @@ export default function HomeArchiveWall() {
     let cancelled = false;
 
     void (async () => {
-      const firestoreArtists = await getPublicRepresentedArtists().catch(
-        () => []
-      );
-      const representedArtists =
-        buildPublicArtistCollections(firestoreArtists).representedArtists.slice(
-          0,
-          4
-        );
-      const nextArtists =
-        representedArtists.length > 0
-          ? representedArtists
-          : seedRepresentedArtists;
+      const firestoreArtists = await getPublicRepresentedArtists().catch(() => null);
+      const representedArtists = firestoreArtists
+        ? buildPublicArtistCollections(firestoreArtists, false).representedArtists
+        : seedRepresentedArtists;
+      const nextArtists = representedArtists.slice(0, 4);
       const artistSlugs = nextArtists.map((artist) => artist.slug);
       const firestoreWorks = (
         await Promise.all(
@@ -285,18 +199,11 @@ export default function HomeArchiveWall() {
             Boolean(work.artistSlug && work.artistName && work.title && work.imageUrl)
         );
 
-      const nextWorks =
-        firestoreWorks.length > 0
-          ? firestoreWorks
-          : getStaticWorkTiles(nextArtists.map((artist) => artist.slug));
-      const filledWorks = fillWithFallbackWorks(nextWorks, nextArtists);
-
       if (cancelled) {
         return;
       }
 
-      setArtists(nextArtists);
-      setVisibleWorks(shuffle(filledWorks).slice(0, RING_CARD_COUNT));
+      setVisibleWorks(shuffle(firestoreWorks).slice(0, RING_CARD_COUNT));
     })();
 
     return () => {
@@ -309,6 +216,8 @@ export default function HomeArchiveWall() {
       return;
     }
 
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) return;
     const intervalId = window.setInterval(() => {
       setSelectedRingIndex((currentIndex) =>
         (currentIndex + 1) % Math.min(visibleWorks.length, RING_CARD_COUNT)
@@ -318,18 +227,7 @@ export default function HomeArchiveWall() {
     return () => window.clearInterval(intervalId);
   }, [isRingHovering, visibleWorks.length]);
 
-  const fallbackWorkTiles = useMemo(
-    () =>
-      fillWithFallbackWorks(
-        getStaticWorkTiles(artists.map((artist) => artist.slug)),
-        artists
-      ),
-    [artists]
-  );
-  const displayWorks =
-    visibleWorks.length > 0
-      ? visibleWorks.slice(0, RING_CARD_COUNT)
-      : fallbackWorkTiles.slice(0, RING_CARD_COUNT);
+  const displayWorks = visibleWorks.slice(0, RING_CARD_COUNT);
   const normalizedSelectedIndex =
     selectedRingIndex % Math.max(displayWorks.length, 1);
 
@@ -367,6 +265,12 @@ export default function HomeArchiveWall() {
               className="archive-ring-stage relative grid auto-rows-[6.2rem] grid-cols-2 gap-2 md:block md:min-h-0 md:flex-1 md:overflow-hidden"
               onMouseEnter={() => setIsRingHovering(true)}
               onMouseLeave={() => setIsRingHovering(false)}
+              onFocusCapture={() => setIsRingHovering(true)}
+              onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setIsRingHovering(false);
+                }
+              }}
             >
               {displayWorks.map((work, index) => (
                 <WorkTile
@@ -392,6 +296,11 @@ export default function HomeArchiveWall() {
                   priority={index < 4}
                 />
               ))}
+              {displayWorks.length === 0 ? (
+                <p className="absolute inset-0 grid place-items-center text-sm text-[#171411]/50">
+                  공개된 작품을 준비하고 있습니다.
+                </p>
+              ) : null}
             </div>
 
             <div className="mx-auto grid w-full max-w-[36rem] gap-3 sm:grid-cols-2">
@@ -449,9 +358,8 @@ export default function HomeArchiveWall() {
               artists preview
             </h2>
             <p className="max-w-2xl text-[15px] leading-8 text-[#171411]/62 md:text-[16px] md:leading-9">
-              전속 작가 4명을 미리 보여주는 영역입니다. 각 카드에서 바로
-              상세 페이지로 이동할 수 있어, 홈에서 아카이브로의 흐름이
-              자연스럽게 이어집니다.
+              서로 다른 시선과 재료로 작업하는 Kün&apos;s Gallery 전속 작가들의
+              작품 세계를 만나보세요.
             </p>
           </div>
 
@@ -470,8 +378,7 @@ export default function HomeArchiveWall() {
               artists or log in.
             </h2>
             <p className="mt-5 max-w-xl text-[15px] leading-8 text-[#171411]/58 md:text-[16px] md:leading-9">
-              가장 중요한 진입점만 남겨, 홈에서 바로 아카이브와 작가 관리
-              흐름으로 이어집니다.
+              작가별 아카이브를 둘러보거나, 작가 계정으로 작품과 기록을 관리해보세요.
             </p>
           </div>
 

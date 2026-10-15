@@ -13,6 +13,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./client";
 import type { AllowedArtistSeed } from "@/lib/artistAccess";
@@ -751,7 +752,7 @@ function toArtistDoc(id: string, rawData: Record<string, unknown>): ArtistDoc {
     slug: toOptionalString(rawData.slug),
     name: toOptionalString(rawData.name),
     nameKo: toOptionalString(rawData.nameKo),
-    email: toOptionalString(rawData.email),
+    email: undefined,
     type: toOptionalArtistType(rawData.type),
     status: toOptionalArtistStatus(rawData.status),
     role: toOptionalArtistRole(rawData.role),
@@ -919,6 +920,7 @@ function toArtistAdminPayload(payload: ArtistAdminSavePayload) {
     type: payload.type,
     status: payload.status,
     role: payload.role,
+    publicProfile: payload.status === "active",
     tagline: payload.tagline.trim(),
     bio: payload.bio.trim(),
     bioEn: payload.bioEn.trim(),
@@ -976,9 +978,7 @@ function toArtistAdminPayload(payload: ArtistAdminSavePayload) {
       : {}),
   };
 
-  return payload.email !== undefined
-    ? { ...withOptionalCollections, email: payload.email.trim() }
-    : withOptionalCollections;
+  return withOptionalCollections;
 }
 
 export async function findArtistDocIdBySlug(slug: string): Promise<string | null> {
@@ -1031,6 +1031,19 @@ async function updateArtistAdminDocument(
   payload: ArtistAdminSavePayload
 ) {
   const cleanPayload = toArtistAdminPayload(payload);
+
+  if (payload.email !== undefined) {
+    const email = payload.email.trim();
+    if (email) {
+      await setDoc(doc(db, "artistPrivate", docId), {
+        email,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } else {
+      await deleteDoc(doc(db, "artistPrivate", docId));
+    }
+    await updateDoc(doc(db, "artists", docId), { email: deleteField() });
+  }
 
   await updateDoc(doc(db, "artists", docId), {
     ...cleanPayload,
@@ -1231,14 +1244,6 @@ async function fetchAllArtistDocs() {
   );
 }
 
-async function fetchAllArtistDocsFromServer() {
-  const snapshot = await getDocsFromServer(collection(db, "artists"));
-
-  return snapshot.docs.map((document) =>
-    toArtistDoc(document.id, document.data() as Record<string, unknown>)
-  );
-}
-
 async function fetchAllWorkDocs() {
   const snapshot = await getDocs(collection(db, "works"));
 
@@ -1372,7 +1377,9 @@ export async function getPublicExhibitionsForArtistSlug(
   const snapshot = await getDocs(
     query(
       collection(db, "exhibitions"),
-      where("artistSlug", "==", normalizedSlug)
+      where("artistSlug", "==", normalizedSlug),
+      where("isPublished", "==", true),
+      where("archived", "==", false)
     )
   );
 
@@ -1422,53 +1429,42 @@ export async function getPublicArtistBySlug(
     return null;
   }
 
-  const queryCandidates: ArtistDoc[] = [];
-
   const slugSnapshot = await getDocsFromServer(
     query(
       collection(db, "artists"),
       where("slug", "==", normalizedSlug),
+      where("status", "==", "active"),
+      where("publicProfile", "==", true),
       limit(1)
     )
   );
 
   if (!slugSnapshot.empty) {
     const document = slugSnapshot.docs[0];
-    queryCandidates.push(
-      toArtistDoc(document.id, document.data() as Record<string, unknown>)
-    );
+    return toArtistDoc(document.id, document.data() as Record<string, unknown>);
   }
 
   const idSnapshot = await getDocFromServer(doc(db, "artists", normalizedSlug));
-
-  if (idSnapshot.exists()) {
-    queryCandidates.push(
-      toArtistDoc(idSnapshot.id, idSnapshot.data() as Record<string, unknown>)
-    );
-  }
-
-  const matchedQueryCandidate = queryCandidates.find(
-    (artist) =>
-      artist.status === "active" &&
-      (artist.slug === normalizedSlug || artist.id === normalizedSlug)
-  );
-
-  if (matchedQueryCandidate) {
-    return matchedQueryCandidate;
-  }
-
-  const allArtists = await fetchAllArtistDocsFromServer();
-  const matchedFallback = allArtists.find(
-    (artist) =>
-      artist.status === "active" &&
-      (artist.slug === normalizedSlug || artist.id === normalizedSlug)
-  );
-
-  return matchedFallback ?? null;
+  if (!idSnapshot.exists()) return null;
+  const artist = toArtistDoc(idSnapshot.id, idSnapshot.data() as Record<string, unknown>);
+  return artist.status === "active" && (idSnapshot.data().publicProfile === true) ? artist : null;
 }
 
 export async function getAllArtistsForAdmin(): Promise<ArtistDoc[]> {
-  return (await fetchAllArtistDocs()).sort((left, right) => {
+  const artists = await fetchAllArtistDocs();
+  const privateSnapshot = await getDocs(collection(db, "artistPrivate"));
+  const privateEmails = new Map(
+    privateSnapshot.docs.map((entry) => [entry.id, toOptionalString(entry.data().email)])
+  );
+  const legacySnapshot = await getDocs(collection(db, "artists"));
+  const legacyEmails = new Map(
+    legacySnapshot.docs.map((entry) => [entry.id, toOptionalString(entry.data().email)])
+  );
+
+  return artists.map((artist) => ({
+    ...artist,
+    email: privateEmails.get(artist.id) ?? legacyEmails.get(artist.id),
+  })).sort((left, right) => {
     const typeOrder = left.type === right.type ? 0 : left.type === "represented" ? -1 : 1;
 
     if (typeOrder !== 0) return typeOrder;
@@ -1481,9 +1477,33 @@ export async function getAllArtistsForAdmin(): Promise<ArtistDoc[]> {
   });
 }
 
+export async function migrateLegacyArtistPrivateData() {
+  const snapshot = await getDocs(collection(db, "artists"));
+  let migrated = 0;
+  for (const entry of snapshot.docs) {
+    const email = toOptionalString(entry.data().email);
+    if (email) {
+      await setDoc(doc(db, "artistPrivate", entry.id), {
+        email,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      migrated += 1;
+    }
+    await updateDoc(entry.ref, {
+      email: deleteField(),
+      publicProfile: entry.data().status === "active",
+    });
+  }
+  return migrated;
+}
+
 export async function getAllArtistsForPublicDisplay(): Promise<ArtistDoc[]> {
   const snapshot = await getDocsFromServer(
-    query(collection(db, "artists"), where("status", "==", "active"))
+    query(
+      collection(db, "artists"),
+      where("status", "==", "active"),
+      where("publicProfile", "==", true)
+    )
   );
 
   return snapshot.docs
@@ -1505,7 +1525,8 @@ export async function getPublicRepresentedArtists(): Promise<ArtistDoc[]> {
     query(
       collection(db, "artists"),
       where("type", "==", "represented"),
-      where("status", "==", "active")
+      where("status", "==", "active"),
+      where("publicProfile", "==", true)
     )
   );
 
@@ -1630,19 +1651,32 @@ export async function getWorkBySlugForPublicRoute(slug: string): Promise<{
   work: ArtistWorkDoc | null;
   unpublished: boolean;
 }> {
-  const work = await getWorkBySlugOrId(slug);
+  const normalizedSlug = slug.trim();
+  if (!normalizedSlug) return { work: null, unpublished: false };
+
+  const matches = await getDocsFromServer(
+    query(
+      collection(db, "works"),
+      where("slug", "==", normalizedSlug),
+      where("isPublished", "==", true),
+      where("archived", "==", false),
+      limit(1)
+    )
+  );
+  let work = matches.empty
+    ? null
+    : toArtistWorkDoc(matches.docs[0].id, matches.docs[0].data() as Record<string, unknown>);
 
   if (!work) {
-    return {
-      work: null,
-      unpublished: false,
-    };
+    const byId = await getDocFromServer(doc(db, "works", normalizedSlug));
+    if (byId.exists()) {
+      const candidate = toArtistWorkDoc(byId.id, byId.data() as Record<string, unknown>);
+      if (candidate.isPublished === true && candidate.archived !== true) work = candidate;
+    }
   }
 
-  return {
-    work,
-    unpublished: work.isPublished !== true,
-  };
+  if (work?.archived === true) work = null;
+  return { work, unpublished: false };
 }
 
 export async function getPublicWorksForArtistSlug(
@@ -1658,7 +1692,8 @@ export async function getPublicWorksForArtistSlug(
     query(
       collection(db, "works"),
       where("artistSlug", "==", normalizedArtistSlug),
-      where("isPublished", "==", true)
+      where("isPublished", "==", true),
+      where("archived", "==", false)
     )
   );
 
@@ -1693,7 +1728,12 @@ export async function getPublicWorksForArtistId(
   }
 
   const snapshot = await getDocs(
-    query(collection(db, "works"), where("artistId", "==", normalizedArtistId))
+    query(
+      collection(db, "works"),
+      where("artistId", "==", normalizedArtistId),
+      where("isPublished", "==", true),
+      where("archived", "==", false)
+    )
   );
 
   return snapshot.docs
@@ -1741,6 +1781,13 @@ export async function createProjectArtistForAdmin(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  if (payload.email?.trim()) {
+    await setDoc(doc(db, "artistPrivate", documentRef.id), {
+      email: payload.email.trim(),
+      updatedAt: serverTimestamp(),
+    });
+  }
 
   return documentRef.id;
 }
@@ -2187,13 +2234,21 @@ export async function createArtistProfileFromSeed(
 ): Promise<ArtistDoc> {
   const ref = doc(db, "artists", uid);
 
+  const { email, ...publicSeed } = seed;
   const payload = {
-    ...seed,
+    ...publicSeed,
+    publicProfile: publicSeed.status === "active",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
-  await setDoc(ref, payload);
+  const batch = writeBatch(db);
+  batch.set(ref, payload);
+  batch.set(doc(db, "artistPrivate", uid), {
+    email,
+    updatedAt: serverTimestamp(),
+  });
+  await batch.commit();
 
   return {
     id: uid,

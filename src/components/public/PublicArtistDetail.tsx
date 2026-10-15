@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getArtistBySlug, type Artist } from "@/data/artists";
-import { works as staticWorks } from "@/data/works";
 import { resolveProfileImageUrl } from "@/lib/artistCatalog";
 import {
   getPublicArtistBySlug,
@@ -206,48 +205,13 @@ function mergePublicArtist(
   };
 }
 
-function findStaticFallbackWork(
-  artistSlug: string,
-  firestoreWork: ArtistWorkDoc
-) {
-  const normalizedTitle = firestoreWork.title?.trim().toLowerCase() ?? "";
-  const normalizedCover = firestoreWork.coverImageUrl?.trim() ?? "";
-
-  return staticWorks.find((work) => {
-    if (work.artistSlug !== artistSlug) {
-      return false;
-    }
-
-    if (firestoreWork.slug && work.slug === firestoreWork.slug) {
-      return true;
-    }
-
-    if (normalizedTitle && work.title.trim().toLowerCase() === normalizedTitle) {
-      return true;
-    }
-
-    if (normalizedCover && work.coverImage === normalizedCover) {
-      return true;
-    }
-
-    return false;
-  });
-}
-
 function mergePublicWork(
   artistSlug: string,
-  firestoreWork?: ArtistWorkDoc | null,
-  staticWork?: Work
+  firestoreWork?: ArtistWorkDoc | null
 ): PublicWork | null {
-  const fallbackWork =
-    staticWork ??
-    (firestoreWork ? findStaticFallbackWork(artistSlug, firestoreWork) : undefined);
-  const slug = firestoreWork
-    ? resolveArtistWorkSlug(firestoreWork)
-    : fallbackWork?.slug ?? "";
-  const title = firestoreWork?.title ?? fallbackWork?.title ?? "";
-  const artistName =
-    firestoreWork?.artistName ?? fallbackWork?.artistName ?? "";
+  const slug = firestoreWork ? resolveArtistWorkSlug(firestoreWork) : "";
+  const title = firestoreWork?.title ?? "";
+  const artistName = firestoreWork?.artistName ?? "";
 
   if (!slug || !title || !artistSlug || !artistName) {
     return null;
@@ -259,41 +223,32 @@ function mergePublicWork(
     artistSlug,
     artistName,
     title,
-    year: firestoreWork?.year ?? fallbackWork?.year,
-    medium: firestoreWork?.medium ?? fallbackWork?.medium,
-    dimensions: firestoreWork?.dimensions ?? fallbackWork?.dimensions,
-    description: firestoreWork?.description ?? fallbackWork?.description,
-    coverImage: firestoreWork?.coverImageUrl ?? fallbackWork?.coverImage,
-    coverImageUrl: firestoreWork?.coverImageUrl ?? fallbackWork?.coverImageUrl,
+    year: firestoreWork?.year,
+    medium: firestoreWork?.medium,
+    dimensions: firestoreWork?.dimensions,
+    description: firestoreWork?.description,
+    coverImage: firestoreWork?.coverImageUrl,
+    coverImageUrl: firestoreWork?.coverImageUrl,
     modelGlb:
       firestoreWork?.generatedGlbUrl ??
-      firestoreWork?.modelGlb ??
-      fallbackWork?.modelGlb,
+      firestoreWork?.modelGlb,
     modelUsdz:
       firestoreWork?.generatedUsdzUrl ??
-      firestoreWork?.modelUsdz ??
-      fallbackWork?.modelUsdz,
-    generatedGlbUrl:
-      firestoreWork?.generatedGlbUrl ?? fallbackWork?.generatedGlbUrl,
-    generatedUsdzUrl:
-      firestoreWork?.generatedUsdzUrl ?? fallbackWork?.generatedUsdzUrl,
-    arV2Config:
-      firestoreWork?.arV2Config ?? fallbackWork?.arV2Config,
-    arV2Asset:
-      firestoreWork?.arV2Asset ?? fallbackWork?.arV2Asset,
-    displayOrder: firestoreWork?.displayOrder ?? fallbackWork?.displayOrder,
-    widthCm: firestoreWork?.widthCm ?? fallbackWork?.widthCm,
-    heightCm: firestoreWork?.heightCm ?? fallbackWork?.heightCm,
-    depthCm: firestoreWork?.depthCm ?? fallbackWork?.depthCm,
-    frontRotationXDeg:
-      firestoreWork?.frontRotationXDeg ?? fallbackWork?.frontRotationXDeg,
-    frontRotationYDeg:
-      firestoreWork?.frontRotationYDeg ?? fallbackWork?.frontRotationYDeg,
-    sideMode: firestoreWork?.sideMode ?? fallbackWork?.sideMode,
-    showBackLabel:
-      firestoreWork?.showBackLabel ?? fallbackWork?.showBackLabel,
-    isPublished: firestoreWork?.isPublished ?? fallbackWork?.isPublished,
-    archived: firestoreWork?.archived ?? fallbackWork?.archived,
+      firestoreWork?.modelUsdz,
+    generatedGlbUrl: firestoreWork?.generatedGlbUrl,
+    generatedUsdzUrl: firestoreWork?.generatedUsdzUrl,
+    arV2Config: firestoreWork?.arV2Config,
+    arV2Asset: firestoreWork?.arV2Asset,
+    displayOrder: firestoreWork?.displayOrder,
+    widthCm: firestoreWork?.widthCm,
+    heightCm: firestoreWork?.heightCm,
+    depthCm: firestoreWork?.depthCm,
+    frontRotationXDeg: firestoreWork?.frontRotationXDeg,
+    frontRotationYDeg: firestoreWork?.frontRotationYDeg,
+    sideMode: firestoreWork?.sideMode,
+    showBackLabel: firestoreWork?.showBackLabel,
+    isPublished: firestoreWork?.isPublished,
+    archived: firestoreWork?.archived,
   };
 }
 
@@ -324,25 +279,17 @@ function getArHref(work: PublicWork) {
 
 export default function PublicArtistDetail({ slug }: { slug: string }) {
   const staticArtist = getArtistBySlug(slug);
-  const staticArtistWorks = useMemo(
-    () => staticWorks.filter((work) => work.artistSlug === slug),
-    [slug]
-  );
-
   const [artistState, setArtist] = useState<PublicArtistDetail | null>(null);
-  const [artistWorks, setArtistWorks] = useState<PublicWork[]>(staticArtistWorks);
+  const [artistWorks, setArtistWorks] = useState<PublicWork[]>([]);
   const [artistExhibitions, setArtistExhibitions] = useState<PublicExhibition[]>(
     []
   );
   const [isLoading, setIsLoading] = useState(true);
-  const [debugSource, setDebugSource] = useState<"Seed" | "Firestore">(
-    staticArtist ? "Seed" : "Seed"
-  );
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
   const [portfolioShareMessage, setPortfolioShareMessage] = useState("");
   const [lightboxWork, setLightboxWork] = useState<PublicWork | null>(null);
   const shareMessageTimeoutRef = useRef<number | null>(null);
-  const showDebugNote = process.env.NODE_ENV === "development";
+  const lightboxCloseButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -351,12 +298,12 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
     setArtistExhibitions([]);
     setIsLoading(true);
     setLoadErrorMessage("");
-    setDebugSource("Seed");
     setPortfolioShareMessage("");
 
     const timeoutId = window.setTimeout(() => {
       if (isActive) {
         setLoadErrorMessage("작가 정보를 불러오는 데 시간이 걸리고 있습니다.");
+        setIsLoading(false);
       }
     }, 6000);
 
@@ -373,38 +320,28 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
           return;
         }
 
-        const nextArtist = mergePublicArtist(staticArtist, firestoreArtist);
+        const nextArtist = firestoreArtist
+          ? mergePublicArtist(staticArtist, firestoreArtist)
+          : null;
         if (nextArtist) {
           setArtist(nextArtist);
         }
 
-        if (firestoreWorks.length > 0) {
-          const nextWorks = firestoreWorks
-            .map((work) => mergePublicWork(slug, work))
-            .filter((work): work is PublicWork => work !== null);
-
-          if (nextWorks.length > 0) {
-            setArtistWorks(nextWorks);
-          }
-        } else {
-          setArtistWorks(staticArtistWorks);
-        }
+        setArtistWorks(firestoreWorks
+          .map((work) => mergePublicWork(slug, work))
+          .filter((work): work is PublicWork => work !== null));
 
         setArtistExhibitions(firestoreExhibitions);
 
-        setDebugSource(
-          firestoreArtist || firestoreWorks.length > 0 ? "Firestore" : "Seed"
-        );
         setLoadErrorMessage("");
       } catch {
         if (!isActive) {
           return;
         }
 
-        setArtist(mergePublicArtist(staticArtist));
-        setArtistWorks(staticArtistWorks);
+        setArtist(null);
+        setArtistWorks([]);
         setArtistExhibitions([]);
-        setDebugSource("Seed");
         setLoadErrorMessage("작가 정보를 불러오지 못해 기본 정보를 표시합니다.");
       } finally {
         if (isActive) {
@@ -418,7 +355,24 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
       isActive = false;
       window.clearTimeout(timeoutId);
     };
-  }, [slug, staticArtist, staticArtistWorks]);
+  }, [slug, staticArtist]);
+
+  useEffect(() => {
+    if (!lightboxWork) return;
+    const previousOverflow = document.body.style.overflow;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = "hidden";
+    lightboxCloseButtonRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLightboxWork(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [lightboxWork]);
 
   const hasStaleArtist = Boolean(artistState && artistState.slug !== slug);
   const artist = hasStaleArtist ? null : artistState;
@@ -609,7 +563,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
               작가 정보를 찾을 수 없습니다.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-black/65">
-              등록된 작가 정보를 찾지 못했습니다.
+              {loadErrorMessage || "등록된 작가 정보를 찾지 못했습니다."}
             </p>
             <Link
               href="/artists"
@@ -664,14 +618,14 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
           </div>
         </header>
 
-        <section className="relative min-h-[calc(100vh-5.5rem)] py-6 md:py-8">
+        <section id="intro" className="relative min-h-[calc(100vh-5.5rem)] py-6 md:py-8">
           <div className="grid min-h-[calc(100vh-8rem)] gap-6 lg:grid-cols-[8.5rem_minmax(0,1fr)]">
             <nav className="hidden border-r border-black/10 pr-5 pt-6 lg:block">
               <div className="sticky top-8 space-y-7">
                 {["Intro", "Works", "Statement", "CV", "Press"].map((item) => (
                   <a
                     key={item}
-                    href={item === "Intro" ? "#" : item === "Works" ? "#works" : "#archive"}
+                    href={({ Intro: "#intro", Works: "#works", Statement: "#statement", CV: "#cv", Press: "#press" } as Record<string, string>)[item]}
                     className="block text-[11px] uppercase tracking-[0.18em] opacity-52 transition hover:opacity-100"
                   >
                     {item}
@@ -830,7 +784,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
           className="grid gap-8 border-t border-black/10 py-12 lg:min-h-screen lg:grid-cols-[1.05fr_0.95fr] lg:py-14"
         >
           <div className="grid gap-6">
-            <article className="border-b border-black/10 pb-8">
+            <article id="statement" className="border-b border-black/10 pb-8">
               <h2 className="text-4xl font-normal tracking-[-0.03em]">
                 Statement
               </h2>
@@ -852,7 +806,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
             </article>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <article className="border-b border-black/10 pb-6 md:border-b-0 md:border-r md:pr-6">
+              <article id="cv" className="border-b border-black/10 pb-6 md:border-b-0 md:border-r md:pr-6">
                 <h2 className="text-3xl font-normal tracking-[-0.03em]">CV</h2>
                 {compactCvItems.length > 0 ? (
                   <div className="mt-5 divide-y divide-black/10">
@@ -885,7 +839,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
                 )}
               </article>
 
-              <article className="border-b border-black/10 pb-6 md:border-b-0">
+              <article id="press" className="border-b border-black/10 pb-6 md:border-b-0">
                 <h2 className="text-3xl font-normal tracking-[-0.03em]">
                   Press & Archive
                 </h2>
@@ -1028,6 +982,7 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
           >
             <button
               type="button"
+              ref={lightboxCloseButtonRef}
               onClick={() => setLightboxWork(null)}
               className="absolute right-0 top-0 z-10 -translate-y-12 text-sm uppercase tracking-[0.22em] text-white/80 transition hover:text-white"
             >
@@ -1059,13 +1014,6 @@ export default function PublicArtistDetail({ slug }: { slug: string }) {
               </Link>
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {showDebugNote ? (
-        <div className="fixed bottom-4 left-4 z-40 max-w-xs border border-black/10 bg-white/80 px-3 py-2 text-xs shadow-[0_10px_40px_rgba(58,42,24,0.12)]">
-          source: {debugSource}
-          {loadErrorMessage ? <span> · {loadErrorMessage}</span> : null}
         </div>
       ) : null}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createCanvasGlbBlob,
   createSafeGlbFilename,
@@ -20,6 +20,7 @@ type ArtistWorkGlbFormProps = {
   mode: "new" | "edit";
   initialValues?: Partial<WorkFormValues>;
   onSave?: (values: WorkFormValues) => Promise<string | void>;
+  onAutosave?: (values: WorkFormValues) => Promise<void>;
   saveButtonLabel?: string;
   artistSlug?: string;
   workSlug?: string;
@@ -243,6 +244,7 @@ export default function ArtistWorkGlbForm({
   mode,
   initialValues,
   onSave,
+  onAutosave,
   saveButtonLabel,
   artistSlug,
   workSlug,
@@ -262,10 +264,29 @@ export default function ArtistWorkGlbForm({
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(
     null
   );
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const autosaveSignatureRef = useRef("");
 
   useEffect(() => {
-    setForm(mergeInitialValues(initialValues));
+    const mergedValues = mergeInitialValues(initialValues);
+    autosaveSignatureRef.current = JSON.stringify(mergedValues);
+    setForm(mergedValues);
   }, [initialValues]);
+
+  useEffect(() => {
+    if (!onAutosave || !form.coverImageUrl.trim()) return;
+    const signature = JSON.stringify(form);
+    if (signature === autosaveSignatureRef.current) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setAutosaveStatus("saving");
+      void onAutosave(form).then(() => {
+        autosaveSignatureRef.current = signature;
+        setAutosaveStatus("saved");
+      }).catch(() => setAutosaveStatus("error"));
+    }, 900);
+    return () => window.clearTimeout(timeoutId);
+  }, [form, onAutosave]);
 
   function updateField<K extends keyof WorkFormValues>(
     key: K,
@@ -412,8 +433,8 @@ export default function ArtistWorkGlbForm({
             <p className="max-w-2xl text-sm leading-7 text-neutral-600 md:text-[15px]">
               {getDescription(mode)}
             </p>
-            <p className="max-w-2xl text-sm leading-7 text-neutral-500">
-              이미지 업로드 후 저장 버튼을 눌러야 반영됩니다.
+            <p className="max-w-2xl text-sm leading-7 text-neutral-500" aria-live="polite">
+              {autosaveStatus === "saving" ? "임시저장 중..." : autosaveStatus === "saved" ? "임시저장 완료" : autosaveStatus === "error" ? "자동 저장에 실패했습니다. 연결을 확인해주세요." : "대표 이미지 업로드 후 입력 내용이 자동으로 임시저장됩니다."}
             </p>
           </div>
 

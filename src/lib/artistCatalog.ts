@@ -80,9 +80,10 @@ export function mergePublicArtist(
 }
 
 export function buildPublicArtistCollections(
-  firestoreArtists: ArtistDoc[] = []
+  firestoreArtists: ArtistDoc[] = [],
+  includeSeeds = true
 ) {
-  const representedSeedArtists = getRepresentedArtists();
+  const representedSeedArtists = includeSeeds ? getRepresentedArtists() : [];
   const representedBySlug = new Map<string, PublicArtistCard>();
   const representedFirestoreArtists = firestoreArtists.filter(
     (artist) => artist.type === "represented"

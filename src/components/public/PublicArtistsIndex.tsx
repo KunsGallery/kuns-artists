@@ -185,12 +185,14 @@ export default function PublicArtistsIndex() {
     null
   );
   const [loadErrorMessage, setLoadErrorMessage] = useState("");
+  const [artistSearch, setArtistSearch] = useState("");
 
   useEffect(() => {
     let isActive = true;
     let resolved = false;
     const timeoutId = window.setTimeout(() => {
       if (isActive && !resolved) {
+        setCollections(buildPublicArtistCollections([], false));
         setLoadErrorMessage(
           "작가 정보를 불러오는 데 시간이 걸리고 있습니다."
         );
@@ -205,7 +207,7 @@ export default function PublicArtistsIndex() {
           return;
         }
 
-        setCollections(buildPublicArtistCollections(publicArtists));
+        setCollections(buildPublicArtistCollections(publicArtists, false));
         setLoadErrorMessage("");
         resolved = true;
       } catch {
@@ -213,8 +215,8 @@ export default function PublicArtistsIndex() {
           return;
         }
 
-        setCollections(buildPublicArtistCollections([]));
-        setLoadErrorMessage("작가 정보를 불러오지 못해 기본 목록을 표시합니다.");
+        setCollections(buildPublicArtistCollections([], false));
+        setLoadErrorMessage("작가 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
         resolved = true;
       } finally {
         if (isActive) {
@@ -229,10 +231,14 @@ export default function PublicArtistsIndex() {
     };
   }, []);
 
-  const representedArtists = collections?.representedArtists ?? [];
-  const projectArtists = collections?.projectArtists ?? [];
-  const representedCount = collections?.representedArtists.length ?? 0;
-  const projectCount = collections?.projectArtists.length ?? 0;
+  const matchesSearch = (artist: PublicArtistCard) =>
+    `${artist.name} ${artist.nameKo ?? ""} ${artist.tagline ?? ""}`
+      .toLocaleLowerCase()
+      .includes(artistSearch.trim().toLocaleLowerCase());
+  const representedArtists = (collections?.representedArtists ?? []).filter(matchesSearch);
+  const projectArtists = (collections?.projectArtists ?? []).filter(matchesSearch);
+  const representedCount = representedArtists.length;
+  const projectCount = projectArtists.length;
   const isLoading = collections === null;
 
   return (
@@ -289,6 +295,17 @@ export default function PublicArtistsIndex() {
                 </Link>
               </div>
 
+              <label className="block max-w-xl">
+                <span className="sr-only">작가 검색</span>
+                <input
+                  type="search"
+                  value={artistSearch}
+                  onChange={(event) => setArtistSearch(event.target.value)}
+                  placeholder="작가명으로 검색"
+                  className="h-12 w-full rounded-full border border-white/15 bg-black/20 px-5 text-sm text-white outline-none placeholder:text-white/42 focus:border-[#F37021]"
+                />
+              </label>
+
               {loadErrorMessage ? (
                 <div className="max-w-2xl rounded-[1.35rem] border border-white/10 bg-black/20 px-4 py-3 text-sm leading-6 text-white/55">
                   {loadErrorMessage}
@@ -315,9 +332,6 @@ export default function PublicArtistsIndex() {
                       {isLoading ? "—" : projectCount}
                     </span>
                   </div>
-                  <p className="pt-2 text-sm leading-7 text-white/58">
-                    Firestore artist data is prioritized, with neutral loading states before any fallback appears.
-                  </p>
                   <p className="text-[11px] uppercase tracking-[0.24em] text-[#FF9B5A]">
                     Public roster
                   </p>
@@ -331,7 +345,7 @@ export default function PublicArtistsIndex() {
           <SectionHeading
             label="REPRESENTED ARTISTS"
             title="Represented Artists"
-            description="The four represented artists are always shown first, with Firestore taking priority when updated information is available."
+            description="갤러리와 함께하는 작가들의 작품과 기록을 살펴보세요."
           />
 
           <div className="mt-10">

@@ -117,7 +117,7 @@ export default function FeaturedArtistsPreview() {
         }
 
         const next =
-          buildPublicArtistCollections(firestoreArtists).representedArtists.slice(
+          buildPublicArtistCollections(firestoreArtists, false).representedArtists.slice(
             0,
             4
           );
@@ -129,12 +129,7 @@ export default function FeaturedArtistsPreview() {
           return;
         }
 
-        const fallback = buildPublicArtistCollections([]).representedArtists.slice(
-          0,
-          4
-        );
-
-        setArtists(fallback);
+        setArtists([]);
       });
 
     return () => {
@@ -150,6 +145,10 @@ export default function FeaturedArtistsPreview() {
         ))}
       </div>
     );
+  }
+
+  if (artists.length === 0) {
+    return <p className="py-10 text-sm text-[#171411]/50">공개된 작가 정보를 준비하고 있습니다.</p>;
   }
 
   return (

@@ -57,6 +57,11 @@ export default function ArtistLoginPage() {
   }
 
   useEffect(() => {
+    const initializationTimeout = window.setTimeout(() => {
+      setIsInitializing(false);
+      setIsSigningIn(false);
+      setErrorMessage("로그인 연결이 지연되고 있습니다. 연결을 확인한 뒤 다시 시도해주세요.");
+    }, 10000);
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       void (async () => {
         try {
@@ -95,7 +100,10 @@ export default function ArtistLoginPage() {
       })();
     });
 
-    return () => unsubscribe();
+    return () => {
+      window.clearTimeout(initializationTimeout);
+      unsubscribe();
+    };
   }, [router]);
 
   return (

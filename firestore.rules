@@ -158,13 +158,13 @@ service cloud.firestore {
 
     function artistCreateKeys() {
       return [
-        "email",
         "slug",
         "name",
         "nameKo",
         "type",
         "status",
         "role",
+        "publicProfile",
         "tagline",
         "bio",
         "bioEn",
@@ -201,22 +201,22 @@ service cloud.firestore {
     function validArtistCreate(uid) {
       return request.resource.data.keys().hasOnly(artistCreateKeys())
         && request.resource.data.keys().hasAll([
-          "email",
           "slug",
           "name",
           "type",
           "status",
           "role",
+          "publicProfile",
           "createdAt",
           "updatedAt"
         ])
-        && request.resource.data.email == authEmail()
         && request.resource.data.slug == expectedArtistSlug()
         && request.resource.data.name == expectedArtistName()
         && request.resource.data.nameKo == expectedArtistNameKo()
         && request.resource.data.type == expectedArtistType()
         && request.resource.data.status == expectedArtistStatus()
         && request.resource.data.role == expectedArtistRole()
+        && request.resource.data.publicProfile == true
         && isOptionalString(request.resource.data.tagline)
         && isOptionalString(request.resource.data.bio)
         && isOptionalString(request.resource.data.bioEn)
@@ -236,7 +236,6 @@ service cloud.firestore {
       let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
 
       return changedKeys.hasOnly(artistSelfEditableKeys())
-        && request.resource.data.email == resource.data.email
         && request.resource.data.slug == resource.data.slug
         && request.resource.data.type == resource.data.type
         && request.resource.data.status == resource.data.status
@@ -395,7 +394,9 @@ service cloud.firestore {
     }
 
     match /artists/{uid} {
-      allow read: if true;
+      allow read: if isAdmin()
+        || isOwnArtistDoc(uid)
+        || resource.data.publicProfile == true;
 
       allow create: if isAdmin()
         || (
@@ -411,8 +412,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /artistPrivate/{uid} {
+      allow read, write: if isAdmin() || isOwnArtistDoc(uid);
+    }
+
     match /works/{workId} {
-      allow read: if true;
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.artistId == authUid())
+        || (resource.data.isPublished == true && resource.data.archived != true);
 
       allow create: if isAdmin()
         || (signedIn() && validArtistWorkCreate());

@@ -97,7 +97,11 @@ export async function uploadBlobToR2(
   payload: R2PresignRequest,
   authorization?: string
 ): Promise<R2UploadResult> {
-  const presigned = await requestR2UploadUrl(payload, authorization);
+  const token = authorization ?? `Bearer ${await getCurrentIdToken()}`;
+  const presigned = await requestR2UploadUrl({
+    ...payload,
+    sizeBytes: payload.sizeBytes ?? blob.size,
+  }, token);
 
   try {
     const uploadResponse = await fetch(presigned.uploadUrl, {

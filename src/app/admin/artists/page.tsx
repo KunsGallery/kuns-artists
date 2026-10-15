@@ -8,6 +8,7 @@ import { useProtectedArtist } from "@/hooks/useProtectedArtist";
 import {
   createProjectArtistForAdmin,
   getAllArtistsForAdmin,
+  migrateLegacyArtistPrivateData,
   getExhibitionsForArtist,
   getWorksForArtist,
   resolveArtistWorkSlug,
@@ -712,6 +713,7 @@ export default function AdminArtistsPage() {
   const [createError, setCreateError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isMigratingPrivateData, setIsMigratingPrivateData] = useState(false);
   const [isBulkPasteOpen, setIsBulkPasteOpen] = useState(false);
   const [bulkPasteText, setBulkPasteText] = useState("");
   const [bulkPasteMessage, setBulkPasteMessage] = useState("");
@@ -1498,6 +1500,22 @@ export default function AdminArtistsPage() {
     }
   }
 
+  async function handleMigratePrivateData() {
+    if (!window.confirm("작가 이메일을 비공개 데이터로 옮기고 공개 프로필에서 제거할까요?")) return;
+    setIsMigratingPrivateData(true);
+    setSaveError("");
+    setSaveMessage("");
+    try {
+      const count = await migrateLegacyArtistPrivateData();
+      setSaveMessage(`${count}명의 작가 연락처를 비공개 영역으로 옮겼습니다.`);
+      await loadArtists(selectedArtistId);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "연락처 보호 작업을 완료하지 못했습니다.");
+    } finally {
+      setIsMigratingPrivateData(false);
+    }
+  }
+
   return (
     <main className="theme-dark min-h-screen bg-[#f5f3ee] text-neutral-950">
       <div className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-8">
@@ -1510,6 +1528,14 @@ export default function AdminArtistsPage() {
           </Link>
 
           <div className="flex flex-wrap items-center gap-2 md:gap-3">
+            <button
+              type="button"
+              onClick={handleMigratePrivateData}
+              disabled={isMigratingPrivateData || isLoadingArtists}
+              className="inline-flex h-11 items-center rounded-full border border-amber-300 bg-amber-50 px-4 text-sm text-amber-950 transition hover:bg-amber-100 disabled:opacity-50"
+            >
+              {isMigratingPrivateData ? "연락처 보호 중..." : "연락처 비공개 보호"}
+            </button>
             <Link
               href="/admin"
               className="inline-flex h-11 items-center rounded-full border border-black/10 bg-white px-5 text-sm text-neutral-900 transition hover:border-black/20 hover:shadow-sm"

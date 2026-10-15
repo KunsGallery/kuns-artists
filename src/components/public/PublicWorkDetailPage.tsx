@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { getArtistBySlug } from "@/data/artists";
-import { getWorkBySlug as getStaticWorkBySlug } from "@/data/works";
 import {
   getPublicWorksForArtistId,
   getPublicWorksForArtistSlug,
@@ -592,7 +591,6 @@ function PublicWorkNotice({
 }
 
 export default function PublicWorkDetailPage({ slug }: { slug: string }) {
-  const staticWork = useMemo(() => getStaticWorkBySlug(slug), [slug]);
   const [work, setWork] = useState<PublicWork | null>(null);
   const [moreWorks, setMoreWorks] = useState<PublicWork[]>([]);
   const [status, setStatus] = useState<LoadState>("loading");
@@ -607,6 +605,7 @@ export default function PublicWorkDetailPage({ slug }: { slug: string }) {
     setCopyMessage("");
     const timeoutId = window.setTimeout(() => {
       if (isActive) {
+        setStatus("error");
         setLoadErrorMessage(
           "Loading artwork details is taking longer than usual."
         );
@@ -622,7 +621,7 @@ export default function PublicWorkDetailPage({ slug }: { slug: string }) {
         }
 
         if (result.work) {
-          const mergedWork = mapPublicWork(result.work, staticWork ?? undefined);
+          const mergedWork = mapPublicWork(result.work);
 
           if (mergedWork) {
             setWork(mergedWork);
@@ -659,7 +658,7 @@ export default function PublicWorkDetailPage({ slug }: { slug: string }) {
       isActive = false;
       window.clearTimeout(timeoutId);
     };
-  }, [slug, staticWork]);
+  }, [slug]);
 
   useEffect(() => {
     let isActive = true;
@@ -781,8 +780,8 @@ export default function PublicWorkDetailPage({ slug }: { slug: string }) {
             loadErrorMessage ||
             "Please try again in a moment. A problem occurred while loading the public artwork archive."
           }
-          actionHref="/artists"
-          actionLabel="Back to Artists"
+          actionHref={`/works/${encodeURIComponent(slug)}`}
+          actionLabel="Try Again"
         />
       </main>
     );

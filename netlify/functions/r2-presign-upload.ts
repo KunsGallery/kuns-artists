@@ -67,6 +67,15 @@ const ALLOWED_EMAILS = new Set([
 ]);
 
 const MAX_QUICK_LOOK_USDZ_BYTES = 100 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
+const MAX_MODEL_BYTES = 250 * 1024 * 1024;
+const ARTIST_SLUG_BY_EMAIL: Record<string, string> = {
+  "gallerykuns@gmail.com": "kim-hwan",
+  "boramine5255@gmail.com": "jung-boram",
+  "wwwrosaweb@gmail.com": "rosa-kang",
+  "chlwotjq127@gmail.com": "jessup-choi",
+};
 
 class HttpError extends Error {
   statusCode: number;
@@ -203,6 +212,22 @@ async function verifyFirebaseIdToken(token: string, projectId: string) {
   if (typeof payload.email !== "string" || !ALLOWED_EMAILS.has(payload.email.toLowerCase())) {
     throw new HttpError(403, "Access denied.");
   }
+  return { email: payload.email.toLowerCase() };
+}
+
+function validateUploadSize(payload: PresignBody) {
+  const size = payload.sizeBytes;
+  if (!Number.isInteger(size) || !size || size <= 0) {
+    throw new HttpError(400, "Upload size is required.");
+  }
+  const limit = ["profile", "work-image", "exhibition-image"].includes(payload.target ?? "")
+    ? MAX_IMAGE_BYTES
+    : payload.target === "cv"
+      ? MAX_PDF_BYTES
+      : payload.target === "quick-look" || payload.target === "usdz"
+        ? MAX_QUICK_LOOK_USDZ_BYTES
+        : MAX_MODEL_BYTES;
+  if (size > limit) throw new HttpError(413, "File exceeds the allowed size.");
 }
 
 function createObjectKey(payload: Required<Pick<PresignBody, "filename" | "target">> & PresignBody) {
@@ -240,7 +265,7 @@ function createObjectKey(payload: Required<Pick<PresignBody, "filename" | "targe
       throw new HttpError(400, "workId is required for quick-look uploads.");
     }
 
-    return `${prefix}/${workId}/${stamp}-${safeFilename}.${extension}`;
+    return `${prefix}/${artistSlug}/${workId}/${stamp}-${safeFilename}.${extension}`;
   }
 
   return `${prefix}/${artistSlug}/${baseName}-${stamp}.${extension}`;
@@ -309,30 +334,6 @@ export const handler = async (event: {
       });
     }
 
-    if (payload.target === "quick-look") {
-      const authorization = event.headers?.authorization ?? event.headers?.Authorization;
-      const bearerToken = authorization?.startsWith("Bearer ")
-        ? authorization.slice("Bearer ".length).trim()
-        : "";
-
-      if (!bearerToken) {
-        return jsonResponse(401, {
-          error: "Authorization header is required.",
-        });
-      }
-
-      const projectId = getRequiredEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
-      await verifyFirebaseIdToken(bearerToken, projectId);
-
-      if (!payload.workId?.trim()) {
-        return jsonResponse(400, {
-          error: "workId is required for quick-look uploads.",
-        });
-      }
-
-      validateQuickLookUploadPayload(payload);
-    }
-
     if (!ALLOWED_TARGETS.includes(payload.target)) {
       return jsonResponse(400, {
         error: "Invalid upload target.",
@@ -345,6 +346,25 @@ export const handler = async (event: {
       return jsonResponse(400, {
         error: `Invalid content type for target ${payload.target}.`,
       });
+    }
+
+    const authorization = event.headers?.authorization ?? event.headers?.Authorization;
+    const bearerToken = authorization?.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length).trim()
+      : "";
+    if (!bearerToken) throw new HttpError(401, "Authorization header is required.");
+    const identity = await verifyFirebaseIdToken(
+      bearerToken,
+      getRequiredEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID")
+    );
+    if (!payload.artistSlug?.trim()) throw new HttpError(400, "artistSlug is required.");
+    if (identity.email !== "gallerykuns@gmail.com" && payload.artistSlug !== ARTIST_SLUG_BY_EMAIL[identity.email]) {
+      throw new HttpError(403, "You can only upload files for your artist profile.");
+    }
+    validateUploadSize(payload);
+    if (payload.target === "quick-look") {
+      if (!payload.workId?.trim()) throw new HttpError(400, "workId is required for quick-look uploads.");
+      validateQuickLookUploadPayload(payload);
     }
 
     const key = createObjectKey({
